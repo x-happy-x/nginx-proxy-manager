@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nginx Manager Lite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="preload" as="image" href="/static/icons/menu.svg" />
+    <link rel="preload" as="image" href="/static/icons/console.svg" />
+    <link rel="preload" as="image" href="/static/icons/theme.svg" />
+    <link rel="preload" as="image" href="/static/icons/save.svg" />
+    <link rel="preload" as="image" href="/static/icons/apply.svg" />
+    <link rel="preload" as="image" href="/static/icons/server.svg" />
+    <link rel="preload" as="image" href="/static/icons/cert.svg" />
+    <link rel="preload" as="image" href="/static/icons/dns.svg" />
+    <link rel="preload" as="image" href="/static/icons/refresh.svg" />
+    <link rel="preload" as="image" href="/static/icons/logs.svg" />
+    <link rel="preload" as="image" href="/static/icons/overview.svg" />
+    <link rel="stylesheet" href="/static/main.css" />
+    <script>
+      (function () {
+        var theme = localStorage.getItem("theme") || "light";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <button id="sidebar-toggle" class="icon-btn" title="Toggle menu" aria-label="Toggle menu">
+            <img src="/static/icons/menu.svg" alt="" />
+          </button>
+          <span class="dot"></span>
+          <h1>Nginx Manager Lite</h1>
+        </div>
+        <div class="actions">
+          <button id="console-toggle" class="icon-btn" title="Console" aria-label="Console">
+            <img src="/static/icons/console.svg" alt="" />
+          </button>
+          <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+            <img src="/static/icons/theme.svg" alt="" />
+          </button>
+          <button id="save-btn" class="icon-btn" title="Save" aria-label="Save">
+            <img src="/static/icons/save.svg" alt="" />
+          </button>
+          <button id="apply-btn" class="icon-btn accent" title="Apply" aria-label="Apply">
+            <img src="/static/icons/apply.svg" alt="" />
+          </button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <button class="tab-btn active" data-tab="overview" aria-label="Overview">
+            <img src="/static/icons/overview.svg" alt="" />
+            <span>Overview</span>
+          </button>
+          <button class="tab-btn" data-tab="servers" aria-label="Servers">
+            <img src="/static/icons/server.svg" alt="" />
+            <span>Servers</span>
+          </button>
+          <button class="tab-btn" data-tab="certs" aria-label="Certificates">
+            <img src="/static/icons/cert.svg" alt="" />
+            <span>Certs</span>
+          </button>
+          <button class="tab-btn" data-tab="dns" aria-label="DNS">
+            <img src="/static/icons/dns.svg" alt="" />
+            <span>DNS</span>
+          </button>
+          <button class="tab-btn" data-tab="logs" aria-label="Logs">
+            <img src="/static/icons/logs.svg" alt="" />
+            <span>Logs</span>
+          </button>
+        </aside>
+
+        <main class="tabs-body">
+          <section class="tab-panel active" data-tab="overview">
+            <section class="card">
+              <div class="card-header">
+                <h2>Nginx Status</h2>
+                <button id="status-refresh" class="icon-btn" title="Refresh" aria-label="Refresh">
+                  <img src="/static/icons/refresh.svg" alt="" />
+                </button>
+              </div>
+              <div id="nginx-status" class="status-grid"></div>
+            </section>
+          </section>
+
+          <section class="tab-panel" data-tab="servers">
+            <section class="card">
+              <div class="card-header">
+                <h2>Services</h2>
+                <button id="add-service" class="icon-btn" title="Add Service" aria-label="Add Service">
+                  <img src="/static/icons/plus.svg" alt="" />
+                </button>
+              </div>
+              <div id="services"></div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>Listen & Stub</h2>
+                <button id="apply-stub" class="icon-btn" title="Apply Stub" aria-label="Apply Stub">
+                  <img src="/static/icons/bolt.svg" alt="" />
+                </button>
+              </div>
+              <div class="row">
+                <label>Listen IPs (comma separated)</label>
+                <input id="listen-ips" type="text" placeholder="192.168.1.2, 192.168.99.2" />
+              </div>
+              <div class="row">
+                <label>Stub File</label>
+                <div id="stub-upload" class="upload-card">
+                  <div class="upload-icon">
+                    <img src="/static/icons/file.svg" alt="" />
+                  </div>
+                  <div class="upload-text">
+                    <div class="upload-title">Upload stub page</div>
+                    <div class="upload-hint">Click or drop file here to replace stub page.</div>
+                    <div id="stub-file-name" class="upload-meta">No file selected</div>
+                  </div>
+                  <input id="stub-file" type="file" accept=".html,.htm,.txt" />
+                </div>
+              </div>
+              <div class="row">
+                <button id="stub-enabled" class="chip-btn chip-stub">Enable stub default server (80/443)</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="tab-panel" data-tab="certs">
+            <section class="card">
+              <h2>SSL Settings</h2>
+              <div class="row">
+                <label>Signature Type</label>
+                <div id="ssl-mode" class="chip-group">
+                  <button class="chip-btn" data-value="acme">ACME</button>
+                  <button class="chip-btn" data-value="local-ca">Local CA</button>
+                  <button class="chip-btn" data-value="self-signed">Self-signed</button>
+                  <button class="chip-btn" data-value="off">HTTP only</button>
+                </div>
+              </div>
+              <div id="acme-email" class="row">
+                <label>Let's Encrypt Email</label>
+                <input id="email" type="email" placeholder="you@example.com" />
+              </div>
+            </section>
+
+            <section id="local-ca-summary" class="card">
+              <div class="card-header">
+                <h2>Local CA</h2>
+                <div class="inline-actions">
+                  <button id="ca-manage" class="chip-btn">Manage CA</button>
+                  <button id="ca-download" class="chip-btn">Download CA</button>
+                </div>
+              </div>
+              <div class="row">
+                <div class="summary">Use your local CA for all domains. Installed CA will be used to sign certificates on Apply.</div>
+              </div>
+              <div class="row">
+                <div id="ca-status" class="status-card">
+                  <div class="status-icon">
+                    <img id="ca-status-icon" src="/static/icons/file.svg" alt="" />
+                  </div>
+                  <div class="status-text">CA status</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>Certificates</h2>
+                <button id="cert-refresh" class="icon-btn" title="Refresh" aria-label="Refresh">
+                  <img src="/static/icons/refresh.svg" alt="" />
+                </button>
+              </div>
+              <div id="cert-cards" class="dns-grid"></div>
+            </section>
+          </section>
+
+          <section class="tab-panel" data-tab="dns">
+            <section class="card">
+              <div class="card-header">
+                <h2>DNS Hosts</h2>
+                <button id="refresh-hosts" class="icon-btn" title="Refresh" aria-label="Refresh">
+                  <img src="/static/icons/refresh.svg" alt="" />
+                </button>
+              </div>
+              <div id="dns-cards" class="dns-grid"></div>
+              <div class="dns-add">
+                <div class="row">
+                  <label>New Host</label>
+                  <input id="host-name" type="text" placeholder="host.example" />
+                </div>
+                <div class="row">
+                  <label>Address</label>
+                  <input id="host-address" type="text" placeholder="192.168.99.13" />
+                </div>
+                <button id="add-host" class="icon-btn" title="Add host" aria-label="Add host">
+                  <img src="/static/icons/plus.svg" alt="" />
+                </button>
+              </div>
+            </section>
+          </section>
+
+          <section class="tab-panel" data-tab="logs">
+            <section class="card">
+              <div class="card-header">
+                <h2>Nginx Logs</h2>
+                <button id="logs-refresh" class="icon-btn" title="Refresh" aria-label="Refresh">
+                  <img src="/static/icons/refresh.svg" alt="" />
+                </button>
+              </div>
+              <div class="row">
+                <label>Type</label>
+                <div id="logs-type" class="chip-group">
+                  <button class="chip-btn" data-value="access">Access</button>
+                  <button class="chip-btn" data-value="error">Error</button>
+                </div>
+              </div>
+              <div class="row cols">
+                <div>
+                  <label>Filter (contains)</label>
+                  <input id="logs-filter" type="text" placeholder="192.168." />
+                </div>
+                <div>
+                  <label>Limit</label>
+                  <input id="logs-limit" type="number" value="200" />
+                </div>
+              </div>
+              <div class="row">
+                <pre id="logs-output" class="log-panel"></pre>
+              </div>
+            </section>
+          </section>
+        </main>
+      </div>
+
+      <div id="console" class="console">
+        <div class="console-header">
+          <div class="console-title">Console</div>
+          <div class="console-actions">
+            <button id="console-clear" class="icon-btn" title="Clear" aria-label="Clear">
+              <img src="/static/icons/trash.svg" alt="" />
+            </button>
+            <button id="console-pause" class="icon-btn" title="Pause autoscroll" aria-label="Pause autoscroll" data-paused="0">
+              <img src="/static/icons/pause.svg" alt="" />
+            </button>
+            <button id="console-close" class="icon-btn" title="Close" aria-label="Close">
+              <img src="/static/icons/close.svg" alt="" />
+            </button>
+          </div>
+        </div>
+        <div id="console-resizer" class="console-resizer"></div>
+        <div id="output" class="console-body"></div>
+      </div>
+    </div>
+
+    <nav class="tabs mobile-tabs">
+      <button class="tab-btn active" data-tab="overview" aria-label="Overview">
+        <img src="/static/icons/overview.svg" alt="" />
+        <span>Overview</span>
+      </button>
+      <button class="tab-btn" data-tab="servers" aria-label="Servers">
+        <img src="/static/icons/server.svg" alt="" />
+        <span>Servers</span>
+      </button>
+      <button class="tab-btn" data-tab="certs" aria-label="Certificates">
+        <img src="/static/icons/cert.svg" alt="" />
+        <span>Certs</span>
+      </button>
+      <button class="tab-btn" data-tab="dns" aria-label="DNS">
+        <img src="/static/icons/dns.svg" alt="" />
+        <span>DNS</span>
+      </button>
+      <button class="tab-btn" data-tab="logs" aria-label="Logs">
+        <img src="/static/icons/logs.svg" alt="" />
+        <span>Logs</span>
+      </button>
+    </nav>
+
+    <div id="ca-dialog" class="modal" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Local CA</div>
+          <button id="ca-close" class="icon-btn" title="Close" aria-label="Close">
+            <img src="/static/icons/close.svg" alt="" />
+          </button>
+        </div>
+        <div class="modal-tabs chip-group">
+          <button class="chip-btn active" data-tab="create">Create</button>
+          <button class="chip-btn" data-tab="upload">Upload</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-pane active" data-tab="create">
+            <div class="row cols">
+              <div>
+                <label>Country (C)</label>
+                <input id="ca-c" type="text" placeholder="EE" />
+              </div>
+              <div>
+                <label>State (ST)</label>
+                <input id="ca-st" type="text" placeholder="Harju" />
+              </div>
+              <div>
+                <label>City (L)</label>
+                <input id="ca-l" type="text" placeholder="Tallinn" />
+              </div>
+              <div>
+                <label>Org (O)</label>
+                <input id="ca-o" type="text" placeholder="Local Dev" />
+              </div>
+              <div>
+                <label>Common Name (CN)</label>
+                <input id="ca-cn" type="text" placeholder="Local Dev Root CA" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="ca-generate" class="chip-btn">Generate CA</button>
+            </div>
+          </div>
+          <div class="modal-pane" data-tab="upload">
+            <div class="row">
+              <label>CA Certificate (PEM)</label>
+              <div id="ca-cert-upload" class="upload-card">
+                <div class="upload-icon">
+                  <img src="/static/icons/file.svg" alt="" />
+                </div>
+                <div class="upload-text">
+                  <div class="upload-title">Upload CA certificate</div>
+                  <div class="upload-hint">Click or drop file here.</div>
+                  <div id="ca-cert-name" class="upload-meta">No file selected</div>
+                </div>
+                <input id="ca-cert" type="file" accept=".crt,.pem" />
+              </div>
+            </div>
+            <div class="row">
+              <label>CA Private Key (PEM)</label>
+              <div id="ca-key-upload" class="upload-card">
+                <div class="upload-icon">
+                  <img src="/static/icons/file.svg" alt="" />
+                </div>
+                <div class="upload-text">
+                  <div class="upload-title">Upload CA private key</div>
+                  <div class="upload-hint">Click or drop file here.</div>
+                  <div id="ca-key-name" class="upload-meta">No file selected</div>
+                </div>
+                <input id="ca-key" type="file" accept=".key,.pem" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="ca-upload" class="chip-btn">Save CA</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/ui/core.js"></script>
+    <script src="/static/ui/log.js"></script>
+    <script src="/static/ui/actions.js"></script>
+    <script src="/static/ui/tabs.js"></script>
+    <script src="/static/ui/theme.js"></script>
+    <script src="/static/ui/console.js"></script>
+    <script src="/static/ui/main.js"></script>
+  </body>
+</html>

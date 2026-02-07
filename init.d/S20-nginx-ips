@@ -1,0 +1,14 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+    # ждём пока поднимутся интерфейсы
+    sleep 5
+
+    # добавляем ip
+    ip addr add 192.168.1.2/24 dev br0 2>/dev/null
+
+    # поднимаем nginx
+    /opt/etc/init.d/S80nginx start
+    ;;
+esac

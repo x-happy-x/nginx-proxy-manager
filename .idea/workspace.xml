@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/deployment.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/nginx-proxy-manager.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/gen_routes.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/init.d/S20-nginx-ips" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/server.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/app.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/apply.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/bolt.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/cert.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/close.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/console.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/dns.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/download.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/file-off.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/file.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/key.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/logs.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/menu.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/overview.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/pause.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/play.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/plus.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/refresh.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/save.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/server.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/test.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/theme.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/trash.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/upload.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/index.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/main.css" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/console.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/core.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/log.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/main.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/tabs.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/theme.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/routes.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_1.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_2.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_3.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_4.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_5.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/screenshots/img_6.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/setup.sh" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="7" />
+    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 2
+}]]></component>
+  <component name="ProjectId" id="39M5UPgRDxA2H6aZPRWdnHRZFx5" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "P:/python/nginx-proxy-manager",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="P:\python\nginx-proxy-manager" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="P:\python\nginx-proxy-manager\screenshots" />
+      <recent name="P:\python\nginx-proxy-manager" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-8fceda3e36b7-JavaScript-PY-261.17801.91" />
+        <option value="bundled-python-sdk-3e3b96e59018-5839b77c6036-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.17801.91" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="" />
+      <created>1770493113257</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1770493113257</updated>
+      <workItem from="1770493114322" duration="2106000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

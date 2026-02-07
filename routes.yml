@@ -1,0 +1,43 @@
+email: admin@crubs.store
+services:
+- hosts:
+  - plane.crubs.store
+  - plane.crubs.lan
+  upstream:
+    address: 192.168.99.15
+    port: 80
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - creality.k1-max.crubs.store
+  - creality.k1-max.crubs.lan
+  upstream:
+    address: 192.168.99.16
+    port: 80
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - ha.crubs.store
+  - ha.crubs.lan
+  - ha.crubs.crazedns.ru
+  upstream:
+    address: 192.168.99.12
+    port: 8123
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - proxmox.crubs.store
+  - proxmox.crubs.lan
+  upstream:
+    address: 192.168.99.11
+    port: 8006
+    scheme: https
+    verify_upstream_ssl: false
+- hosts:
+  - pc.crubs.store
+  - pc.crubs.lan
+  upstream:
+    address: 192.168.1.10
+    port: 80
+    scheme: http
+    verify_upstream_ssl: false

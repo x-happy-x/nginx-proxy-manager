@@ -1,0 +1,79 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          nginx-manager-lite
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Nginx Manager Lite
+### END INIT INFO
+
+APP_DIR="/opt/etc/homenet-nginx/lite-ui"
+PYTHON_BIN="python3"
+ROUTES_PATH="/opt/etc/homenet-nginx/routes.yml"
+GEN_ROUTES_PATH="/opt/etc/homenet-nginx/gen_routes.py"
+HOST="192.168.1.2"
+PORT="8080"
+PID_FILE="/opt/var/run/nginx-manager-lite.pid"
+LOG_FILE="/opt/var/log/nginx-manager-lite.log"
+NGINX_CONF_ROOT="/opt/etc/nginx"
+NGINX_LISTEN_IPS="192.168.1.2,192.168.99.2"
+NGINX_TEST_CMD="nginx -t"
+NGINX_RELOAD_CMD="nginx -s reload"
+LE_ROOT="/opt/etc/letsencrypt"
+ACME_SH_CMD="/opt/etc/acme.sh/acme.sh"
+ACME_SH_HOME="/opt/etc/acme.sh"
+ACME_SH_SHELL="sh"
+LOCAL_CA_CERT="/opt/etc/nginx/local-ca/ca.crt"
+LOCAL_CA_KEY="/opt/etc/nginx/local-ca/ca.key"
+
+start() {
+  [ -d "/opt/var/run" ] || mkdir -p /opt/var/run
+  [ -d "/opt/var/log" ] || mkdir -p /opt/var/log
+  cd "$APP_DIR" || exit 1
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+    echo "nginx-manager-lite already running"
+    return 0
+  fi
+  ROUTES_PATH="$ROUTES_PATH" \
+  GEN_ROUTES_PATH="$GEN_ROUTES_PATH" \
+  LITE_UI_HOST="$HOST" \
+  LITE_UI_PORT="$PORT" \
+  NGINX_CONF_ROOT="$NGINX_CONF_ROOT" \
+  NGINX_LISTEN_IPS="$NGINX_LISTEN_IPS" \
+  NGINX_TEST_CMD="$NGINX_TEST_CMD" \
+  NGINX_RELOAD_CMD="$NGINX_RELOAD_CMD" \
+  LE_ROOT="$LE_ROOT" \
+  ACME_SH_CMD="$ACME_SH_CMD" \
+  ACME_SH_HOME="$ACME_SH_HOME" \
+  ACME_SH_SHELL="$ACME_SH_SHELL" \
+  LOCAL_CA_CERT="$LOCAL_CA_CERT" \
+  LOCAL_CA_KEY="$LOCAL_CA_KEY" \
+  PYTHON_BIN="$PYTHON_BIN" \
+  nohup "$PYTHON_BIN" server.py >>"$LOG_FILE" 2>&1 &
+  echo $! > "$PID_FILE"
+  echo "nginx-manager-lite started"
+}
+
+stop() {
+  if [ -f "$PID_FILE" ]; then
+    kill "$(cat "$PID_FILE")" 2>/dev/null
+    rm -f "$PID_FILE"
+    echo "nginx-manager-lite stopped"
+  else
+    echo "nginx-manager-lite not running"
+  fi
+}
+
+restart() {
+  stop
+  start
+}
+
+case "$1" in
+  start) start ;;
+  stop) stop ;;
+  restart) restart ;;
+  *) echo "Usage: $0 {start|stop|restart}" ;;
+esac
