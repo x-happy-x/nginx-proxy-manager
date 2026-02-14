@@ -6,6 +6,9 @@ SRC_DIR="$SCRIPT_DIR/init.d"
 DST_DIR="/opt/etc/init.d"
 UI_LOG="/opt/var/log/nginx-manager-lite.log"
 UI_PID="/opt/var/run/nginx-manager-lite.pid"
+ROUTES_PATH_DEFAULT="$SCRIPT_DIR/routes.v2.1.yml"
+GEN_ROUTES_PATH_DEFAULT="$SCRIPT_DIR/gen_routes.py"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 usage() {
   cat <<EOF
@@ -17,6 +20,7 @@ Commands:
   start      Start managed scripts in order
   stop       Stop managed scripts in reverse order
   restart    Restart managed scripts in order
+  apply      Apply routes via generator (homenet cleanup included)
   status     Show symlink and runtime status
   logs [N]   Tail UI log (default: 80 lines)
   help       Show this help
@@ -108,6 +112,22 @@ tail_logs() {
   tail -n "$lines" "$UI_LOG"
 }
 
+apply_routes() {
+  routes_path="${ROUTES_PATH:-$ROUTES_PATH_DEFAULT}"
+  gen_path="${GEN_ROUTES_PATH:-$GEN_ROUTES_PATH_DEFAULT}"
+  if [ ! -f "$gen_path" ]; then
+    echo "missing generator: $gen_path" >&2
+    exit 1
+  fi
+  if [ ! -f "$routes_path" ]; then
+    echo "missing routes file: $routes_path" >&2
+    exit 1
+  fi
+  echo "apply: $gen_path --config $routes_path"
+  NGINX_CONF_ROOT="${NGINX_CONF_ROOT:-/opt/etc/nginx}" \
+  "$PYTHON_BIN" "$gen_path" --config "$routes_path"
+}
+
 cmd="${1:-help}"
 case "$cmd" in
   setup)
@@ -125,6 +145,9 @@ case "$cmd" in
     ;;
   restart)
     run_action_in_order restart
+    ;;
+  apply)
+    apply_routes
     ;;
   status)
     show_status

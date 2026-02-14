@@ -1,0 +1,51 @@
+schema_version: 2.1
+
+defaults:
+  globals:
+    ssl_mode: acme
+    listen_ips: []
+    ports:
+      http: 80
+      https: 443
+      http_extra: []
+      https_extra: []
+    ui:
+      host: 0.0.0.0
+      port: 8080
+    stub:
+      enabled: true
+      root: /opt/var/www/stub
+    acme:
+      email: ""
+
+  app:
+    upstream:
+      scheme: http
+      verify_upstream_ssl: false
+    ws_proxy:
+      enabled: false
+      path: /connections
+      rewrite_to_wss: false
+      rewrite_from: ""
+
+  host:
+    kind: private
+    dns:
+      publish: [local]
+      local_record_ip: auto
+    tls:
+      cert_policy: auto_local_ca
+      cert_ref: auto
+      san: []
+
+  endpoint:
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+      ndns_profile: ndns_proxy
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto

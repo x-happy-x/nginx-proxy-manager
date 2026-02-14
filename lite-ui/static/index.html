@@ -84,24 +84,76 @@
           <section class="tab-panel active" data-tab="overview">
             <section class="card">
               <div class="card-header">
-                <h2>Nginx Status</h2>
-                <button id="status-refresh" class="icon-btn" title="Refresh" aria-label="Refresh">
+                <h2>Overview</h2>
+                <button id="overview-refresh" class="icon-btn" title="Refresh overview" aria-label="Refresh overview">
                   <img src="/static/icons/refresh.svg" alt="" />
                 </button>
               </div>
-              <div id="nginx-status" class="status-grid"></div>
+              <div id="overview-grid" class="editor-grid">
+                <div class="editor-card">
+                  <div class="editor-head">
+                    <strong>Nginx Runtime</strong>
+                  </div>
+                  <div id="nginx-status" class="status-grid"></div>
+                </div>
+                <div class="editor-card">
+                  <div class="editor-head">
+                    <strong>Listen Endpoints</strong>
+                  </div>
+                  <div id="nginx-listen-cards" class="summary-chips"></div>
+                </div>
+                <div class="editor-card">
+                  <div class="editor-head">
+                    <strong>Routes File</strong>
+                  </div>
+                  <div class="row cols">
+                    <div style="grid-column: 1 / -1;">
+                      <label>Active routes file</label>
+                      <select id="routes-file-select"></select>
+                    </div>
+                  </div>
+                  <div class="row actions">
+                    <button id="routes-file-refresh" class="icon-btn ghost" title="Refresh routes files" aria-label="Refresh routes files">
+                      <img src="/static/icons/refresh.svg" alt="" />
+                    </button>
+                    <button id="routes-file-select-btn" class="icon-btn ghost" title="Use selected file" aria-label="Use selected file">
+                      <img src="/static/icons/overview.svg" alt="" />
+                    </button>
+                    <button id="routes-file-backup" class="icon-btn" title="Backup active routes file" aria-label="Backup active routes file">
+                      <img src="/static/icons/save.svg" alt="" />
+                    </button>
+                  </div>
+                  <div id="routes-file-active" class="summary mono"></div>
+                </div>
+                <div class="editor-card">
+                  <div class="editor-head">
+                    <strong>Configs</strong>
+                  </div>
+                  <div id="overview-configs" class="editor-grid"></div>
+                </div>
+              </div>
             </section>
           </section>
 
           <section class="tab-panel" data-tab="servers">
             <section class="card">
               <div class="card-header">
-                <h2>Services</h2>
-                <button id="add-service" class="icon-btn" title="Add Service" aria-label="Add Service">
+                <h2>Apps</h2>
+                <button id="add-app" class="icon-btn" title="Add App" aria-label="Add App">
                   <img src="/static/icons/plus.svg" alt="" />
                 </button>
               </div>
-              <div id="services"></div>
+              <div id="apps-list" class="editor-grid"></div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>Hosts</h2>
+                <button id="add-host-entry" class="icon-btn" title="Add Host" aria-label="Add Host">
+                  <img src="/static/icons/plus.svg" alt="" />
+                </button>
+              </div>
+              <div id="hosts-list" class="editor-grid"></div>
             </section>
 
             <section class="card">
@@ -167,55 +219,6 @@
               </div>
             </section>
 
-            <section class="card">
-              <div class="card-header">
-                <h2>NDNS Proxy</h2>
-                <button id="refresh-ndns" class="icon-btn" title="Refresh NDNS" aria-label="Refresh NDNS">
-                  <img src="/static/icons/refresh.svg" alt="" />
-                </button>
-              </div>
-              <div id="ndns-http-summary" class="summary">HTTP: - | HTTPS: -</div>
-              <div id="ndns-cards" class="dns-grid"></div>
-              <div class="dns-add ndns-add">
-                <div class="row">
-                  <label>Name</label>
-                  <input id="ndns-name" type="text" placeholder="vpn" />
-                </div>
-                <div class="row">
-                  <label>Target</label>
-                  <input id="ndns-target" type="text" placeholder="bc:24:11:24:50:db" />
-                </div>
-                <div class="row">
-                  <label>Port</label>
-                  <input id="ndns-port" type="number" placeholder="25500" />
-                </div>
-                <div class="row">
-                  <label>Proto</label>
-                  <select id="ndns-proto">
-                    <option value="http">http</option>
-                    <option value="https">https</option>
-                  </select>
-                </div>
-                <div class="row">
-                  <label>Domain</label>
-                  <input id="ndns-domain" type="text" value="ndns" />
-                </div>
-                <div class="row">
-                  <label>Security</label>
-                  <select id="ndns-security">
-                    <option value="public">public</option>
-                    <option value="private">private</option>
-                    <option value="">(none)</option>
-                  </select>
-                </div>
-                <div class="row">
-                  <button id="ndns-ssl-redirect" class="chip-btn active">SSL redirect</button>
-                </div>
-                <button id="add-ndns" class="icon-btn" title="Add NDNS proxy" aria-label="Add NDNS proxy">
-                  <img src="/static/icons/plus.svg" alt="" />
-                </button>
-              </div>
-            </section>
           </section>
 
           <section class="tab-panel" data-tab="certs">
@@ -343,6 +346,32 @@
                 </div>
               </div>
               <div class="row">
+                <label>Smart Filters</label>
+                <div id="route-filters-toggle" class="chip-group">
+                  <button class="chip-btn" data-filter-key="host">Host</button>
+                  <button class="chip-btn" data-filter-key="targetIp">Target IP</button>
+                  <button class="chip-btn" data-filter-key="listenEndpoint">Listen Endpoint</button>
+                </div>
+              </div>
+              <div id="route-filter-host-wrap" class="filter-drawer">
+                <div class="chip-group multi">
+                  <span class="value-chip vc-kind-private">host</span>
+                  <input id="route-filter-host" type="text" placeholder="s2.proxmox.dashboard.local" />
+                </div>
+              </div>
+              <div id="route-filter-target-wrap" class="filter-drawer">
+                <div class="chip-group multi">
+                  <span class="value-chip vc-kind-private">targetIp</span>
+                  <input id="route-filter-target-ip" type="text" placeholder="192.168.99.20" />
+                </div>
+              </div>
+              <div id="route-filter-listen-wrap" class="filter-drawer">
+                <div class="chip-group multi">
+                  <span class="value-chip vc-kind-private">listenEndpoint</span>
+                  <input id="route-filter-listen-endpoint" type="text" placeholder="192.168.1.2:443" />
+                </div>
+              </div>
+              <div class="row">
                 <label>Status</label>
                 <div id="route-logs-mode" class="chip-group">
                   <button class="chip-btn active" data-value="all">All</button>
@@ -371,6 +400,58 @@
               </div>
             </section>
           </section>
+
+          <div id="add-entity-dialog" class="modal">
+            <div class="modal-backdrop"></div>
+            <div class="modal-card">
+              <div class="modal-header">
+                <div class="modal-title" id="add-entity-title">Add</div>
+                <button id="add-entity-close" class="icon-btn ghost" aria-label="Close">
+                  <img src="/static/icons/close.svg" alt="" />
+                </button>
+              </div>
+              <div class="row" id="add-app-fields">
+                <div class="row cols">
+                  <div><label>App ID</label><input id="new-app-id" type="text" placeholder="app-home" /></div>
+                  <div><label>Name</label><input id="new-app-name" type="text" placeholder="Home" /></div>
+                  <div><label>Upstream Address</label><input id="new-app-address" type="text" placeholder="192.168.1.10" /></div>
+                  <div><label>Upstream Port</label><input id="new-app-port" type="number" value="80" /></div>
+                </div>
+              </div>
+              <div class="row hidden" id="add-host-fields">
+                <div class="row cols">
+                  <div><label>Host</label><input id="new-host-name" type="text" placeholder="app.local" /></div>
+                  <div><label>Kind</label><div id="new-host-kind" class="chip-group"></div></div>
+                  <div><label>App</label><div id="new-host-app" class="chip-group multi"></div></div>
+                  <div><label>Web Port</label><input id="new-host-port" type="number" value="443" /></div>
+                </div>
+              </div>
+              <div class="row actions">
+                <button id="add-entity-submit" class="chip-btn">Create</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="config-editor-dialog" class="modal">
+            <div class="modal-backdrop"></div>
+            <div class="modal-card">
+              <div class="modal-header">
+                <div class="modal-title" id="config-editor-title">Config</div>
+                <button id="config-editor-close" class="icon-btn ghost" aria-label="Close">
+                  <img src="/static/icons/close.svg" alt="" />
+                </button>
+              </div>
+              <div class="row">
+                <label id="config-editor-path">Path</label>
+                <textarea id="config-editor-content" class="log-panel config-editor-area" style="min-height: 420px; max-height: 70vh;"></textarea>
+              </div>
+              <div class="row actions">
+                <button id="config-editor-save" class="icon-btn" title="Save config" aria-label="Save config">
+                  <img src="/static/icons/save.svg" alt="" />
+                </button>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
 

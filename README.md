@@ -36,6 +36,7 @@ sh scripts/setup.sh
 
 ```sh
 ./homenet setup
+./homenet apply
 ./homenet restart
 ./homenet stop
 ./homenet status
@@ -43,6 +44,7 @@ sh scripts/setup.sh
 ```
 
 `setup` создает симлинки в `/opt/etc/init.d` для `init.d/S*` и перезапускает их по порядку.
+`apply` запускает генератор маршрутов (`gen_routes.py --config <routes>`) и чистит старые managed-конфиги.
 
 ## Init.d (Entware)
 
@@ -69,8 +71,8 @@ python3 lite-ui/server.py
 
 ## Переменные окружения
 
-- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/crubs-nginx/routes.yml`)
-- `GEN_ROUTES_PATH` — путь к `gen_routes.py` (по умолчанию `/opt/crubs-nginx/gen_routes.py`)
+- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/etc/homenet-nginx/routes.v2.1.yml`)
+- `GEN_ROUTES_PATH` — путь к `gen_routes.py` (по умолчанию `/opt/etc/homenet-nginx/gen_routes.py`)
 - `PYTHON_BIN` — интерпретатор Python (по умолчанию `python3`)
 - `NDMC_BIN` — путь к `ndmc` (по умолчанию `ndmc`)
 - `IP_HOST_DELETE_MODE` — режим удаления записи DNS (по умолчанию `no-host`)
@@ -189,7 +191,46 @@ IP_HOST_DELETE_MODE=no-host-ip
 
 ## Routing Logs
 
-`gen_routes.py` создает формат `crubs_route_json` и пишет подробные маршрутизационные логи в `ROUTE_ACCESS_LOG`.
+`gen_routes.py` создает формат `homenet_route_json` и пишет подробные маршрутизационные логи в `ROUTE_ACCESS_LOG`.
 В UI для этого есть отдельная вкладка `Routing`.
 Доступны быстрые фильтры `All`, `4xx`, `5xx`, `Errors (4xx+5xx)`.
 API: `/api/nginx/route-logs` и `/api/nginx/route-logs/errors`.
+
+## Schema v2 (Apps + Hosts)
+
+Новая целевая модель вынесена в пример `routes.example.yml`.
+Дефолтные значения полей вынесены в `routes.defaults.yml`.
+Идея:
+
+- `apps[]` — описание backend-приложения (upstream, ws_proxy).
+- `hosts[]` — домены/хосты, которые ссылаются на `app_id`, и их SSL/NDNS/DNS настройки.
+- `certs[]` — опциональные явные привязки custom-сертификатов.
+- `globals` — общие настройки (`listen_ips`, `ports`, `ui`, `stub`, глобальный `ssl_mode`, `acme.email`).
+
+Это пока схема-цель. Текущий runtime продолжает использовать `services` из `routes.yml`.
+
+Для `hosts[]` добавлен тип:
+- `kind: private` — локальный хост (LAN/local).
+- `kind: public` — публичный хост (например через NDNS).
+
+Подробное описание полей: `docs/schema-v2.1.md`.
+
+### Конвертация legacy -> v2.1
+
+```sh
+python3 scripts/convert_routes.py --input routes.yml --output routes.converted.yml
+```
+
+Скрипт конвертирует `services` в `apps/hosts/endpoints`.
+
+### Генерация nginx из v2.1
+
+```sh
+sudo python3 gen_routes.py --config routes.converted.yml
+```
+
+Проверка без reload:
+
+```sh
+sudo python3 gen_routes.py --config routes.converted.yml --dry-run
+```

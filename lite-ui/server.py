@@ -15,7 +15,8 @@ import yaml
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-ROUTES_PATH = os.environ.get("ROUTES_PATH", "/opt/etc/homenet-nginx/routes.yml")
+ROUTES_PATH = os.environ.get("ROUTES_PATH", "/opt/etc/homenet-nginx/routes.v2.1.yml")
+ACTIVE_ROUTES_PATH = ROUTES_PATH
 GEN_ROUTES_PATH = os.environ.get("GEN_ROUTES_PATH", "/opt/etc/homenet-nginx/gen_routes.py")
 PYTHON_BIN = os.environ.get("PYTHON_BIN", "python3")
 NGINX_CONF_ROOT = os.environ.get("NGINX_CONF_ROOT", "/etc/nginx")
@@ -50,101 +51,165 @@ def normalize_port_list(value):
     return out
 
 
-def read_routes():
-    if not os.path.exists(ROUTES_PATH):
-        return {
-            "email": "",
-            "services": [],
-            "ssl_mode": "acme",
+def default_routes_v21():
+    return {
+        "schema_version": 2.1,
+        "globals": {
+            "ssl_mode": "local-ca",
             "listen_ips": [],
             "ports": {"http": 80, "https": 443, "http_extra": [], "https_extra": []},
-            "ui": {
-                "host": os.environ.get("LITE_UI_HOST", "0.0.0.0"),
-                "port": int(os.environ.get("LITE_UI_PORT", "8080")),
-            },
+            "ui": {"host": os.environ.get("LITE_UI_HOST", "0.0.0.0"), "port": int(os.environ.get("LITE_UI_PORT", "8080"))},
             "stub": {"enabled": True, "root": "/opt/var/www/stub"},
-        }
-    with open(ROUTES_PATH, "r") as f:
-        data = yaml.safe_load(f) or {}
-    ui = data.get("ui", {})
-    ports = data.get("ports", {})
-    ports_http = normalize_port(ports.get("http", 80), 80)
-    ports_https = normalize_port(ports.get("https", 443), 443)
-    return {
-        "email": data.get("email", ""),
-        "services": data.get("services", []),
-        "ssl_mode": data.get("ssl_mode", "acme"),
-        "listen_ips": data.get("listen_ips", []),
+            "acme": {"email": ""},
+        },
+        "apps": [],
+        "hosts": [],
+        "certs": [],
+    }
+
+
+def get_routes_path():
+    return ACTIVE_ROUTES_PATH
+
+
+def set_routes_path(path):
+    global ACTIVE_ROUTES_PATH
+    if not path:
+        return False, "empty_path"
+    resolved = os.path.abspath(path)
+    ACTIVE_ROUTES_PATH = resolved
+    return True, resolved
+
+
+def normalize_routes_v21(data):
+    out = default_routes_v21()
+    if not isinstance(data, dict):
+        return out
+    globals_cfg = data.get("globals", {}) if isinstance(data.get("globals", {}), dict) else {}
+    ports = globals_cfg.get("ports", {}) if isinstance(globals_cfg.get("ports", {}), dict) else {}
+    ui = globals_cfg.get("ui", {}) if isinstance(globals_cfg.get("ui", {}), dict) else {}
+    stub = globals_cfg.get("stub", {}) if isinstance(globals_cfg.get("stub", {}), dict) else {}
+    acme = globals_cfg.get("acme", {}) if isinstance(globals_cfg.get("acme", {}), dict) else {}
+    out["schema_version"] = 2.1
+    out["globals"] = {
+        "ssl_mode": str(globals_cfg.get("ssl_mode", "local-ca") or "local-ca"),
+        "listen_ips": parse_listen_ips(globals_cfg.get("listen_ips", [])),
         "ports": {
-            "http": ports_http,
-            "https": ports_https,
+            "http": normalize_port(ports.get("http", 80), 80),
+            "https": normalize_port(ports.get("https", 443), 443),
             "http_extra": normalize_port_list(ports.get("http_extra", [])),
             "https_extra": normalize_port_list(ports.get("https_extra", [])),
         },
         "ui": {
-            "host": ui.get("host", os.environ.get("LITE_UI_HOST", "0.0.0.0")),
+            "host": str(ui.get("host", os.environ.get("LITE_UI_HOST", "0.0.0.0")) or "0.0.0.0").strip(),
             "port": normalize_port(ui.get("port", os.environ.get("LITE_UI_PORT", "8080")), 8080),
         },
-        "stub": data.get("stub", {"enabled": True, "root": "/opt/var/www/stub"}),
+        "stub": {
+            "enabled": bool(stub.get("enabled", True)),
+            "root": str(stub.get("root", "/opt/var/www/stub") or "/opt/var/www/stub"),
+        },
+        "acme": {"email": str(acme.get("email", "") or "")},
     }
+    out["apps"] = data.get("apps", []) if isinstance(data.get("apps", []), list) else []
+    out["hosts"] = data.get("hosts", []) if isinstance(data.get("hosts", []), list) else []
+    out["certs"] = data.get("certs", []) if isinstance(data.get("certs", []), list) else []
+    return out
+
+
+def read_routes():
+    routes_path = get_routes_path()
+    if not os.path.exists(routes_path):
+        return default_routes_v21()
+    with open(routes_path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    if str(data.get("schema_version")) != "2.1":
+        raise ValueError("routes schema_version must be 2.1")
+    return normalize_routes_v21(data)
 
 
 def write_routes(data):
-    ports = data.get("ports", {})
-    ui = data.get("ui", {})
-    ports_http = normalize_port(ports.get("http", 80), 80)
-    ports_https = normalize_port(ports.get("https", 443), 443)
-    payload = {
-        "email": data.get("email", ""),
-        "services": data.get("services", []),
-        "ssl_mode": data.get("ssl_mode", "acme"),
-        "listen_ips": data.get("listen_ips", []),
-        "ports": {
-            "http": ports_http,
-            "https": ports_https,
-            "http_extra": [p for p in normalize_port_list(ports.get("http_extra", [])) if p != ports_http],
-            "https_extra": [p for p in normalize_port_list(ports.get("https_extra", [])) if p != ports_https],
-        },
-        "ui": {
-            "host": (ui.get("host") or os.environ.get("LITE_UI_HOST", "0.0.0.0")).strip(),
-            "port": normalize_port(ui.get("port", os.environ.get("LITE_UI_PORT", "8080")), 8080),
-        },
-        "stub": data.get("stub", {"enabled": True, "root": "/opt/var/www/stub"}),
-    }
-    with open(ROUTES_PATH, "w") as f:
-        yaml.safe_dump(
-            payload,
-            f,
-            sort_keys=False,
-            default_flow_style=False,
-            allow_unicode=False,
-        )
+    payload = normalize_routes_v21(data)
+    routes_path = get_routes_path()
+    os.makedirs(os.path.dirname(routes_path), exist_ok=True)
+    with open(routes_path, "w") as f:
+        yaml.safe_dump(payload, f, sort_keys=False, default_flow_style=False, allow_unicode=False)
 
 
 def apply_routes():
-    cmd = [PYTHON_BIN, GEN_ROUTES_PATH, "--config", ROUTES_PATH]
+    cmd = [PYTHON_BIN, GEN_ROUTES_PATH, "--config", get_routes_path()]
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     return res.returncode == 0, res.stdout
 
 
+def list_route_files():
+    active = get_routes_path()
+    root = os.path.dirname(active) or "."
+    items = []
+    try:
+        names = os.listdir(root)
+    except OSError:
+        names = []
+    for name in sorted(names):
+        lower = name.lower()
+        if not (lower.endswith(".yml") or lower.endswith(".yaml")):
+            continue
+        path = os.path.join(root, name)
+        if not os.path.isfile(path):
+            continue
+        items.append(path)
+    if active not in items:
+        items.insert(0, active)
+    return {"active": active, "dir": root, "items": items}
+
+
+def backup_routes_file():
+    src = get_routes_path()
+    if not os.path.exists(src):
+        return False, f"missing routes file: {src}", ""
+    base = os.path.basename(src)
+    name, ext = os.path.splitext(base)
+    if not ext:
+        ext = ".yml"
+    stamp = subprocess.run(["date", "+%Y%m%d-%H%M%S"], stdout=subprocess.PIPE, text=True).stdout.strip()
+    dst = os.path.join(os.path.dirname(src), f"{name}.{stamp}.bak{ext}")
+    try:
+        with open(src, "rb") as r, open(dst, "wb") as w:
+            w.write(r.read())
+    except OSError as e:
+        return False, str(e), ""
+    return True, "backup created", dst
+
+
 def sync_local_dns(routes):
-    services = routes.get("services", [])
-    listen_ips = parse_listen_ips(routes.get("listen_ips", NGINX_LISTEN_IPS))
+    apps = {str(a.get("id")): a for a in routes.get("apps", []) if isinstance(a, dict) and a.get("id")}
+    hosts = routes.get("hosts", [])
+    globals_cfg = routes.get("globals", {})
+    listen_ips = parse_listen_ips(globals_cfg.get("listen_ips", NGINX_LISTEN_IPS))
     dns_ip = listen_ips[0] if listen_ips else ""
     errors = []
-    for svc in services:
-        if not svc.get("add_to_local_dns"):
+    for item in hosts:
+        if not isinstance(item, dict):
             continue
-        upstream = svc.get("upstream", {})
-        address = (upstream.get("address") or "").strip()
+        dns_cfg = item.get("dns", {}) if isinstance(item.get("dns", {}), dict) else {}
+        publish = dns_cfg.get("publish", []) if isinstance(dns_cfg.get("publish", []), list) else []
+        if "local" not in publish:
+            continue
+        app = apps.get(str(item.get("app_id", "")).strip())
+        upstream = app.get("upstream", {}) if isinstance(app, dict) else {}
+        address = (upstream.get("address") or "").strip() if isinstance(upstream, dict) else ""
         if not address and not dns_ip:
             continue
-        target_ip = dns_ip or address
-        for host in svc.get("hosts", []):
-            delete_ip_host(host, target_ip)
-            ok, out = add_ip_host(host, target_ip)
-            if not ok:
-                errors.append(f"{host}: {out}")
+        local_record_ip = str(dns_cfg.get("local_record_ip", "auto") or "auto").strip()
+        target_ip = dns_ip if local_record_ip == "auto" else local_record_ip
+        if not target_ip:
+            target_ip = address
+        host = str(item.get("host", "")).strip()
+        if not host:
+            continue
+        delete_ip_host(host, target_ip)
+        ok, out = add_ip_host(host, target_ip)
+        if not ok:
+            errors.append(f"{host}: {out}")
     if errors:
         return False, "\n".join(errors)
     return True, "local DNS synced"
@@ -196,12 +261,13 @@ def ensure_stub_cert(cert_dir):
 
 
 def apply_stub_config(routes):
-    stub = routes.get("stub", {})
+    globals_cfg = routes.get("globals", {}) if isinstance(routes.get("globals", {}), dict) else {}
+    stub = globals_cfg.get("stub", {}) if isinstance(globals_cfg.get("stub", {}), dict) else {}
     if not stub.get("enabled", True):
         return True, "stub disabled"
-    listen_ips = routes.get("listen_ips", NGINX_LISTEN_IPS)
+    listen_ips = globals_cfg.get("listen_ips", NGINX_LISTEN_IPS)
     listen_ips = parse_listen_ips(listen_ips)
-    ports = routes.get("ports", {})
+    ports = globals_cfg.get("ports", {}) if isinstance(globals_cfg.get("ports", {}), dict) else {}
     http_port = normalize_port(ports.get("http", 80), 80)
     https_port = normalize_port(ports.get("https", 443), 443)
     http_ports = [http_port] + [p for p in normalize_port_list(ports.get("http_extra", [])) if p != http_port]
@@ -326,14 +392,19 @@ def ensure_local_ca_signed(host, sans=None, force=False):
 
 def issue_local_ca_for_routes(force=False):
     routes = read_routes()
-    services = routes.get("services", [])
+    hosts = routes.get("hosts", [])
     errors = []
-    for svc in services:
-        extra_sans = svc.get("san", [])
-        for host in svc.get("hosts", []):
-            ok, msg = ensure_local_ca_signed(host, sans=extra_sans, force=force)
-            if not ok:
-                errors.append(f"{host}: {msg}")
+    for item in hosts:
+        if not isinstance(item, dict):
+            continue
+        host = str(item.get("host", "")).strip()
+        if not host:
+            continue
+        tls = item.get("tls", {}) if isinstance(item.get("tls", {}), dict) else {}
+        extra_sans = tls.get("san", []) if isinstance(tls.get("san", []), list) else []
+        ok, msg = ensure_local_ca_signed(host, sans=extra_sans, force=force)
+        if not ok:
+            errors.append(f"{host}: {msg}")
     if errors:
         return False, "\n".join(errors)
     return True, "issued"
@@ -464,6 +535,7 @@ def nginx_status():
         "version": "",
         "config_files": [],
         "listeners": [],
+        "parsed_listeners": [],
         "rss_kb": 0,
     }
     try:
@@ -502,6 +574,7 @@ def nginx_status():
                     path = path[:-1]
                 files.append(path)
         status["config_files"] = sorted(set(files))
+        status["parsed_listeners"] = parse_nginx_t_listeners(res.stdout)
     except FileNotFoundError:
         pass
     try:
@@ -532,14 +605,149 @@ def nginx_status():
     return status
 
 
+def parse_listen_address(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return "", None
+    # Drop optional unix socket statements.
+    if raw.startswith("unix:"):
+        return "", None
+    # IPv6 format [::]:443
+    if raw.startswith("[") and "]" in raw:
+        idx = raw.find("]")
+        host = raw[1:idx]
+        rest = raw[idx + 1 :]
+        if rest.startswith(":") and rest[1:].isdigit():
+            return host, int(rest[1:])
+        return host, None
+    # IPv4 / hostname with explicit port.
+    if ":" in raw:
+        host, port = raw.rsplit(":", 1)
+        if port.isdigit():
+            return host, int(port)
+    # Port-only form: listen 443;
+    if raw.isdigit():
+        return "", int(raw)
+    # Wildcard host with no explicit port is not useful without defaults.
+    return raw, None
+
+
+def parse_listen_tokens(token_str):
+    parts = [p for p in str(token_str or "").split() if p]
+    if not parts:
+        return None
+    addr = parts[0]
+    host, port = parse_listen_address(addr)
+    if port is None:
+        # handle forms like "listen default_server;" (invalid for us) or
+        # "listen 0.0.0.0:443 ssl;" already parsed above.
+        return None
+    flags = set(parts[1:])
+    scheme = "https" if "ssl" in flags else "http"
+    return {
+        "ip": host or "*",
+        "port": port,
+        "scheme": scheme,
+        "flags": sorted(flags),
+    }
+
+
+def parse_nginx_t_listeners(text):
+    listeners = []
+    seen = set()
+    source = ""
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        if line.startswith("# configuration file "):
+            source = line[len("# configuration file ") :].rstrip(":").strip()
+            continue
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"^listen\s+(.+?);$", line)
+        if not m:
+            continue
+        parsed = parse_listen_tokens(m.group(1))
+        if not parsed:
+            continue
+        item = {
+            "ip": parsed["ip"],
+            "port": parsed["port"],
+            "scheme": parsed["scheme"],
+            "flags": parsed["flags"],
+            "source": source,
+        }
+        key = (item["ip"], item["port"], item["scheme"], tuple(item["flags"]), item["source"])
+        if key in seen:
+            continue
+        seen.add(key)
+        listeners.append(item)
+    listeners.sort(key=lambda x: (x["port"], x["ip"], x["scheme"], x["source"]))
+    return listeners
+
+
+def config_catalog():
+    items = []
+    candidates = []
+    routes_path = get_routes_path()
+    candidates.append(("routes_v21", "Routes v2.1", routes_path, "yaml"))
+    status = nginx_status()
+    nginx_files = status.get("config_files", []) if isinstance(status, dict) else []
+    if not nginx_files:
+        nginx_files = [os.path.join(NGINX_CONF_ROOT, "nginx.conf")]
+    seen_paths = set()
+    for idx, path in enumerate(nginx_files):
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        title = os.path.basename(path) or path
+        ctype = "nginx"
+        if path.endswith(".types"):
+            ctype = "text"
+        candidates.append((f"nginx_{idx}", title, path, ctype))
+    for cid, title, path, ctype in candidates:
+        exists = os.path.exists(path)
+        size = os.path.getsize(path) if exists else 0
+        mtime = int(os.path.getmtime(path)) if exists else 0
+        listens = []
+        if exists and ctype == "nginx":
+            try:
+                with open(path, "r", errors="replace") as f:
+                    body = f.read()
+                listens = parse_nginx_t_listeners(body)
+            except OSError:
+                listens = []
+        items.append(
+            {
+                "id": cid,
+                "title": title,
+                "path": path,
+                "type": ctype,
+                "editable": ctype in ("yaml", "nginx", "text"),
+                "exists": exists,
+                "size": size,
+                "mtime": mtime,
+                "listens": listens,
+            }
+        )
+    return items
+
+
+def config_by_id(config_id):
+    for item in config_catalog():
+        if item["id"] == config_id:
+            return item
+    return None
+
+
 def read_ui_bind():
     host = os.environ.get("LITE_UI_HOST", "").strip()
     port_raw = os.environ.get("LITE_UI_PORT", "").strip()
     if not host or not port_raw:
         try:
-            with open(ROUTES_PATH, "r") as f:
+            with open(get_routes_path(), "r") as f:
                 data = yaml.safe_load(f) or {}
-            ui = data.get("ui", {}) if isinstance(data, dict) else {}
+            globals_cfg = data.get("globals", {}) if isinstance(data, dict) else {}
+            ui = globals_cfg.get("ui", {}) if isinstance(globals_cfg, dict) else {}
             if not host:
                 host = str(ui.get("host", "")).strip()
             if not port_raw:
@@ -763,55 +971,49 @@ def ndns_suggest_port(start=20000, end=59999):
     return False, "no_free_port", None
 
 
-def service_ndns_payload(service, listen_ips=None):
-    ndns_cfg = service.get("ndns", {}) if isinstance(service, dict) else {}
-    if not isinstance(ndns_cfg, dict) or not ndns_cfg.get("enabled"):
+def host_ndns_payload(host_item, listen_ips=None):
+    if not isinstance(host_item, dict):
         return None
-
-    upstream = service.get("upstream", {}) if isinstance(service, dict) else {}
-    hosts = service.get("hosts", []) if isinstance(service, dict) else []
-
-    name = str(ndns_cfg.get("name") or "").strip()
-    if not name:
-        host = str(hosts[0]).strip() if hosts else ""
-        name = host.split(".", 1)[0] if host else ""
-    if not name:
+    host = str(host_item.get("host", "")).strip()
+    if not host:
         return None
-
-    raw_port = ndns_cfg.get("port", "")
-    port = normalize_port(raw_port, 0)
-    if not port:
-        return None
-
-    proto = str(ndns_cfg.get("proto") or "").strip().lower()
-    if proto not in ("http", "https"):
-        proto = "http"
-
-    target = str(ndns_cfg.get("target") or "").strip()
-    if not target:
-        target = str((listen_ips or [None])[0] or "").strip()
-    if not target:
-        target = str((upstream or {}).get("address") or "").strip()
-    if not target:
-        return None
-
-    item = {
-        "name": name,
-        "upstream": {"proto": proto, "target": target, "port": str(port)},
-        "domain": str(ndns_cfg.get("domain") or "ndns").strip(),
-        "securityLevel": str(ndns_cfg.get("security_level") or "public").strip(),
-        "sslRedirect": bool(ndns_cfg.get("ssl_redirect", True)),
-    }
-    return item
+    for ep in host_item.get("endpoints", []) or []:
+        if not isinstance(ep, dict):
+            continue
+        behavior = ep.get("behavior", {}) if isinstance(ep.get("behavior", {}), dict) else {}
+        if not behavior.get("ndns_profile") and (ep.get("name") or "").strip().lower() != "ndns":
+            continue
+        listen = ep.get("listen", {}) if isinstance(ep.get("listen", {}), dict) else {}
+        port = normalize_port(listen.get("port"), 0)
+        if not port:
+            continue
+        proto = str(listen.get("protocol", "http") or "http").strip().lower()
+        if proto not in ("http", "https"):
+            proto = "http"
+        name = str(behavior.get("ndns_name") or "").strip() or host.split(".", 1)[0]
+        target = str(behavior.get("ndns_target_ip") or "").strip()
+        if not target or target == "auto":
+            target = str((listen_ips or [None])[0] or "").strip()
+        if not name or not target:
+            continue
+        return {
+            "name": name,
+            "upstream": {"proto": proto, "target": target, "port": str(port)},
+            "domain": str(behavior.get("ndns_domain") or "ndns").strip(),
+            "securityLevel": str(behavior.get("ndns_security_level") or "public").strip(),
+            "sslRedirect": bool(behavior.get("ndns_ssl_redirect", True)),
+        }
+    return None
 
 
 def sync_ndns_from_routes(routes):
-    services = routes.get("services", [])
-    listen_ips = parse_listen_ips(routes.get("listen_ips", NGINX_LISTEN_IPS))
+    hosts = routes.get("hosts", [])
+    globals_cfg = routes.get("globals", {})
+    listen_ips = parse_listen_ips(globals_cfg.get("listen_ips", NGINX_LISTEN_IPS))
     errors = []
     applied = 0
-    for svc in services:
-        item = service_ndns_payload(svc, listen_ips=listen_ips)
+    for host_item in hosts:
+        item = host_ndns_payload(host_item, listen_ips=listen_ips)
         if not item:
             continue
         ok, out = ndns_proxy_apply(item, old_name="")
@@ -882,7 +1084,16 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         params = dict([p.split("=", 1) for p in parsed.query.split("&") if "=" in p])
         if parsed.path == "/api/routes":
-            self.send_json(200, read_routes())
+            try:
+                data = read_routes()
+            except ValueError as e:
+                self.send_json(500, {"ok": False, "error": str(e)})
+                return
+            data["_routes_file"] = get_routes_path()
+            self.send_json(200, data)
+            return
+        if parsed.path == "/api/routes/files":
+            self.send_json(200, {"ok": True, **list_route_files()})
             return
         if parsed.path == "/api/ca/status":
             self.send_json(200, {"ok": True, "installed": has_local_ca()})
@@ -951,6 +1162,26 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/nginx/status":
             self.send_json(200, {"ok": True, "status": nginx_status()})
             return
+        if parsed.path == "/api/nginx/configs":
+            self.send_json(200, {"ok": True, "items": config_catalog()})
+            return
+        if parsed.path == "/api/nginx/config/read":
+            config_id = params.get("id", "").strip()
+            item = config_by_id(config_id)
+            if not item:
+                self.send_json(404, {"ok": False, "error": "config_not_found"})
+                return
+            if not item.get("exists"):
+                self.send_json(404, {"ok": False, "error": "config_missing"})
+                return
+            try:
+                with open(item["path"], "r", errors="replace") as f:
+                    content = f.read()
+            except OSError as e:
+                self.send_json(500, {"ok": False, "error": str(e)})
+                return
+            self.send_json(200, {"ok": True, "item": item, "content": content})
+            return
         if parsed.path == "/api/ui/bind":
             host, port = read_ui_bind()
             self.send_json(200, {"ok": True, "host": host, "port": port})
@@ -1012,13 +1243,44 @@ class Handler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self.send_json(400, {"ok": False, "error": "invalid_json"})
                 return
+            if str(payload.get("schema_version")) != "2.1":
+                self.send_json(400, {"ok": False, "error": "schema_version_must_be_2_1"})
+                return
             write_routes(payload)
             self.send_json(200, {"ok": True})
+            return
+        if parsed.path == "/api/routes/select":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(raw or "{}")
+            except json.JSONDecodeError:
+                self.send_json(400, {"ok": False, "error": "invalid_json"})
+                return
+            path = str(payload.get("path", "")).strip()
+            if not path:
+                self.send_json(400, {"ok": False, "error": "path_required"})
+                return
+            ok, out = set_routes_path(path)
+            if not ok:
+                self.send_json(400, {"ok": False, "error": out})
+                return
+            if not os.path.exists(get_routes_path()):
+                write_routes(default_routes_v21())
+            self.send_json(200, {"ok": True, "path": get_routes_path()})
+            return
+        if parsed.path == "/api/routes/backup":
+            ok, out, dst = backup_routes_file()
+            self.send_json(200, {"ok": ok, "output": out, "path": dst})
             return
         if parsed.path == "/api/apply":
             ok, output = apply_routes()
             if ok:
-                routes = read_routes()
+                try:
+                    routes = read_routes()
+                except ValueError as e:
+                    self.send_json(500, {"ok": False, "output": str(e)})
+                    return
                 ndns_ok, ndns_out = sync_ndns_from_routes(routes)
                 dns_ok, dns_out = sync_local_dns(routes)
                 output = (output or "").rstrip()
@@ -1054,6 +1316,33 @@ class Handler(BaseHTTPRequestHandler):
                 return
             ok, output = save_stub_content(content)
             self.send_json(200, {"ok": ok, "output": output})
+            return
+        if parsed.path == "/api/nginx/config/write":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(raw or "{}")
+            except json.JSONDecodeError:
+                self.send_json(400, {"ok": False, "error": "invalid_json"})
+                return
+            config_id = str(payload.get("id", "")).strip()
+            content = payload.get("content", "")
+            item = config_by_id(config_id)
+            if not item:
+                self.send_json(404, {"ok": False, "error": "config_not_found"})
+                return
+            path = item.get("path", "")
+            if not path:
+                self.send_json(400, {"ok": False, "error": "bad_config_path"})
+                return
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    f.write(str(content))
+            except OSError as e:
+                self.send_json(500, {"ok": False, "error": str(e)})
+                return
+            self.send_json(200, {"ok": True, "output": f"saved {path}"})
             return
         if parsed.path == "/api/ca/upload":
             length = int(self.headers.get("Content-Length", "0"))

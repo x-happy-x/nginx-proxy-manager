@@ -1,163 +1,280 @@
-email: admin@crubs.store
-services:
-- hosts:
-  - ha.crubs.store
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - ha.crubs.store
-  ws_proxy:
-    enabled: false
-    path: /connections
-    rewrite_to_wss: false
-    rewrite_from: ''
+schema_version: 2.1
+globals:
+  ssl_mode: local-ca
+  listen_ips:
+  - 192.168.1.2
+  - 192.168.99.2
+  ports:
+    http: 80
+    https: 443
+    http_extra: []
+    https_extra: []
+  ui:
+    host: 192.168.1.1
+    port: 63412
+  stub:
+    enabled: true
+    root: /opt/var/www/stub
+  acme:
+    email: admin@crubs.store
+apps:
+- id: ha
+  name: Home Assistant
   upstream:
     address: 192.168.99.12
     port: 8123
     scheme: http
     verify_upstream_ssl: false
-- hosts:
-  - dns.local
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - dns.local
   ws_proxy:
     enabled: false
     path: /connections
     rewrite_to_wss: false
     rewrite_from: ''
+- id: dns
+  name: Nginx Manager
   upstream:
     address: 192.168.1.1
     port: 63412
     scheme: http
     verify_upstream_ssl: false
-- hosts:
-  - plane.crub.store
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - plane.crub.store
   ws_proxy:
     enabled: false
     path: /connections
     rewrite_to_wss: false
     rewrite_from: ''
+- id: plane
+  name: Plane
   upstream:
     address: 192.168.99.15
     port: 443
     scheme: http
     verify_upstream_ssl: false
-- hosts:
-  - proxmox.dashboard.local
-  - s1.proxmox.dashboard.local
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - proxmox.dashboard.local
-  - s1.proxmox.dashboard.local
   ws_proxy:
     enabled: false
     path: /connections
     rewrite_to_wss: false
     rewrite_from: ''
+- id: proxmox-s1-dashboard
+  name: Dashboard Proxmox [s1]
   upstream:
     address: 192.168.99.10
     port: 8006
     scheme: https
     verify_upstream_ssl: false
-- hosts:
-  - s2.proxmox.dashboard.local
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - s2.proxmox.dashboard.local
   ws_proxy:
     enabled: false
     path: /connections
     rewrite_to_wss: false
     rewrite_from: ''
+- id: proxmox-s2-dashboard
+  name: Dashboard Proxmox [s2]
   upstream:
     address: 192.168.99.20
     port: 8006
     scheme: https
     verify_upstream_ssl: false
-- hosts:
-  - zashboard.local
-  ssl_mode: 'off'
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - zashboard.local
   ws_proxy:
-    enabled: true
+    enabled: false
     path: /connections
-    rewrite_to_wss: true
-    rewrite_from: ws://192.168.1.1:9090
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: zashboard
+  name: Dashboard Mihomo
   upstream:
     address: 192.168.1.1
     port: 9090
     scheme: http
     verify_upstream_ssl: false
-- hosts:
-  - xkeen.local
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - xkeen.local
   ws_proxy:
-    enabled: false
+    enabled: true
     path: /connections
-    rewrite_to_wss: false
-    rewrite_from: ''
+    rewrite_to_wss: true
+    rewrite_from: ws://192.168.1.1:9090
+- id: xkeen-ui
+  name: Dashboard XKeen
   upstream:
     address: 192.168.1.1
     port: 8088
     scheme: http
     verify_upstream_ssl: false
-- hosts:
-  - vless.sub.local
-  ssl_mode: ''
-  host_ssl_mode: {}
-  add_to_local_dns: true
-  san: []
-  dns_hosts:
-  - vless.sub.local
   ws_proxy:
     enabled: false
     path: /connections
     rewrite_to_wss: false
     rewrite_from: ''
+- id: vless-proxy
+  name: Vless Proxy
   upstream:
     address: 192.168.99.18
     port: 25500
     scheme: http
     verify_upstream_ssl: false
-ssl_mode: local-ca
-listen_ips:
-- 192.168.1.2
-- 192.168.99.2
-ports:
-  http: 80
-  https: 443
-  http_extra: []
-  https_extra: []
-ui:
-  host: 192.168.1.1
-  port: 63412
-stub:
-  enabled: true
-  root: /opt/var/www/stub
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+hosts:
+- host: ha.crubs.store
+  kind: public
+  app_id: ha
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: dns.local
+  kind: private
+  app_id: dns
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: plane.crub.store
+  kind: public
+  app_id: plane
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: proxmox.dashboard.local
+  kind: private
+  app_id: proxmox-s1-dashboard
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: s1.proxmox.dashboard.local
+  kind: private
+  app_id: proxmox-s1-dashboard
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: s2.proxmox.dashboard.local
+  kind: private
+  app_id: proxmox-s2-dashboard
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: zashboard.local
+  kind: private
+  app_id: zashboard
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+- host: xkeen.local
+  kind: private
+  app_id: xkeen-ui
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+- host: vless.sub.local
+  kind: private
+  app_id: vless-proxy
+  dns:
+    publish:
+    - local
+    local_record_ip: auto
+  tls:
+    cert_policy: auto_local_ca
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+certs: []

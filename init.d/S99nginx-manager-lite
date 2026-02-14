@@ -29,8 +29,8 @@ LOCAL_CA_CERT="/opt/etc/nginx/local-ca/ca.crt"
 LOCAL_CA_KEY="/opt/etc/nginx/local-ca/ca.key"
 
 if [ -f "$ROUTES_PATH" ]; then
-  CFG_HOST="$($PYTHON_BIN -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; u=d.get("ui") or {}; print((u.get("host") or "").strip())' "$ROUTES_PATH" 2>/dev/null || true)"
-  CFG_PORT="$($PYTHON_BIN -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; u=d.get("ui") or {}; p=u.get("port"); print("" if p is None else str(p).strip())' "$ROUTES_PATH" 2>/dev/null || true)"
+  CFG_HOST="$($PYTHON_BIN -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; g=d.get("globals") or {}; u=g.get("ui") or {}; print((u.get("host") or "").strip())' "$ROUTES_PATH" 2>/dev/null || true)"
+  CFG_PORT="$($PYTHON_BIN -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; g=d.get("globals") or {}; u=g.get("ui") or {}; p=u.get("port"); print("" if p is None else str(p).strip())' "$ROUTES_PATH" 2>/dev/null || true)"
   [ -n "$CFG_HOST" ] && HOST="$CFG_HOST"
   [ -n "$CFG_PORT" ] && PORT="$CFG_PORT"
 fi

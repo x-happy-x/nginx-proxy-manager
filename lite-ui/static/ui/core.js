@@ -19,7 +19,18 @@ UI.state = {
   logsType: "access",
   routeLogMode: "all",
   routeLogItems: [],
-  status: {}
+  routeFilters: { host: "", targetIp: "", listenEndpoint: "" },
+  routeFilterOpen: { host: false, targetIp: false, listenEndpoint: false },
+  status: {},
+  overviewConfigs: [],
+  currentConfigId: "",
+  appsV21: [],
+  hostsV21: [],
+  savedAppsV21: [],
+  savedHostsV21: [],
+  appEditIndex: null,
+  hostEditIndex: null,
+  addDialogType: "app"
 };
 UI.LOG_KEY = "consoleHeight";
 UI.LOG_SCROLL_KEY = "consoleAutoScroll";

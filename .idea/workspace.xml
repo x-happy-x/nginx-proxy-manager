@@ -4,11 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="initial commit">
+    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="fixs and add ndns">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gen_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/gen_routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/init.d/S20-nginx-ips" beforeDir="false" afterPath="$PROJECT_DIR$/init.d/S20-nginx-ips" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/homenet" beforeDir="false" afterPath="$PROJECT_DIR$/homenet" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" beforeDir="false" afterPath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lite-ui/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lite-ui/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/index.html" afterDir="false" />
@@ -85,7 +85,7 @@
     <option name="spentUsd" value="0.064247" />
   </component>
   <component name="RecapUselessUpdatesCounter">
-    <option name="suspendCountdown" value="9" />
+    <option name="suspendCountdown" value="1" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -114,7 +114,7 @@
       <updated>1770493113257</updated>
       <workItem from="1770493114322" duration="2631000" />
       <workItem from="1770497777256" duration="7000" />
-      <workItem from="1771051427367" duration="11426000" />
+      <workItem from="1771051427367" duration="19373000" />
     </task>
     <task id="LOCAL-00001" summary="initial commit">
       <option name="closed" value="true" />
@@ -124,7 +124,15 @@
       <option name="project" value="LOCAL" />
       <updated>1770495514283</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="fixs and add ndns">
+      <option name="closed" value="true" />
+      <created>1771062957266</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1771062957266</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -143,6 +151,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initial commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="initial commit" />
+    <MESSAGE value="fixs and add ndns" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixs and add ndns" />
   </component>
 </project>

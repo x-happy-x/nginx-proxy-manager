@@ -3,19 +3,22 @@ window.UI = window.UI || {};
 UI.main = {};
 
 UI.main.init = function () {
-  UI.qs("#add-service").addEventListener("click", () => {
-    UI.state.services.push({
-      hosts: [],
-      san: [],
-      ssl_mode: "",
-      host_ssl_mode: {},
-      add_to_local_dns: false,
-      ws_proxy: { enabled: false, path: "/connections", rewrite_to_wss: false, rewrite_from: "" },
-      ndns: { enabled: false, name: "", domain: "ndns", target: "", port: "", proto: "", security_level: "public", ssl_redirect: true, simple_mode: true },
-      upstream: { address: "", port: 80, scheme: "http", verify_upstream_ssl: false },
-    });
-    UI.state.serviceExpanded = UI.state.services.length - 1;
-    UI.actions.renderServices();
+  UI.qs("#add-app").addEventListener("click", () => {
+    UI.actions.openAddEntityDialog("app");
+  });
+
+  UI.qs("#add-host-entry").addEventListener("click", () => {
+    UI.actions.openAddEntityDialog("host");
+  });
+
+  UI.qs("#add-entity-close").addEventListener("click", () => {
+    UI.actions.closeAddEntityDialog();
+  });
+  UI.qs("#add-entity-dialog .modal-backdrop").addEventListener("click", () => {
+    UI.actions.closeAddEntityDialog();
+  });
+  UI.qs("#add-entity-submit").addEventListener("click", async () => {
+    await UI.actions.submitAddEntityDialog();
   });
 
   UI.qs("#save-btn").addEventListener("click", async () => {
@@ -107,40 +110,12 @@ UI.main.init = function () {
   bindUpload("#ca-cert-upload", "#ca-cert", "#ca-cert-name", "cert");
   bindUpload("#ca-key-upload", "#ca-key", "#ca-key-name", "key");
 
-  document.addEventListener("click", (event) => {
-    if (UI.state.serviceExpanded === null) {
-      return;
-    }
-    if (!event.target.closest(".service")) {
-      const expanded = UI.qsa(".service")[UI.state.serviceExpanded];
-      if (expanded) {
-        UI.state.services[UI.state.serviceExpanded] = UI.actions.syncServiceFromDom(expanded);
-      }
-      UI.state.serviceExpanded = null;
-      UI.actions.renderServices();
-    }
-  });
-
   UI.qs("#add-host").addEventListener("click", async () => {
     await UI.actions.addHost();
   });
 
   UI.qs("#refresh-hosts").addEventListener("click", async () => {
     await UI.actions.loadHosts();
-  });
-
-  UI.qs("#refresh-ndns").addEventListener("click", async () => {
-    await UI.actions.loadNdns();
-  });
-
-  UI.qs("#add-ndns").addEventListener("click", async () => {
-    await UI.actions.addNdns();
-  });
-
-  const ndnsSslRedirect = UI.qs("#ndns-ssl-redirect");
-  ndnsSslRedirect.addEventListener("click", (e) => {
-    e.preventDefault();
-    ndnsSslRedirect.classList.toggle("active");
   });
 
   UI.qs("#logs-refresh").addEventListener("click", async () => {
@@ -174,6 +149,21 @@ UI.main.init = function () {
     UI.actions.loadRouteLogs();
   });
 
+  UI.qsa("#route-filters-toggle .chip-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      UI.actions.toggleRouteFilter(btn.dataset.filterKey);
+    });
+  });
+
+  const routeFilterInputs = ["#route-filter-host", "#route-filter-target-ip", "#route-filter-listen-endpoint"];
+  routeFilterInputs.forEach((sel) => {
+    const el = UI.qs(sel);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      UI.actions.loadRouteLogs();
+    });
+  });
+
   UI.qsa("#route-logs-mode .chip-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       UI.actions.setRouteLogsMode(btn.dataset.value);
@@ -181,8 +171,30 @@ UI.main.init = function () {
     });
   });
 
-  UI.qs("#status-refresh").addEventListener("click", async () => {
+  UI.qs("#overview-refresh").addEventListener("click", async () => {
     await UI.actions.loadStatus();
+    await UI.actions.loadOverviewConfigs();
+    await UI.actions.loadRouteFiles();
+  });
+
+  UI.qs("#routes-file-refresh").addEventListener("click", async () => {
+    await UI.actions.loadRouteFiles();
+  });
+  UI.qs("#routes-file-select-btn").addEventListener("click", async () => {
+    await UI.actions.selectRouteFile();
+  });
+  UI.qs("#routes-file-backup").addEventListener("click", async () => {
+    await UI.actions.backupRouteFile();
+  });
+
+  UI.qs("#config-editor-close").addEventListener("click", () => {
+    UI.actions.closeConfigEditor();
+  });
+  UI.qs("#config-editor-dialog .modal-backdrop").addEventListener("click", () => {
+    UI.actions.closeConfigEditor();
+  });
+  UI.qs("#config-editor-save").addEventListener("click", async () => {
+    await UI.actions.saveConfigEditor();
   });
 
   UI.qs("#ca-upload").addEventListener("click", async () => {
@@ -234,9 +246,7 @@ UI.main.init = function () {
     UI.log.appendError("Load DNS hosts", "Failed to load hosts.");
   });
 
-  UI.actions.loadNdns().catch(() => {
-    UI.log.appendError("Load NDNS", "Failed to load NDNS settings.");
-  });
+  UI.actions.loadNdns().catch(() => {});
 
   UI.actions.loadCerts().catch(() => {
     UI.log.appendError("Load certs", "Failed to load certificates.");
@@ -248,10 +258,17 @@ UI.main.init = function () {
 
   UI.actions.setLogsType("access");
   UI.actions.setRouteLogsMode("all");
+  UI.actions.renderRouteFilterToggles();
   UI.actions.loadLogs();
   UI.actions.loadRouteLogs();
 
   UI.actions.loadStatus();
+  UI.actions.loadOverviewConfigs().catch(() => {
+    UI.log.appendError("Overview configs", "Failed to load configs.");
+  });
+  UI.actions.loadRouteFiles().catch(() => {
+    UI.log.appendError("Routes files", "Failed to load routes files.");
+  });
 
   UI.tabs.init();
   UI.tabs.initSidebar();

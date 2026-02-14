@@ -1,0 +1,94 @@
+schema_version: 2.1
+
+globals:
+  listen_ips:
+    - 192.168.1.2
+    - 192.168.99.2
+  ports:
+    http: 80
+    https: 443
+    http_extra: []
+    https_extra: []
+  ui:
+    host: 192.168.1.1
+    port: 63412
+  stub:
+    enabled: true
+    root: /opt/var/www/stub
+  acme:
+    email: admin@homenet.local
+
+apps:
+  - id: app-ha
+    name: Home Assistant
+    upstream:
+      address: 192.168.99.12
+      port: 8123
+      scheme: http
+      verify_upstream_ssl: false
+    ws_proxy:
+      enabled: false
+      path: /connections
+      rewrite_to_wss: false
+      rewrite_from: ""
+
+  - id: app-zashboard
+    name: Zashboard
+    upstream:
+      address: 192.168.1.1
+      port: 9090
+      scheme: http
+      verify_upstream_ssl: false
+    ws_proxy:
+      enabled: true
+      path: /connections
+      rewrite_to_wss: true
+      rewrite_from: ws://192.168.1.1:9090
+
+hosts:
+  - host: ha.homenet.local
+    kind: public
+    app_id: app-ha
+    dns:
+      publish: [local, public]
+      local_record_ip: auto
+    tls:
+      cert_policy: auto_local_ca
+      cert_ref: auto
+      san: []
+    endpoints:
+      - name: web
+        listen:
+          protocol: https
+          port: 443
+        behavior:
+          redirect: https
+      - name: ndns
+        listen:
+          protocol: http
+          port: auto_random
+        behavior:
+          ndns_profile: ndns_proxy
+          ndns_name: ha
+          ndns_domain: ndns
+          ndns_security_level: public
+          ndns_ssl_redirect: true
+          ndns_target_ip: auto
+
+  - host: zashboard.local
+    kind: private
+    app_id: app-zashboard
+    dns:
+      publish: [local]
+      local_record_ip: auto
+    tls:
+      cert_policy: off
+      cert_ref: none
+      san: []
+    endpoints:
+      - name: web
+        listen:
+          protocol: http
+          port: 80
+        behavior:
+          redirect: off
