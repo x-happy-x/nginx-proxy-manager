@@ -1,43 +1,163 @@
 email: admin@crubs.store
 services:
 - hosts:
-  - plane.crubs.store
-  - plane.crubs.lan
-  upstream:
-    address: 192.168.99.15
-    port: 80
-    scheme: http
-    verify_upstream_ssl: false
-- hosts:
-  - creality.k1-max.crubs.store
-  - creality.k1-max.crubs.lan
-  upstream:
-    address: 192.168.99.16
-    port: 80
-    scheme: http
-    verify_upstream_ssl: false
-- hosts:
   - ha.crubs.store
-  - ha.crubs.lan
-  - ha.crubs.crazedns.ru
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - ha.crubs.store
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
   upstream:
     address: 192.168.99.12
     port: 8123
     scheme: http
     verify_upstream_ssl: false
 - hosts:
-  - proxmox.crubs.store
-  - proxmox.crubs.lan
+  - dns.local
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - dns.local
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
   upstream:
-    address: 192.168.99.11
+    address: 192.168.1.1
+    port: 63412
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - plane.crub.store
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - plane.crub.store
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  upstream:
+    address: 192.168.99.15
+    port: 443
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - proxmox.dashboard.local
+  - s1.proxmox.dashboard.local
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - proxmox.dashboard.local
+  - s1.proxmox.dashboard.local
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  upstream:
+    address: 192.168.99.10
     port: 8006
     scheme: https
     verify_upstream_ssl: false
 - hosts:
-  - pc.crubs.store
-  - pc.crubs.lan
+  - s2.proxmox.dashboard.local
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - s2.proxmox.dashboard.local
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
   upstream:
-    address: 192.168.1.10
-    port: 80
+    address: 192.168.99.20
+    port: 8006
+    scheme: https
+    verify_upstream_ssl: false
+- hosts:
+  - zashboard.local
+  ssl_mode: 'off'
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - zashboard.local
+  ws_proxy:
+    enabled: true
+    path: /connections
+    rewrite_to_wss: true
+    rewrite_from: ws://192.168.1.1:9090
+  upstream:
+    address: 192.168.1.1
+    port: 9090
     scheme: http
     verify_upstream_ssl: false
+- hosts:
+  - xkeen.local
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - xkeen.local
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  upstream:
+    address: 192.168.1.1
+    port: 8088
+    scheme: http
+    verify_upstream_ssl: false
+- hosts:
+  - vless.sub.local
+  ssl_mode: ''
+  host_ssl_mode: {}
+  add_to_local_dns: true
+  san: []
+  dns_hosts:
+  - vless.sub.local
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  upstream:
+    address: 192.168.99.18
+    port: 25500
+    scheme: http
+    verify_upstream_ssl: false
+ssl_mode: local-ca
+listen_ips:
+- 192.168.1.2
+- 192.168.99.2
+ports:
+  http: 80
+  https: 443
+  http_extra: []
+  https_extra: []
+ui:
+  host: 192.168.1.1
+  port: 63412
+stub:
+  enabled: true
+  root: /opt/var/www/stub

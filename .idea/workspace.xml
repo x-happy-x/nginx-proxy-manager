@@ -4,108 +4,92 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/deployment.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/nginx-proxy-manager.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gen_routes.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/init.d/S20-nginx-ips" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/server.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/app.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/apply.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/bolt.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/cert.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/close.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/console.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/dns.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/download.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/file-off.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/file.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/key.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/logs.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/menu.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/overview.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/pause.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/play.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/plus.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/refresh.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/save.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/server.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/test.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/theme.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/trash.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/icons/upload.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/main.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/console.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/core.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/log.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/main.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/tabs.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lite-ui/static/ui/theme.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/routes.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_1.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_2.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_3.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_4.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_5.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/screenshots/img_6.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/setup.sh" afterDir="false" />
+    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="initial commit">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gen_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/gen_routes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/init.d/S20-nginx-ips" beforeDir="false" afterPath="$PROJECT_DIR$/init.d/S20-nginx-ips" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" beforeDir="false" afterPath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/static/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/main.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/core.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/core.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/main.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/routes.yml" beforeDir="false" afterPath="$PROJECT_DIR$/routes.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="ChangesViewManager">
+    <option name="groupingKeys">
+      <option value="directory" />
+      <option value="repository" />
+    </option>
+  </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="7" />
+    <option name="cachedIndexableFilesCount" value="56" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;x-happy-x&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/x-happy-x/nginx-proxy-manager.git&quot;,
+    &quot;accountId&quot;: &quot;4206f8f1-74e8-4378-9520-21e19fe28edd&quot;
+  }
+}</component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 2
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
   <component name="ProjectId" id="39M5UPgRDxA2H6aZPRWdnHRZFx5" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "P:/python/nginx-proxy-manager",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;//wsl.localhost/dev/home/amagomedsharipov/projects/python/nginx-proxy-manager&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
+  <component name="RecapSpentCounter">
+    <option name="endsOfQuotaMs" value="1771578022253" />
+    <option name="spentUsd" value="0.064247" />
+  </component>
+  <component name="RecapUselessUpdatesCounter">
+    <option name="suspendCountdown" value="9" />
+  </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="P:\python\nginx-proxy-manager\screenshots" />
       <recent name="P:\python\nginx-proxy-manager" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
@@ -128,11 +112,37 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1770493113257</updated>
-      <workItem from="1770493114322" duration="2106000" />
+      <workItem from="1770493114322" duration="2631000" />
+      <workItem from="1770497777256" duration="7000" />
+      <workItem from="1771051427367" duration="11426000" />
     </task>
+    <task id="LOCAL-00001" summary="initial commit">
+      <option name="closed" value="true" />
+      <created>1770495514283</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1770495514283</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="initial commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="initial commit" />
   </component>
 </project>

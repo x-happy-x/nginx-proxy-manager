@@ -30,6 +30,20 @@ sh scripts/setup.sh
 - `S20-nginx-ips` добавит IP на `br0` и запустит nginx;
 - `S99nginx-manager-lite` запустит UI (или перезапустит, если уже работает).
 
+## Локальная команда управления
+
+В корне репозитория есть скрипт `homenet`:
+
+```sh
+./homenet setup
+./homenet restart
+./homenet stop
+./homenet status
+./homenet logs 100
+```
+
+`setup` создает симлинки в `/opt/etc/init.d` для `init.d/S*` и перезапускает их по порядку.
+
 ## Init.d (Entware)
 
 - `init.d/S99nginx-manager-lite` — автозапуск UI.
@@ -64,6 +78,7 @@ python3 lite-ui/server.py
 - `LITE_UI_PORT` — порт (по умолчанию `8080`)
 - `NGINX_CONF_ROOT` — корень конфигов nginx (по умолчанию `/etc/nginx`)
 - `NGINX_LISTEN_IPS` — IP-адреса для `listen` (по умолчанию пусто, все интерфейсы)
+- `ROUTE_ACCESS_LOG` — путь к подробному access log маршрутизации (по умолчанию `/opt/var/log/nginx/route_access.log`)
 - `LOCAL_CA_CERT` — путь к локальному CA сертификату
 - `LOCAL_CA_KEY` — путь к локальному CA ключу
 
@@ -75,6 +90,16 @@ python3 lite-ui/server.py
 - `local-ca` — подписывать домены локальным CA
 - `self-signed` — всегда self-signed для всех доменов
 - `off` — только HTTP, без HTTPS
+
+Также можно переопределять SSL режим на уровне сервиса и хоста:
+
+```yaml
+services:
+  - hosts: [zashboard.local]
+    ssl_mode: local-ca          # override для сервиса
+    host_ssl_mode:              # override для конкретных хостов
+      zashboard.local: off
+```
 
 ## Local DNS
 
@@ -89,6 +114,14 @@ python3 lite-ui/server.py
 listen_ips:
   - 192.168.1.2
   - 192.168.99.2
+ports:
+  http: 80
+  https: 443
+  http_extra: []
+  https_extra: []
+ui:
+  host: 0.0.0.0
+  port: 8080
 stub:
   enabled: true
   root: /opt/var/www/stub
@@ -96,6 +129,8 @@ stub:
 
 Кнопка "Apply Stub" в UI пишет `stub.conf` в `${NGINX_CONF_ROOT}/conf.d` и
 создает self-signed сертификат `${NGINX_CONF_ROOT}/selfsigned/stub.crt`.
+Порты nginx (`ports.http`/`ports.https` + `ports.http_extra`/`ports.https_extra`) и bind UI (`ui.host`/`ui.port`) также настраиваются из UI.
+Для применения bind UI используйте кнопку restart UI (или `/opt/etc/init.d/S99nginx-manager-lite restart`).
 
 ## Local CA
 
@@ -110,6 +145,26 @@ stub:
 
 Для каждого сервиса есть поле `san` (список). Значения можно задавать как
 `DNS:example.local`, `IP:192.168.1.2` или просто `example.local`/`192.168.1.2`.
+
+Для upstream `scheme` доступны `http`, `https`, и `auto`.
+`auto` подставляет входящий протокол (`$scheme`), порт при этом берется из `upstream.port`.
+
+### WS/WSS proxy (для HTTPS + WebSocket)
+
+Для сервиса можно включить поля:
+
+```yaml
+ws_proxy:
+  enabled: true
+  path: /connections
+  rewrite_to_wss: true
+  rewrite_from: ws://192.168.1.1:9090
+```
+
+- `enabled` — добавляет отдельный `location` для websocket path.
+- `path` — путь websocket (например `/connections`).
+- `rewrite_to_wss` — включает подмену `ws://...` в HTML/JS на `wss://$host`.
+- `rewrite_from` — какая строка заменяется (если пусто, берется `ws://<upstream.address>:<upstream.port>`).
 
 ## Пример запуска с кастомными путями
 
@@ -132,3 +187,9 @@ python3 lite-ui/server.py
 IP_HOST_DELETE_MODE=no-host-ip
 ```
 
+## Routing Logs
+
+`gen_routes.py` создает формат `crubs_route_json` и пишет подробные маршрутизационные логи в `ROUTE_ACCESS_LOG`.
+В UI для этого есть отдельная вкладка `Routing`.
+Доступны быстрые фильтры `All`, `4xx`, `5xx`, `Errors (4xx+5xx)`.
+API: `/api/nginx/route-logs` и `/api/nginx/route-logs/errors`.

@@ -1,14 +1,55 @@
 #!/bin/sh
+# Entware init script: add secondary .2 IP on all LAN bridges (br*) that have IPv4,
+# then restart nginx if anything changed.
 
-case "$1" in
-  start)
-    # ждём пока поднимутся интерфейсы
-    sleep 5
+CHANGED=0
 
-    # добавляем ip
-    ip addr add 192.168.1.2/24 dev br0 2>/dev/null
+# list bridge interfaces brX that have any IPv4
+BR_IFS="$(ip -o -4 addr show | awk '/ br[0-9]+ /{print $2}' | sort -u)"
 
-    # поднимаем nginx
-    /opt/etc/init.d/S80nginx start
-    ;;
-esac
+inc_last_octet() {
+  ip="$1"
+  o4="$(echo "$ip" | cut -d. -f4)"
+  [ -z "$o4" ] && return 1
+  # don't touch if last octet is 254/255
+  [ "$o4" -ge 254 ] && return 1
+  echo "$(echo "$ip" | cut -d. -f1-3).$((o4+1))"
+  return 0
+}
+
+for dev in $BR_IFS; do
+  # pick primary global IPv4 on this dev (skip "secondary")
+  main_cidr="$(ip -o -4 addr show dev "$dev" scope global | awk '!/secondary/{print $4; exit}')"
+  [ -z "$main_cidr" ] && continue
+
+  main_ip="${main_cidr%/*}"
+  mask="${main_cidr#*/}"
+
+  alias_ip="$(inc_last_octet "$main_ip")" || continue
+
+  # already present?
+  if ip -o -4 addr show dev "$dev" | grep -q "inet $alias_ip/"; then
+    continue
+  fi
+
+  if ip addr add "$alias_ip/$mask" dev "$dev" 2>/dev/null; then
+    logger -t nginx-ips "added $alias_ip/$mask on $dev (main $main_ip/$mask)"
+    CHANGED=1
+  else
+    logger -t nginx-ips "failed to add $alias_ip/$mask on $dev"
+  fi
+done
+
+# Restart nginx if we changed any IPs
+if [ "$CHANGED" = "1" ]; then
+  if [ -x /opt/etc/init.d/S80nginx ]; then
+    /opt/etc/init.d/S80nginx restart >/dev/null 2>&1 || true
+  elif [ -x /opt/etc/init.d/S80nginx-entware ]; then
+    /opt/etc/init.d/S80nginx-entware restart >/dev/null 2>&1 || true
+  else
+    # last resort
+    nginx -s reload >/dev/null 2>&1 || true
+  fi
+fi
+
+exit 0

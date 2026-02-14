@@ -16,6 +16,7 @@ ACME_WEBROOT = "/var/www/_letsencrypt"
 SELF_DIR = f"{CONF_ROOT}/selfsigned"
 MAPS_CONF = f"{CONF_ROOT}/conf.d/crubs_maps.conf"
 PROXY_SNIPPET = f"{CONF_ROOT}/snippets/crubs_proxy_common.conf"
+ROUTE_ACCESS_LOG = os.environ.get("ROUTE_ACCESS_LOG", "/opt/var/log/nginx/route_access.log")
 
 def sh(cmd, check=True):
     print("+", " ".join(cmd))
@@ -139,13 +140,34 @@ def parse_listen_ips(value):
         return [v.strip() for v in value if str(v).strip()]
     return [v.strip() for v in str(value).split(",") if v.strip()]
 
+def normalize_port(value, fallback):
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    if 1 <= port <= 65535:
+        return port
+    return fallback
+
+def normalize_port_list(value):
+    out = []
+    if not value:
+        return out
+    if not isinstance(value, list):
+        value = [value]
+    for item in value:
+        p = normalize_port(item, 0)
+        if p and p not in out:
+            out.append(p)
+    return out
+
 def listen_lines(port, listen_ips, extra=""):
     if not listen_ips:
         return f"listen {port}{extra};"
     lines = [f"listen {ip}:{port}{extra};" for ip in listen_ips]
     return "\n".join(lines)
 
-def server80(host, proxy_block, redirect_to_https, listen_ips):
+def server80(host, proxy_block, redirect_to_https, listen_ips, route_log_format, http_ports, https_port, extra_locations=""):
     acme = textwrap.dedent(f"""
 location ^~ /.well-known/acme-challenge/ {{
                            root {ACME_WEBROOT};
@@ -153,41 +175,56 @@ default_type "text/plain";
 }}
                            """).rstrip()
     body = acme + "\n\n"
+    if extra_locations:
+        body += extra_locations.rstrip() + "\n\n"
     if redirect_to_https:
-        body += "return 308 https://$host$request_uri;\n"
+        if int(https_port) == 443:
+            body += "return 308 https://$host$request_uri;\n"
+        else:
+            body += f"return 308 https://$host:{https_port}$request_uri;\n"
     else:
         body += proxy_block + "\n"
-    listens = listen_lines(80, listen_ips)
+    listens = "\n".join(listen_lines(p, listen_ips) for p in http_ports)
     return textwrap.dedent(f"""
 server {{
 {listens}
                            server_name {host};
+                           access_log {ROUTE_ACCESS_LOG} {route_log_format};
                            {body}
 }}
                            """).strip()
 
-def server443(host, ssl_cert, ssl_key, proxy_block, listen_ips):
-    listens = listen_lines(443, listen_ips, " ssl http2")
+def server443(host, ssl_cert, ssl_key, proxy_block, listen_ips, route_log_format, https_ports, extra_locations=""):
+    listens = "\n".join(listen_lines(p, listen_ips, " ssl") for p in https_ports)
     return textwrap.dedent(f"""
 server {{
 {listens}
                            server_name {host};
+                           http2 on;
+                           access_log {ROUTE_ACCESS_LOG} {route_log_format};
                            ssl_certificate {ssl_cert};
                            ssl_certificate_key {ssl_key};
 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 
+                           {extra_locations}
                            {proxy_block}
 }}
                            """).strip()
 
 def proxy_block(up):
-    scheme = up.get("scheme","http")
+    scheme = str(up.get("scheme", "http")).strip().lower()
     addr = up["address"]
     port = up.get("port", 80)
+    if scheme == "auto":
+        proxy_scheme = "$scheme"
+    elif scheme in ("http", "https"):
+        proxy_scheme = scheme
+    else:
+        proxy_scheme = "http"
     lines = [f"location / {{",
-             f"    proxy_pass {scheme}://{addr}:{port};",
+             f"    proxy_pass {proxy_scheme}://{addr}:{port};",
              f"    include {PROXY_SNIPPET};"]
-    if scheme == "https":
+    if proxy_scheme in ("https", "$scheme"):
         # часто upstream=IP: self-signed → не проверяем
         if up.get("verify_upstream_ssl", False) is False:
             lines += ["    proxy_ssl_verify off;"]
@@ -195,47 +232,210 @@ def proxy_block(up):
     lines += ["}"]
     return "\n".join(lines)
 
-def write_site(host, up, have_ssl, is_lan, ssl_mode, listen_ips):
+
+def ws_proxy_block(up, ws_cfg):
+    if not isinstance(ws_cfg, dict):
+        return ""
+    if not ws_cfg.get("enabled", False):
+        return ""
+    path = str(ws_cfg.get("path", "/connections")).strip() or "/connections"
+    if not path.startswith("/"):
+        path = "/" + path
+
+    scheme = str(up.get("scheme", "http")).strip().lower()
+    addr = up["address"]
+    port = up.get("port", 80)
+    if scheme == "auto":
+        proxy_scheme = "$scheme"
+    elif scheme in ("http", "https"):
+        proxy_scheme = scheme
+    else:
+        proxy_scheme = "http"
+
+    lines = [f"location ^~ {path} {{",
+             f"    proxy_pass {proxy_scheme}://{addr}:{port};",
+             f"    include {PROXY_SNIPPET};"]
+    if proxy_scheme in ("https", "$scheme"):
+        if up.get("verify_upstream_ssl", False) is False:
+            lines += ["    proxy_ssl_verify off;"]
+        lines += ["    proxy_ssl_server_name on;"]
+    lines += ["}"]
+    return "\n".join(lines)
+
+
+def ws_rewrite_lines(up, ws_cfg):
+    if not isinstance(ws_cfg, dict):
+        return []
+    if not ws_cfg.get("enabled", False):
+        return []
+    if not ws_cfg.get("rewrite_to_wss", False):
+        return []
+    addr = str(up.get("address", "")).strip()
+    port = str(up.get("port", "80")).strip()
+    if not addr:
+        return []
+    ws_from = str(ws_cfg.get("rewrite_from", f"ws://{addr}:{port}")).strip()
+    if not ws_from:
+        return []
+    return [
+        "    sub_filter_once off;",
+        "    sub_filter_types text/html text/plain application/javascript text/javascript;",
+        f"    sub_filter '{ws_from}' 'wss://$host';",
+    ]
+
+
+def ndns_listener_block(svc, listen_ips):
+    ndns_cfg = svc.get("ndns", {}) if isinstance(svc, dict) else {}
+    if not isinstance(ndns_cfg, dict) or not ndns_cfg.get("enabled"):
+        return None
+    port = normalize_port(ndns_cfg.get("port"), 0)
+    if not port:
+        return None
+    up = svc.get("upstream", {})
+    if not up or not up.get("address"):
+        return None
+
+    ws_cfg = svc.get("ws_proxy", {})
     pb = proxy_block(up)
+    wsb = ws_proxy_block(up, ws_cfg)
+    rewrites = ws_rewrite_lines(up, ws_cfg)
+    if rewrites:
+        pb = pb.replace(f"    include {PROXY_SNIPPET};", f"    include {PROXY_SNIPPET};\n" + "\n".join(rewrites), 1)
+
+    base_name = str(ndns_cfg.get("name") or "").strip()
+    if not base_name:
+        hosts = svc.get("hosts", [])
+        if hosts:
+            base_name = str(hosts[0]).split(".", 1)[0]
+    if not base_name:
+        base_name = "service"
+    route_fmt = route_log_format_name(f"ndns_{base_name}")
+    fmt_decl = textwrap.dedent(f"""
+log_format {route_fmt} escape=json
+  '{{"time":"$time_iso8601","remote":"$remote_addr","host":"$host","server_name":"$server_name","server_addr":"$server_addr","server_port":"$server_port","scheme":"$scheme","method":"$request_method","uri":"$request_uri","status":"$status","bytes_sent":"$body_bytes_sent","request_time":"$request_time","upstream_addr":"$upstream_addr","upstream_status":"$upstream_status","upstream_connect_time":"$upstream_connect_time","upstream_header_time":"$upstream_header_time","upstream_response_time":"$upstream_response_time","proxy_host":"$proxy_host","http_referer":"$http_referer","http_user_agent":"$http_user_agent"}}';
+""").strip()
+    listens = listen_lines(port, listen_ips)
+    conf = textwrap.dedent(f"""
+server {{
+{listens}
+                           server_name _;
+                           access_log {ROUTE_ACCESS_LOG} {route_fmt};
+                           {wsb}
+                           {pb}
+}}
+""").strip()
+    safe_name = "".join(c if (c.isalnum() or c in ("-", "_")) else "_" for c in base_name)
+    filename = f"ndns-port-{safe_name}-{port}.conf"
+    return filename, fmt_decl + "\n\n" + conf + "\n"
+
+
+def route_log_format_name(host):
+    cleaned = "".join(c if (c.isalnum() or c == "_") else "_" for c in host)
+    return f"crubs_route_{cleaned}"
+
+
+def write_site(host, up, have_ssl, is_lan, ssl_mode, listen_ips, http_ports, https_ports, ws_cfg=None):
+    pb = proxy_block(up)
+    wsb = ws_proxy_block(up, ws_cfg)
+    rewrites = ws_rewrite_lines(up, ws_cfg)
+    if rewrites:
+        pb = pb.replace(f"    include {PROXY_SNIPPET};", f"    include {PROXY_SNIPPET};\n" + "\n".join(rewrites), 1)
+    route_fmt = route_log_format_name(host)
+    fmt_decl = textwrap.dedent(f"""
+log_format {route_fmt} escape=json
+  '{{"time":"$time_iso8601","remote":"$remote_addr","host":"$host","server_name":"$server_name","server_addr":"$server_addr","server_port":"$server_port","scheme":"$scheme","method":"$request_method","uri":"$request_uri","status":"$status","bytes_sent":"$body_bytes_sent","request_time":"$request_time","upstream_addr":"$upstream_addr","upstream_status":"$upstream_status","upstream_connect_time":"$upstream_connect_time","upstream_header_time":"$upstream_header_time","upstream_response_time":"$upstream_response_time","proxy_host":"$proxy_host","http_referer":"$http_referer","http_user_agent":"$http_user_agent"}}';
+""").strip()
+    https_port = https_ports[0]
     conf = []
     if ssl_mode == "off":
-        conf.append(server80(host, pb, redirect_to_https=False, listen_ips=listen_ips))
+        conf.append(server80(host, pb, redirect_to_https=False, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
     elif ssl_mode == "self-signed":
         crt, key = self_paths(host)
         ensure_selfsigned(host)
-        conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips))
-        conf.append(server443(host, crt, key, pb, listen_ips=listen_ips))
+        conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
+        conf.append(server443(host, crt, key, pb, listen_ips=listen_ips, route_log_format=route_fmt, https_ports=https_ports, extra_locations=wsb))
     elif ssl_mode == "local-ca":
         crt, key = self_paths(host)
         ensure_local_ca_signed(host)
-        conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips))
-        conf.append(server443(host, crt, key, pb, listen_ips=listen_ips))
+        conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
+        conf.append(server443(host, crt, key, pb, listen_ips=listen_ips, route_log_format=route_fmt, https_ports=https_ports, extra_locations=wsb))
     else:
         if is_lan:
             # .lan: всегда https (self-signed), а 80 → редирект
             crt, key = self_paths(host)
             ensure_selfsigned(host)
-            conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips))
-            conf.append(server443(host, crt, key, pb, listen_ips=listen_ips))
+            conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
+            conf.append(server443(host, crt, key, pb, listen_ips=listen_ips, route_log_format=route_fmt, https_ports=https_ports, extra_locations=wsb))
         else:
             # публичный: если есть LE — редирект и полноценный 443, иначе — временно проксируем на 80
             if have_ssl:
                 full, key = le_paths(host)
-                conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips))
-                conf.append(server443(host, full, key, pb, listen_ips=listen_ips))
+                conf.append(server80(host, pb, redirect_to_https=True, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
+                conf.append(server443(host, full, key, pb, listen_ips=listen_ips, route_log_format=route_fmt, https_ports=https_ports, extra_locations=wsb))
             else:
-                conf.append(server80(host, pb, redirect_to_https=False, listen_ips=listen_ips))
-    return "\n\n".join(conf) + "\n"
+                conf.append(server80(host, pb, redirect_to_https=False, listen_ips=listen_ips, route_log_format=route_fmt, http_ports=http_ports, https_port=https_port, extra_locations=wsb))
+    return fmt_decl + "\n\n" + "\n\n".join(conf) + "\n"
 
-def write_service_confs(svc, phase, ssl_mode, listen_ips):
+def effective_ssl_mode(default_mode, svc, host):
+    mode = default_mode
+    if isinstance(svc, dict):
+        mode = svc.get("ssl_mode", mode)
+        host_modes = svc.get("host_ssl_mode", {})
+        if isinstance(host_modes, dict):
+            mode = host_modes.get(host, mode)
+    mode = str(mode or default_mode).strip().lower()
+    if mode not in ("acme", "local-ca", "self-signed", "off"):
+        return default_mode
+    return mode
+
+
+def write_service_confs(svc, phase, default_ssl_mode, listen_ips, http_ports, https_ports):
     up = svc["upstream"]
+    ws_cfg = svc.get("ws_proxy", {})
     for host in svc["hosts"]:
         public = is_public(host)
         have_ssl = cert_exists(host) if public else True
-        content = write_site(host, up, have_ssl, is_lan=not public, ssl_mode=ssl_mode, listen_ips=listen_ips)
+        ssl_mode = effective_ssl_mode(default_ssl_mode, svc, host)
+        content = write_site(
+            host,
+            up,
+            have_ssl,
+            is_lan=not public,
+            ssl_mode=ssl_mode,
+            listen_ips=listen_ips,
+            http_ports=http_ports,
+            https_ports=https_ports,
+            ws_cfg=ws_cfg,
+        )
         path = f"{MANAGED_DIR}/{host}.conf"
         write(path, "# managed by crubs-nginx-yaml\n" + content)
         enable_site(path)
+    ndns_conf = ndns_listener_block(svc, listen_ips)
+    if ndns_conf:
+        filename, content = ndns_conf
+        path = f"{MANAGED_DIR}/{filename}"
+        write(path, "# managed by crubs-nginx-yaml\n" + content)
+        enable_site(path)
+
+
+def validate_ndns_ports(services):
+    used = {}
+    errors = []
+    for svc in services:
+        ndns_cfg = svc.get("ndns", {}) if isinstance(svc, dict) else {}
+        if not isinstance(ndns_cfg, dict) or not ndns_cfg.get("enabled"):
+            continue
+        port = normalize_port(ndns_cfg.get("port"), 0)
+        if not port:
+            continue
+        hosts = svc.get("hosts", [])
+        name = str(ndns_cfg.get("name") or "").strip()
+        ident = name or (hosts[0] if hosts else f"service:{port}")
+        if port in used:
+            errors.append(f"Duplicate NDNS port {port}: {used[port]} and {ident}")
+        else:
+            used[port] = ident
+    return errors
 
 def nginx_reload():
     test_cmd = os.environ.get("NGINX_TEST_CMD", "nginx -t")
@@ -284,12 +484,31 @@ def main():
     clean_managed()
 
     services = cfg["services"]
+    ndns_port_errors = validate_ndns_ports(services)
+    if ndns_port_errors:
+        print("NDNS port conflicts:")
+        for err in ndns_port_errors:
+            print("-", err)
+        sys.exit(1)
+
     ssl_mode = cfg.get("ssl_mode", "acme")
     listen_ips = cfg.get("listen_ips", NGINX_LISTEN_IPS)
     listen_ips = parse_listen_ips(listen_ips)
+    ports_cfg = cfg.get("ports", {})
+    http_port = normalize_port(ports_cfg.get("http", 80), 80)
+    https_port = normalize_port(ports_cfg.get("https", 443), 443)
+    http_ports = [http_port] + [p for p in normalize_port_list(ports_cfg.get("http_extra", [])) if p != http_port]
+    https_ports = [https_port] + [p for p in normalize_port_list(ports_cfg.get("https_extra", [])) if p != https_port]
     # Фаза 1: поднимаем :80 (и .lan с self-signed https)
     for svc in services:
-        write_service_confs(svc, phase="bootstrap", ssl_mode=ssl_mode, listen_ips=listen_ips)
+        write_service_confs(
+            svc,
+            phase="bootstrap",
+            default_ssl_mode=ssl_mode,
+            listen_ips=listen_ips,
+            http_ports=http_ports,
+            https_ports=https_ports,
+        )
     nginx_reload()
 
     # Выпускаем LE для публичных доменов без сертификата
@@ -299,7 +518,14 @@ def main():
     # Фаза 2: пересобираем уже с https для тех, кому выпустили
     clean_managed()
     for svc in services:
-        write_service_confs(svc, phase="final", ssl_mode=ssl_mode, listen_ips=listen_ips)
+        write_service_confs(
+            svc,
+            phase="final",
+            default_ssl_mode=ssl_mode,
+            listen_ips=listen_ips,
+            http_ports=http_ports,
+            https_ports=https_ports,
+        )
     nginx_reload()
 
 if __name__ == "__main__":

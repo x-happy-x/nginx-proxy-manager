@@ -1,0 +1,142 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="/opt/etc/homenet-nginx"
+SRC_DIR="$SCRIPT_DIR/init.d"
+DST_DIR="/opt/etc/init.d"
+UI_LOG="/opt/var/log/nginx-manager-lite.log"
+UI_PID="/opt/var/run/nginx-manager-lite.pid"
+
+usage() {
+  cat <<EOF
+Usage: $0 <command>
+
+Commands:
+  setup      Link managed init.d scripts and restart them in order
+  links      Link managed init.d scripts only
+  start      Start managed scripts in order
+  stop       Stop managed scripts in reverse order
+  restart    Restart managed scripts in order
+  status     Show symlink and runtime status
+  logs [N]   Tail UI log (default: 80 lines)
+  help       Show this help
+EOF
+}
+
+list_managed() {
+  if [ ! -d "$SRC_DIR" ]; then
+    return 0
+  fi
+  for src in "$SRC_DIR"/S*; do
+    [ -f "$src" ] || continue
+    basename "$src"
+  done | sort
+}
+
+reverse_lines() {
+  awk '{ a[NR]=$0 } END { for (i=NR; i>=1; i--) print a[i] }'
+}
+
+link_scripts() {
+  [ -d "$SRC_DIR" ] || { echo "missing source directory: $SRC_DIR" >&2; exit 1; }
+  mkdir -p "$DST_DIR"
+  count=0
+  for name in $(list_managed); do
+    src="$SRC_DIR/$name"
+    dst="$DST_DIR/$name"
+    ln -sf "$src" "$dst"
+    chmod +x "$src"
+    echo "linked: $dst -> $src"
+    count=$((count + 1))
+  done
+  [ "$count" -gt 0 ] || { echo "no managed scripts in $SRC_DIR (expected S*)" >&2; exit 1; }
+}
+
+run_action_in_order() {
+  action="$1"
+  for name in $(list_managed); do
+    script="$DST_DIR/$name"
+    [ -x "$script" ] || continue
+    echo "$action: $script"
+    "$script" "$action" || true
+  done
+}
+
+run_action_reverse() {
+  action="$1"
+  list_managed | reverse_lines | while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    script="$DST_DIR/$name"
+    [ -x "$script" ] || continue
+    echo "$action: $script"
+    "$script" "$action" || true
+  done
+}
+
+show_status() {
+  for name in $(list_managed); do
+    src="$SRC_DIR/$name"
+    dst="$DST_DIR/$name"
+    if [ -L "$dst" ]; then
+      target="$(readlink "$dst" || true)"
+      link_state="linked -> $target"
+    elif [ -e "$dst" ]; then
+      link_state="exists (not symlink)"
+    else
+      link_state="missing"
+    fi
+
+    run_state="unknown"
+    if [ "$name" = "S99nginx-manager-lite" ]; then
+      if [ -f "$UI_PID" ] && kill -0 "$(cat "$UI_PID" 2>/dev/null)" 2>/dev/null; then
+        run_state="running (pid $(cat "$UI_PID" 2>/dev/null))"
+      else
+        run_state="stopped"
+      fi
+    fi
+    echo "$name: $link_state; state: $run_state"
+    [ -f "$src" ] || echo "  warning: source missing: $src"
+  done
+}
+
+tail_logs() {
+  lines="${1:-80}"
+  if [ ! -f "$UI_LOG" ]; then
+    echo "missing log: $UI_LOG" >&2
+    exit 1
+  fi
+  tail -n "$lines" "$UI_LOG"
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  setup)
+    link_scripts
+    run_action_in_order restart
+    ;;
+  links)
+    link_scripts
+    ;;
+  start)
+    run_action_in_order start
+    ;;
+  stop)
+    run_action_reverse stop
+    ;;
+  restart)
+    run_action_in_order restart
+    ;;
+  status)
+    show_status
+    ;;
+  logs)
+    tail_logs "${2:-80}"
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

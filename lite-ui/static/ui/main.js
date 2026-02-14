@@ -7,7 +7,11 @@ UI.main.init = function () {
     UI.state.services.push({
       hosts: [],
       san: [],
+      ssl_mode: "",
+      host_ssl_mode: {},
       add_to_local_dns: false,
+      ws_proxy: { enabled: false, path: "/connections", rewrite_to_wss: false, rewrite_from: "" },
+      ndns: { enabled: false, name: "", domain: "ndns", target: "", port: "", proto: "", security_level: "public", ssl_redirect: true, simple_mode: true },
       upstream: { address: "", port: 80, scheme: "http", verify_upstream_ssl: false },
     });
     UI.state.serviceExpanded = UI.state.services.length - 1;
@@ -26,6 +30,10 @@ UI.main.init = function () {
 
   UI.qs("#apply-stub").addEventListener("click", async () => {
     await UI.actions.applyStub();
+  });
+
+  UI.qs("#restart-ui-bind").addEventListener("click", async () => {
+    await UI.actions.restartUiBind();
   });
 
   const stubToggle = UI.qs("#stub-enabled");
@@ -121,6 +129,20 @@ UI.main.init = function () {
     await UI.actions.loadHosts();
   });
 
+  UI.qs("#refresh-ndns").addEventListener("click", async () => {
+    await UI.actions.loadNdns();
+  });
+
+  UI.qs("#add-ndns").addEventListener("click", async () => {
+    await UI.actions.addNdns();
+  });
+
+  const ndnsSslRedirect = UI.qs("#ndns-ssl-redirect");
+  ndnsSslRedirect.addEventListener("click", (e) => {
+    e.preventDefault();
+    ndnsSslRedirect.classList.toggle("active");
+  });
+
   UI.qs("#logs-refresh").addEventListener("click", async () => {
     await UI.actions.loadLogs();
   });
@@ -138,6 +160,25 @@ UI.main.init = function () {
 
   UI.qs("#logs-limit").addEventListener("change", () => {
     UI.actions.loadLogs();
+  });
+
+  UI.qs("#route-logs-refresh").addEventListener("click", async () => {
+    await UI.actions.loadRouteLogs();
+  });
+
+  UI.qs("#route-logs-filter").addEventListener("change", () => {
+    UI.actions.loadRouteLogs();
+  });
+
+  UI.qs("#route-logs-limit").addEventListener("change", () => {
+    UI.actions.loadRouteLogs();
+  });
+
+  UI.qsa("#route-logs-mode .chip-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      UI.actions.setRouteLogsMode(btn.dataset.value);
+      UI.actions.loadRouteLogs();
+    });
   });
 
   UI.qs("#status-refresh").addEventListener("click", async () => {
@@ -193,6 +234,10 @@ UI.main.init = function () {
     UI.log.appendError("Load DNS hosts", "Failed to load hosts.");
   });
 
+  UI.actions.loadNdns().catch(() => {
+    UI.log.appendError("Load NDNS", "Failed to load NDNS settings.");
+  });
+
   UI.actions.loadCerts().catch(() => {
     UI.log.appendError("Load certs", "Failed to load certificates.");
   });
@@ -202,7 +247,9 @@ UI.main.init = function () {
   });
 
   UI.actions.setLogsType("access");
+  UI.actions.setRouteLogsMode("all");
   UI.actions.loadLogs();
+  UI.actions.loadRouteLogs();
 
   UI.actions.loadStatus();
 

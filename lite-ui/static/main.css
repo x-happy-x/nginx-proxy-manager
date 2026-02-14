@@ -266,6 +266,38 @@ html[data-theme="dark"] .service-meta {
   color: var(--text);
 }
 
+.hidden {
+  display: none !important;
+}
+
+.hosts-list {
+  display: grid;
+  gap: 8px;
+}
+
+.host-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+}
+
+.ndns-simple {
+  display: grid;
+  gap: 8px;
+}
+
+.ndns-preview {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+.service-ndns-fields {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .chip,
 .chip-btn {
   display: inline-flex;
@@ -570,6 +602,18 @@ html[data-theme="dark"] .dns-card {
   margin-top: 12px;
 }
 
+.ndns-add {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.ndns-add .icon-btn {
+  align-self: end;
+}
+
+.ndns-fields {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .log-panel {
   background: rgba(8, 6, 6, 0.08);
   border: 1px solid var(--border);
@@ -584,6 +628,59 @@ html[data-theme="dark"] .dns-card {
 
 html[data-theme="dark"] .log-panel {
   background: rgba(0, 0, 0, 0.3);
+}
+
+.route-log-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 520px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+html[data-theme="dark"] .route-log-wrap {
+  background: rgba(8, 5, 5, 0.92);
+}
+
+.route-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.route-log-table th,
+.route-log-table td {
+  padding: 8px 10px;
+  border-bottom: 1px dashed var(--border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.route-log-table td.mono {
+  font-family: "Courier New", monospace;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.route-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.route-status.st-ok {
+  background: rgba(87, 181, 93, 0.16);
+}
+
+.route-status.st-4xx {
+  background: rgba(240, 186, 64, 0.2);
+}
+
+.route-status.st-5xx {
+  background: rgba(229, 97, 97, 0.2);
 }
 
 .modal {
@@ -733,7 +830,7 @@ html[data-theme="dark"] .console-resizer {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px 14px 14px;
   background: rgba(255, 255, 255, 0.9);
