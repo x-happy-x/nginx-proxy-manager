@@ -4,18 +4,19 @@
 Принцип такой, до
 мен (например ha.local) указывает на nginx (192.168.1.2:80/443), он по нашей конфигурации проксирует запрос по нужному адресу (например 192.168.99.12:8123).
 Автоматом можно задать dns в keenetic, чтобы вручную не добавлять записи `ip host`. И генерить сертификаты со своим CA.
-Легкий UI: один Python-скрипт + статические файлы. Работает с любым nginx и `gen_routes.py`.
+Легкий UI и runtime теперь собраны в Go-бинарники. Работает с любым nginx и схемой `routes.yml`.
 UI можно поднять на отдельном IP (скрипт `init.d/S20-nginx-ips` добавляет IP на `br0` перед запуском nginx).
 
 Возможно при запуске с нуля по этому ридми будут проблемы, потому что его писал codex :)
 
 ## Скриншоты
-![Снимок экрана 2026-02-07 231629.png](screenshots/%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-02-07%20231629.png)
+![Снимок экрана 2026-02-07 231629.png](docs/screenshots/%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-02-07%20231629.png)
 
 ## Требования на nginx-хосте
 
-- Python 3
 - nginx
+- `ndmc` для интеграции с Keenetic
+- Python 3 только для вспомогательных legacy-скриптов вроде `scripts/convert_routes.py`
 
 ## Быстрый запуск
 
@@ -25,26 +26,42 @@ sh scripts/setup.sh
 
 После запуска `scripts/setup.sh`:
 - репозиторий будет установлен в `/opt/etc/homenet-nginx` или обновлен;
+- локальный `config/runtime.env` будет сохранен при обновлении;
 - файлы `init.d/S20-nginx-ips` и `init.d/S99nginx-manager-lite` будут
   симлинкнуты в `/opt/etc/init.d/`;
 - `S20-nginx-ips` добавит IP на `br0` и запустит nginx;
 - `S99nginx-manager-lite` запустит UI (или перезапустит, если уже работает).
 
+## Бинарники
+
+Бинарники лежат в подпапках `bin/<os-arch>/`:
+
+- `bin/linux-amd64/manager`
+- `bin/linux-amd64/nginx`
+- `bin/linux-amd64/homenet`
+- `bin/linux-arm64/manager`
+- `bin/linux-arm64/nginx`
+- `bin/linux-arm64/homenet`
+
+На роутере используется `bin/linux-arm64/`.
+
 ## Локальная команда управления
 
-В корне репозитория есть скрипт `homenet`:
+Основной CLI теперь:
 
 ```sh
-./homenet setup
-./homenet apply
-./homenet restart
-./homenet stop
-./homenet status
-./homenet logs 100
+bin/linux-amd64/homenet setup
+bin/linux-amd64/homenet apply
+bin/linux-amd64/homenet restart
+bin/linux-amd64/homenet stop
+bin/linux-amd64/homenet status
+bin/linux-amd64/homenet logs 100
 ```
 
+На роутере те же команды вызываются через `bin/linux-arm64/homenet`.
+
 `setup` создает симлинки в `/opt/etc/init.d` для `init.d/S*` и перезапускает их по порядку.
-`apply` запускает генератор маршрутов (`gen_routes.py --config <routes>`) и чистит старые managed-конфиги.
+`apply` запускает отдельный генератор nginx (`bin/.../nginx --config <routes>`).
 
 ## Init.d (Entware)
 
@@ -56,24 +73,27 @@ sh scripts/setup.sh
 
 ```sh
 opkg update
-opkg install python3
+opkg install nginx
 ```
 
 ## Запуск
 
 ```sh
 cd /opt/etc/homenet-nginx
-python3 lite-ui/server.py
+bin/linux-arm64/manager
 ```
 
 По умолчанию UI доступен на `http://0.0.0.0:8080`.
-Чтобы слушать на отдельном IP, укажите `LITE_UI_HOST` (пример: `LITE_UI_HOST=192.168.1.2`).
+Основные runtime-пути и bind UI теперь лежат в `config/runtime.env`.
+Чтобы слушать на отдельном IP, измените там `LITE_UI_HOST`.
 
 ## Переменные окружения
 
-- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/etc/homenet-nginx/routes.v2.1.yml`)
-- `GEN_ROUTES_PATH` — путь к `gen_routes.py` (по умолчанию `/opt/etc/homenet-nginx/gen_routes.py`)
-- `PYTHON_BIN` — интерпретатор Python (по умолчанию `python3`)
+- `CONFIG_ENV_PATH` — альтернативный путь к env-файлу runtime (по умолчанию `config/runtime.env`)
+- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/etc/homenet-nginx/routes.v2.1.yml` для manager, в init.d у нас используется `/opt/etc/homenet-nginx/routes.yml`)
+- `GEN_ROUTES_PATH` — путь к бинарнику генератора nginx
+- `STATIC_ROOT` — корень primary static assets (по умолчанию `frontend/static`)
+- `REACT_INDEX_REL` — относительный путь к React entrypoint внутри `STATIC_ROOT` (по умолчанию `react/index.html`)
 - `NDMC_BIN` — путь к `ndmc` (по умолчанию `ndmc`)
 - `IP_HOST_DELETE_MODE` — режим удаления записи DNS (по умолчанию `no-host`)
 - `LITE_UI_HOST` — адрес для слушания (по умолчанию `0.0.0.0`)
@@ -171,10 +191,8 @@ ws_proxy:
 ## Пример запуска с кастомными путями
 
 ```sh
-ROUTES_PATH=/opt/etc/nginx/routes.yml \
-GEN_ROUTES_PATH=/opt/etc/nginx/gen_routes.py \
-LITE_UI_PORT=8080 \
-python3 lite-ui/server.py
+CONFIG_ENV_PATH=/opt/etc/homenet-nginx/config/runtime.env \
+bin/linux-arm64/manager
 ```
 
 ## DNS Proxy Static Hosts
@@ -191,7 +209,7 @@ IP_HOST_DELETE_MODE=no-host-ip
 
 ## Routing Logs
 
-`gen_routes.py` создает формат `homenet_route_json` и пишет подробные маршрутизационные логи в `ROUTE_ACCESS_LOG`.
+Бинарник `nginx` создает формат `homenet_route_json` и пишет подробные маршрутизационные логи в `ROUTE_ACCESS_LOG`.
 В UI для этого есть отдельная вкладка `Routing`.
 Доступны быстрые фильтры `All`, `4xx`, `5xx`, `Errors (4xx+5xx)`.
 API: `/api/nginx/route-logs` и `/api/nginx/route-logs/errors`.
@@ -226,11 +244,11 @@ python3 scripts/convert_routes.py --input routes.yml --output routes.converted.y
 ### Генерация nginx из v2.1
 
 ```sh
-sudo python3 gen_routes.py --config routes.converted.yml
+sudo bin/linux-amd64/nginx --config routes.converted.yml
 ```
 
 Проверка без reload:
 
 ```sh
-sudo python3 gen_routes.py --config routes.converted.yml --dry-run
+sudo bin/linux-amd64/nginx --config routes.converted.yml --dry-run
 ```

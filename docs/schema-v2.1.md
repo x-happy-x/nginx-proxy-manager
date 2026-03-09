@@ -14,7 +14,7 @@
 - `listen_ips[]`: nginx listen IPs (empty => all interfaces)
 - `ports.http|https`: default web ports
 - `ports.http_extra[]|https_extra[]`: optional additional global ports
-- `ui.host|port`: lite-ui bind settings
+- `ui.host|port`: manager bind settings
 - `stub.enabled|root`: fallback stub server settings
 - `acme.email`: ACME account email
 
@@ -22,14 +22,15 @@
 
 - `id`: unique app id
 - `name`: display name
-- `upstream.address|port|scheme|verify_upstream_ssl`
-- `ws_proxy.enabled|path|rewrite_to_wss|rewrite_from`
+- `upstream.address|port|scheme`
 
 ## hosts[]
 
 - `host`: fqdn
 - `kind`: `private|public`
 - `app_id`: reference to `apps[].id`
+- `verify_upstream_ssl`: `true|false` for HTTPS upstream verification
+- `ws_proxy.enabled|path|rewrite_to_wss|rewrite_from`
 - `dns.publish[]`: `local|public`
 - `dns.local_record_ip`: explicit IP or `auto`
 - `tls.cert_policy`: `off|auto_acme|auto_local_ca|self_signed|custom_ref`
@@ -57,4 +58,3 @@
 - `hosts` define how to expose domains and ports.
 - Multiple hosts can point to one app.
 - Multiple endpoints can be defined per host.
-
