@@ -1,6 +1,6 @@
 import type { RouteApp } from "../../../types";
 import { useI18n } from "../../../i18n";
-import { CardIconActions, FieldLabel, IconButton, RadioChips } from "../../../components/ui";
+import { Button, CardIconActions, FieldLabel, IconButton, RadioChips } from "../../../components/ui";
 import { getInitials, readFileAsDataUrl } from "../../../features/servers/lib/utils";
 
 type Props = {
@@ -111,11 +111,11 @@ export function AppCard({ app, idx, editing, busy, dirty, onSetMode, onUpdateApp
         ) : (
           <div className="summary-row">
             {dirty ? <span className="unsaved-badge chip-token chip-token--warning">{t("common.unsaved")}</span> : null}
-            <button className="summary-chip summary-chip--app chip-token chip-token--interactive" type="button" onClick={() => onSetMode("edit")}>
+            <Button className="summary-chip summary-chip--app chip-token chip-token--interactive" variant="ghost" compact onClick={() => onSetMode("edit")}>
               <strong className="summary-chip__value">
                 {app.upstream.address ? `${app.upstream.scheme}:${app.upstream.address}:${app.upstream.port || 80}` : "-"}
               </strong>
-            </button>
+            </Button>
           </div>
         )}
       </div>
