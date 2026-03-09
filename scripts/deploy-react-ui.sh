@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build React UI locally and deploy runtime files to router over SSH.
+# Build runtime artifacts locally and deploy only required runtime files to router over SSH.
 # Loads env from DEPLOY_ENV_FILE (default: scripts/deploy-react-ui.env) if present.
 # Required env:
 #   ROUTER_HOST=192.168.1.1
@@ -11,7 +11,7 @@ set -euo pipefail
 #   REMOTE_DIR=/opt/etc/homenet-nginx
 #   SSH_OPTS='-o StrictHostKeyChecking=accept-new'
 #   RESTART_UI=1
-#   RESTART_CMD='/opt/etc/init.d/S99nginx-manager-lite restart'
+#   RESTART_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet restart'
 #   UPLOAD_APP_ICONS=1
 #   SKIP_INSTALL=1
 #   ROUTER_PASSWORD='your_password' (requires sshpass)
@@ -57,6 +57,11 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v go >/dev/null 2>&1; then
+  echo "ERROR: go command not found"
+  exit 1
+fi
+
 SSH_TARGET="${ROUTER_USER}@${ROUTER_HOST}"
 SSH_BASE=(ssh -p "${ROUTER_PORT}")
 if [[ -n "${SSH_OPTS}" ]]; then
@@ -73,7 +78,11 @@ if [[ -n "${ROUTER_PASSWORD}" ]]; then
   SSH_BASE=(sshpass -p "${ROUTER_PASSWORD}" "${SSH_BASE[@]}")
 fi
 
-echo "[1/5] Install frontend deps"
+run_ssh() {
+  "${SSH_BASE[@]}" "${SSH_TARGET}" "$1"
+}
+
+echo "[1/6] Install frontend deps"
 cd "${REPO_ROOT}/frontend"
 if [[ "${SKIP_INSTALL}" == "1" ]]; then
   echo "Skip install (SKIP_INSTALL=1)"
@@ -85,7 +94,7 @@ else
   fi
 fi
 
-echo "[2/5] Build frontend"
+echo "[2/6] Build frontend"
 npm run build
 
 if [[ ! -f "${REPO_ROOT}/frontend/static/react/index.html" ]]; then
@@ -93,29 +102,89 @@ if [[ ! -f "${REPO_ROOT}/frontend/static/react/index.html" ]]; then
   exit 1
 fi
 
-echo "[3/5] Ensure remote directories"
-"${SSH_BASE[@]}" "${SSH_TARGET}" "mkdir -p '${REMOTE_DIR}/frontend/static/react' '${REMOTE_DIR}/frontend/static/app-icons' '${REMOTE_DIR}/frontend/static/icons'"
+echo "[3/6] Build linux-arm64 binaries"
+cd "${REPO_ROOT}/golang"
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/manager ./manager
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/nginx ./nginx
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/homenet ./ctl
 
-echo "[4/5] Upload files"
+echo "[4/6] Prepare remote runtime directories"
+run_ssh "mkdir -p '${REMOTE_DIR}/bin/linux-arm64' '${REMOTE_DIR}/frontend/static' '${REMOTE_DIR}/init.d' '${REMOTE_DIR}/config' '${REMOTE_DIR}/.deploy-tmp/config'"
+run_ssh "rm -rf \
+  '${REMOTE_DIR}/.git' \
+  '${REMOTE_DIR}/.idea' \
+  '${REMOTE_DIR}/__pycache__' \
+  '${REMOTE_DIR}/lite-ui' \
+  '${REMOTE_DIR}/screenshots' \
+  '${REMOTE_DIR}/static' \
+  '${REMOTE_DIR}/golang' \
+  '${REMOTE_DIR}/docs' \
+  '${REMOTE_DIR}/scripts' \
+  '${REMOTE_DIR}/bin/linux-amd64' \
+  '${REMOTE_DIR}/frontend/src' \
+  '${REMOTE_DIR}/frontend/node_modules' \
+  '${REMOTE_DIR}/frontend/static/react' \
+  '${REMOTE_DIR}/frontend/static/icons' \
+  '${REMOTE_DIR}/frontend/static/app-icons'"
+run_ssh "rm -f \
+  '${REMOTE_DIR}/AGENTS.md' \
+  '${REMOTE_DIR}/README.md' \
+  '${REMOTE_DIR}/gen_routes.py' \
+  '${REMOTE_DIR}/homenet' \
+  '${REMOTE_DIR}/local.setup.sh' \
+  '${REMOTE_DIR}/routes.example.yml' \
+  '${REMOTE_DIR}/routes.defaults.yml' \
+  '${REMOTE_DIR}/frontend/index.html' \
+  '${REMOTE_DIR}/frontend/package.json' \
+  '${REMOTE_DIR}/frontend/package-lock.json' \
+  '${REMOTE_DIR}/frontend/tsconfig.json' \
+  '${REMOTE_DIR}/frontend/tsconfig.node.json' \
+  '${REMOTE_DIR}/frontend/tsconfig.node.tsbuildinfo' \
+  '${REMOTE_DIR}/frontend/tsconfig.tsbuildinfo' \
+  '${REMOTE_DIR}/frontend/vite.config.d.ts' \
+  '${REMOTE_DIR}/frontend/vite.config.js' \
+  '${REMOTE_DIR}/frontend/vite.config.ts'"
+
+echo "[5/6] Upload runtime artifacts"
 cd "${REPO_ROOT}"
 
 tar -cf - \
+  bin/linux-arm64 \
+  init.d/S20-nginx-ips \
   init.d/S99nginx-manager-lite \
-  frontend/static | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}'"
+  frontend/static/react \
+  frontend/static/icons | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}'"
 
 if [[ "${UPLOAD_APP_ICONS}" == "1" && -d "${REPO_ROOT}/frontend/static/app-icons" ]]; then
   tar -cf - frontend/static/app-icons | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}'"
 fi
 
-echo "[5/5] Verify remote files"
-"${SSH_BASE[@]}" "${SSH_TARGET}" "ls -la '${REMOTE_DIR}/frontend/static/react/index.html' '${REMOTE_DIR}/init.d/S99nginx-manager-lite'"
+tar -cf - routes.yml config/runtime.env | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}/.deploy-tmp'"
+run_ssh "if [ ! -f '${REMOTE_DIR}/routes.yml' ]; then cp '${REMOTE_DIR}/.deploy-tmp/routes.yml' '${REMOTE_DIR}/routes.yml'; fi"
+run_ssh "if [ ! -f '${REMOTE_DIR}/config/runtime.env' ]; then cp '${REMOTE_DIR}/.deploy-tmp/config/runtime.env' '${REMOTE_DIR}/config/runtime.env'; fi"
+run_ssh "rm -rf '${REMOTE_DIR}/.deploy-tmp'"
 
-echo "[5.1/5] Fix init script permissions/links"
-"${SSH_BASE[@]}" "${SSH_TARGET}" "chmod +x '${REMOTE_DIR}/init.d/S99nginx-manager-lite' || true; if [ -d /opt/etc/init.d ]; then ln -sf '${REMOTE_DIR}/init.d/S99nginx-manager-lite' /opt/etc/init.d/S99nginx-manager-lite; fi"
+echo "[6/6] Verify remote runtime and restart"
+run_ssh "chmod +x \
+  '${REMOTE_DIR}/init.d/S20-nginx-ips' \
+  '${REMOTE_DIR}/init.d/S99nginx-manager-lite' \
+  '${REMOTE_DIR}/bin/linux-arm64/manager' \
+  '${REMOTE_DIR}/bin/linux-arm64/nginx' \
+  '${REMOTE_DIR}/bin/linux-arm64/homenet'"
+run_ssh "if [ -d /opt/etc/init.d ]; then \
+  ln -sf '${REMOTE_DIR}/init.d/S20-nginx-ips' /opt/etc/init.d/S20-nginx-ips; \
+  ln -sf '${REMOTE_DIR}/init.d/S99nginx-manager-lite' /opt/etc/init.d/S99nginx-manager-lite; \
+fi"
+run_ssh "ls -la \
+  '${REMOTE_DIR}/frontend/static/react/index.html' \
+  '${REMOTE_DIR}/frontend/static/icons/menu.svg' \
+  '${REMOTE_DIR}/bin/linux-arm64/manager' \
+  '${REMOTE_DIR}/routes.yml' \
+  '${REMOTE_DIR}/config/runtime.env'"
 
 if [[ "${RESTART_UI}" == "1" ]]; then
   echo "Restart UI service"
-  "${SSH_BASE[@]}" "${SSH_TARGET}" "${RESTART_CMD} || true"
+  run_ssh "${RESTART_CMD} || true"
 fi
 
-echo "Done: deployed React UI to ${SSH_TARGET}:${REMOTE_DIR}"
+echo "Done: deployed runtime artifacts to ${SSH_TARGET}:${REMOTE_DIR}"

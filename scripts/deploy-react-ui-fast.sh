@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fast deploy: skip npm install, only build + upload.
+# Fast deploy: skip npm install, build runtime artifacts, upload runtime-only payload.
 # Required env:
 #   ROUTER_HOST=192.168.1.1
 
