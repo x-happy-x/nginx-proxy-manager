@@ -1,0 +1,34 @@
+.tabs-inline {
+  display: flex;
+  gap: 8px;
+
+  button.active {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+}
+
+.grid-2 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-1 {
+  display: grid;
+  gap: 10px;
+}
+
+.grid-1 textarea,
+.grid-2 textarea {
+  min-height: 140px;
+  resize: vertical;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}

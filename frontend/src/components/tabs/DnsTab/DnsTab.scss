@@ -1,0 +1,106 @@
+.dns-tab .panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.dns-tab .table-wrap {
+  overflow: auto;
+}
+
+.dns-tab table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  input {
+    min-width: 280px;
+  }
+}
+
+.dns-tab .row-3,
+.dns-tab .row-2 {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dns-tab .row-3 {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.dns-tab .row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dns-tab .ndns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 8px;
+}
+
+.dns-tab .ndns-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 10px;
+
+  .ndns-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+
+    strong {
+      min-width: 0;
+      word-break: break-word;
+    }
+  }
+
+  .summary-grid {
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .summary-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.35);
+    display: grid;
+    gap: 4px;
+  }
+
+  .summary-value {
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  .actions-row {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+html[data-theme="dark"] .dns-tab .ndns-card .summary-item {
+  background: rgba(14, 8, 8, 0.76);
+}
+
+@media (max-width: 800px) {
+  .dns-tab .row-3,
+  .dns-tab .row-2 {
+    grid-template-columns: 1fr;
+  }
+}

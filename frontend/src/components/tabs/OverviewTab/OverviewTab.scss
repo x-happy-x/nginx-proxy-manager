@@ -1,0 +1,75 @@
+.overview-tab .panel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.overview-tab .panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 12px;
+
+  h3 {
+    margin: 0 0 8px;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+  }
+
+  .chip {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+
+  .chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .actions-row {
+    margin-top: 8px;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+}
+
+.overview-tab .panel-full {
+  grid-column: 1 / -1;
+}
+
+.overview-tab .cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.overview-tab .cfg-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--surface-2);
+
+  strong {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  p {
+    margin: 0 0 8px;
+  }
+}
+
+@media (max-width: 1020px) {
+  .overview-tab .panel-grid {
+    grid-template-columns: 1fr;
+  }
+}

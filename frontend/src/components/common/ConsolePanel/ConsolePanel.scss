@@ -1,0 +1,85 @@
+.console {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 240px;
+  background: var(--console-bg);
+  backdrop-filter: var(--blur);
+  color: var(--text);
+  z-index: 30;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+  transform: translateY(100%);
+  transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
+
+  &.open {
+    transform: translateY(0);
+  }
+}
+
+.console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--console-header);
+  border-bottom: 1px solid var(--border);
+}
+
+.console-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.console-title {
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+.console-resizer {
+  height: 6px;
+  cursor: ns-resize;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="dark"] .console-resizer {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.console-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+.log-entry {
+  margin-bottom: 12px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+  padding-bottom: 8px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.log-title {
+  font-weight: bold;
+}
+
+.log-time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.log-line {
+  white-space: pre-wrap;
+}

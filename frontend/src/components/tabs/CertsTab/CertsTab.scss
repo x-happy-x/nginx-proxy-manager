@@ -1,0 +1,35 @@
+.certs-tab .panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.certs-tab .cert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.certs-tab .cert-card {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 10px;
+
+  p {
+    margin: 6px 0;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .actions-row {
+    margin-top: 6px;
+  }
+}

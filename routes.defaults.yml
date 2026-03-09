@@ -21,15 +21,15 @@ defaults:
   app:
     upstream:
       scheme: http
-      verify_upstream_ssl: false
+
+  host:
+    kind: private
+    verify_upstream_ssl: false
     ws_proxy:
       enabled: false
       path: /connections
       rewrite_to_wss: false
       rewrite_from: ""
-
-  host:
-    kind: private
     dns:
       publish: [local]
       local_record_ip: auto

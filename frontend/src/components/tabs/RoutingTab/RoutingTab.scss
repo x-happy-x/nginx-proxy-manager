@@ -1,0 +1,37 @@
+.routing-tab .panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 12px;
+}
+
+.routing-tab .row-3 {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.routing-tab .table-wrap {
+  overflow: auto;
+}
+
+.routing-tab table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 7px 6px;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.83rem;
+  }
+}
+
+@media (max-width: 800px) {
+  .routing-tab .row-3 {
+    grid-template-columns: 1fr;
+  }
+}
