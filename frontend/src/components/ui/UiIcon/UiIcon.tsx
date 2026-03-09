@@ -32,5 +32,14 @@ type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "alt"> & {
 };
 
 export function UiIcon({ name, alt = "", className = "", ...rest }: Props) {
-  return <img src={`/static/icons/${name}.svg`} alt={alt} className={["ui-icon", className].filter(Boolean).join(" ")} {...rest} />;
+  return (
+    <img
+      src={`/static/icons/${name}.svg`}
+      alt={alt}
+      className={["ui-icon", className].filter(Boolean).join(" ")}
+      draggable={false}
+      {...rest}
+      onContextMenu={(event) => event.preventDefault()}
+    />
+  );
 }

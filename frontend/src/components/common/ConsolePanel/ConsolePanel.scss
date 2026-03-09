@@ -7,7 +7,7 @@
   background: var(--console-bg);
   backdrop-filter: var(--blur);
   color: var(--text);
-  z-index: 30;
+  z-index: 50;
   border-top: 1px solid var(--border);
   box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
   transform: translateY(100%);
@@ -40,9 +40,10 @@
 }
 
 .console-resizer {
-  height: 6px;
+  height: 10px;
   cursor: ns-resize;
   background: var(--resizer-bg);
+  touch-action: none;
 }
 
 .console-body {
@@ -78,4 +79,10 @@
 
 .log-line {
   white-space: pre-wrap;
+}
+
+body.is-console-resizing {
+  cursor: ns-resize;
+  user-select: none;
+  -webkit-user-select: none;
 }
