@@ -103,7 +103,7 @@
   height: 46px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--avatar-bg);
   display: grid;
   place-items: center;
   position: relative;
@@ -123,13 +123,13 @@
 }
 
 .servers-tab .server-avatar.host-avatar {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--avatar-bg-host);
 }
 
 .servers-tab .server-avatar.editable .avatar-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(6, 20, 28, 0.72);
+  background: var(--overlay-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -202,7 +202,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--subtle-panel);
   display: grid;
   gap: 4px;
 
@@ -210,10 +210,6 @@
     min-width: 0;
     word-break: break-word;
   }
-}
-
-html[data-theme="dark"] .servers-tab .summary-item {
-  background: rgba(14, 8, 8, 0.76);
 }
 
 .servers-tab .servers-modal-actions {
@@ -227,12 +223,8 @@ html[data-theme="dark"] .servers-tab .summary-item {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--subtle-panel);
   word-break: break-word;
-}
-
-html[data-theme="dark"] .servers-tab .delete-confirm-text {
-  background: rgba(14, 8, 8, 0.76);
 }
 
 .servers-tab .mode-pane {

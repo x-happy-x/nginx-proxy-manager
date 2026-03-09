@@ -27,7 +27,7 @@
     height: 12px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    box-shadow: 0 0 12px rgba(241, 154, 154, 0.8);
+    box-shadow: 0 0 12px var(--accent-soft-strong);
   }
 
   h1 {

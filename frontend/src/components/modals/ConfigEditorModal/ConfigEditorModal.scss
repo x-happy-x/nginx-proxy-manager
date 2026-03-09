@@ -8,7 +8,7 @@
   .backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(8, 10, 16, 0.34);
+    background: var(--modal-backdrop);
   }
 
   .modal-card {

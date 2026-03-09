@@ -19,8 +19,8 @@
     font-weight: 700;
     text-align: center;
     color: var(--text);
-    background: rgba(241, 154, 154, 0.3);
-    border: 1px solid rgba(241, 154, 154, 0.55);
+    background: var(--accent-soft-strong);
+    border: 1px solid var(--accent-border);
   }
 }
 
@@ -69,6 +69,6 @@
 
 .lang-switch__item.active {
   color: var(--text);
-  background: rgba(241, 154, 154, 0.18);
+  background: var(--tab-active-bg);
   border-color: var(--border);
 }

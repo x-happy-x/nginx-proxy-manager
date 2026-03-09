@@ -76,7 +76,7 @@
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 8px;
-    background: rgba(255, 255, 255, 0.35);
+    background: var(--subtle-panel);
     display: grid;
     gap: 4px;
   }
@@ -92,10 +92,6 @@
     flex-wrap: wrap;
     gap: 6px;
   }
-}
-
-html[data-theme="dark"] .dns-tab .ndns-card .summary-item {
-  background: rgba(14, 8, 8, 0.76);
 }
 
 @media (max-width: 800px) {

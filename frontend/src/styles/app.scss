@@ -59,8 +59,8 @@ button.accent,
 .icon-btn.accent {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: none;
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(241, 154, 154, 0.5);
+  color: #fffaf4;
+  box-shadow: 0 8px 20px var(--accent-soft-strong);
 }
 
 .icon-btn {
@@ -194,7 +194,7 @@ label,
   padding: 6px 12px;
   border-radius: 999px;
   font-size: 11px;
-  border: 1px solid rgba(224, 138, 145, 0.46);
+  border: 1px solid var(--accent-border);
   color: var(--text);
   background: var(--chip-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
@@ -205,8 +205,8 @@ label,
 }
 
 .chip-token--warning {
-  background: rgba(224, 138, 145, 0.22);
-  border-color: rgba(224, 138, 145, 0.62);
+  background: var(--accent-soft-strong);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .chip-token--interactive {
@@ -216,8 +216,8 @@ label,
 
 .chip-token--interactive:hover,
 .chip-token--interactive:focus-visible {
-  background: rgba(224, 138, 145, 0.24);
-  border-color: rgba(224, 138, 145, 0.68);
+  background: var(--accent-soft-strong);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .chip-token--interactive:active {
@@ -240,14 +240,14 @@ label,
 }
 
 .ui-chip:hover {
-  border-color: rgba(224, 138, 145, 0.64);
-  background: rgba(224, 138, 145, 0.22);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-soft-strong);
 }
 
 .chip-token--active,
 .ui-chip.active {
-  background: rgba(224, 138, 145, 0.28);
-  border-color: rgba(224, 138, 145, 0.72);
+  background: var(--accent-soft-strong);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   color: var(--text);
 }
 
@@ -270,7 +270,7 @@ label,
 
 .ui-tab-btn:hover {
   transform: translateY(-1px);
-  border-color: rgba(224, 138, 145, 0.56);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
   color: var(--text);
 }
 

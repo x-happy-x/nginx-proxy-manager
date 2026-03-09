@@ -42,11 +42,7 @@
 .console-resizer {
   height: 6px;
   cursor: ns-resize;
-  background: rgba(0, 0, 0, 0.08);
-}
-
-html[data-theme="dark"] .console-resizer {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--resizer-bg);
 }
 
 .console-body {
