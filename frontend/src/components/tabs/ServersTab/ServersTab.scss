@@ -1,7 +1,7 @@
 .servers-tab .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .servers-tab .card-item,
@@ -251,7 +251,18 @@ html[data-theme="dark"] .servers-tab .delete-confirm-text {
   }
 }
 
+@media (max-width: 1200px) {
+  .servers-tab .grid-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 760px) {
+  .servers-tab .card-item,
+  .servers-tab .panel {
+    padding: 10px;
+  }
+
   .servers-tab .card-item .row-2,
   .servers-tab .card-item .ndns-grid,
   .servers-tab .panel .row-2 {
@@ -293,5 +304,23 @@ html[data-theme="dark"] .servers-tab .delete-confirm-text {
       overflow: visible;
       text-overflow: clip;
     }
+  }
+}
+
+@media (max-width: 560px) {
+  .servers-tab .summary-row,
+  .servers-tab .card-icon-actions,
+  .servers-tab .actions-row {
+    align-items: stretch;
+  }
+
+  .servers-tab .server-card-head {
+    gap: 8px;
+  }
+
+  .servers-tab .server-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
   }
 }

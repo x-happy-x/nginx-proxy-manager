@@ -9,7 +9,8 @@
   gap: 8px;
   align-self: start;
   position: sticky;
-  top: 78px;
+  top: 88px;
+  min-width: 0;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 
   &:hover {
@@ -84,7 +85,7 @@
 
   .mobile-tabs {
     position: fixed;
-    bottom: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     left: 8px;
     right: 8px;
     z-index: 40;
@@ -104,11 +105,27 @@
       color: var(--muted);
       justify-content: center;
       border-radius: 12px;
+      min-height: 46px;
 
       &.active {
         color: var(--text);
         background: rgba(241, 154, 154, 0.18);
       }
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .mobile-tabs {
+    left: 6px;
+    right: 6px;
+    gap: 3px;
+    padding: 5px;
+    border-radius: 16px;
+
+    .ui-tab-btn {
+      padding: 8px 2px;
+      min-height: 42px;
     }
   }
 }
