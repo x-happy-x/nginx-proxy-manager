@@ -9,7 +9,7 @@ set -euo pipefail
 #   ROUTER_USER=root
 #   ROUTER_PORT=22
 #   REMOTE_DIR=/opt/etc/homenet-nginx
-#   UI_SOURCE_DIR=frontend-prototype
+#   UI_SOURCE_DIR=frontend
 #   SSH_OPTS='-o StrictHostKeyChecking=accept-new'
 #   RESTART_UI=1
 #   RESTART_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet restart'
@@ -33,7 +33,7 @@ ROUTER_HOST="${ROUTER_HOST:-}"
 ROUTER_USER="${ROUTER_USER:-root}"
 ROUTER_PORT="${ROUTER_PORT:-22}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/etc/homenet-nginx}"
-UI_SOURCE_DIR="${UI_SOURCE_DIR:-frontend-prototype}"
+UI_SOURCE_DIR="${UI_SOURCE_DIR:-frontend}"
 SSH_OPTS="${SSH_OPTS:-}"
 RESTART_UI="${RESTART_UI:-0}"
 RESTART_CMD="${RESTART_CMD:-/opt/etc/init.d/S99nginx-manager-lite restart}"

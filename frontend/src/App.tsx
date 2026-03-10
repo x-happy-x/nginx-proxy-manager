@@ -33,8 +33,8 @@ import {
   writeConfig,
 } from "./api";
 import { ConsolePanel } from "./components/common/ConsolePanel";
-import { SidebarTabs, type TabKey } from "./components/layout/SidebarTabs";
-import { TopBar } from "./components/layout/TopBar";
+import { AppSidebar } from "./components/layout/AppSidebar";
+import type { TabKey } from "./components/layout/SidebarTabs";
 import { CaModal } from "./components/modals/CaModal";
 import { ConfigEditorModal } from "./components/modals/ConfigEditorModal";
 import { CertsTab } from "./components/tabs/CertsTab";
@@ -117,7 +117,6 @@ export default function App() {
     const stored = localStorage.getItem("locale");
     return stored === "en" ? "en" : "ru";
   });
-  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => localStorage.getItem("nav_collapsed") === "1");
   const [activeTab, setActiveTab] = useState<TabKey>(() => tabFromHash(window.location.hash));
   const [doc, setDoc] = useState<RoutesDocument | null>(null);
   const [baseline, setBaseline] = useState("");
@@ -167,10 +166,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("locale", locale);
   }, [locale]);
-
-  useEffect(() => {
-    localStorage.setItem("nav_collapsed", navCollapsed ? "1" : "0");
-  }, [navCollapsed]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -385,19 +380,19 @@ export default function App() {
     <I18nContext.Provider value={{ locale, setLocale, t }}>
       <main className="app-root">
         <section className="app-shell">
-          <TopBar
-            dirty={dirty}
-            busy={busy}
-            isDarkTheme={theme === "dark"}
-            consoleOpen={consoleOpen}
-            onReload={() => void boot()}
-            onSave={() => void saveCurrent()}
-            onToggleTheme={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
-            onToggleConsole={() => setConsoleOpen((v) => !v)}
-          />
-
-          <section className={["workspace", navCollapsed ? "workspace--nav-collapsed" : ""].filter(Boolean).join(" ")}>
-            <SidebarTabs active={activeTab} onChange={setTab} collapsed={navCollapsed} onToggleCollapse={() => setNavCollapsed((prev) => !prev)} />
+          <section className="workspace">
+            <AppSidebar
+              active={activeTab}
+              dirty={dirty}
+              busy={busy}
+              isDarkTheme={theme === "dark"}
+              consoleOpen={consoleOpen}
+              onChange={setTab}
+              onReload={() => void boot()}
+              onSave={() => void saveCurrent()}
+              onToggleTheme={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
+              onToggleConsole={() => setConsoleOpen((v) => !v)}
+            />
 
             <div className="content">
           {activeTab === "overview" ? (

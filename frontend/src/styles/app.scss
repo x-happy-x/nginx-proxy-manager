@@ -102,8 +102,6 @@ label,
   min-height: 100vh;
   width: 100%;
   padding: 12px;
-  max-width: 1600px;
-  margin: 0 auto;
   display: grid;
   gap: 12px;
 }
@@ -111,7 +109,7 @@ label,
 .app-shell {
   display: grid;
   gap: 0;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: linear-gradient(180deg, var(--surface-3), color-mix(in srgb, var(--surface-3) 82%, transparent));
@@ -121,20 +119,16 @@ label,
 
 .workspace {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 230px) 1fr;
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 16px;
-  padding: 14px 0 120px;
-  transition: grid-template-columns 0.24s ease;
+  padding: 0 0 120px;
   align-items: start;
-}
-
-.workspace.workspace--nav-collapsed {
-  --sidebar-width: 86px;
 }
 
 .content {
   min-width: 0;
   display: grid;
+  align-content: start;
 }
 
 .tab-section {
@@ -395,12 +389,8 @@ button:focus-visible,
 
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: var(--sidebar-width, 208px) minmax(0, 1fr);
+    grid-template-columns: 264px minmax(0, 1fr);
     gap: 14px;
-  }
-
-  .workspace.workspace--nav-collapsed {
-    --sidebar-width: 78px;
   }
 }
 

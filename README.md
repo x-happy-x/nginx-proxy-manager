@@ -87,8 +87,8 @@ bin/linux-arm64/manager
 Основные runtime-пути и bind UI теперь лежат в `config/runtime.env`.
 Чтобы слушать на отдельном IP, измените там `LITE_UI_HOST`.
 
-Текущий legacy/editor UI оставлен в `frontend/`, а новый экспериментальный интерфейс живет в `frontend-prototype/`.
-Скрипт `scripts/deploy-react-ui.sh` по умолчанию собирает именно `frontend-prototype/` и публикует его в runtime-путь `frontend/static/react`.
+Основной UI живет в `frontend/`.
+Скрипт `scripts/deploy-react-ui.sh` по умолчанию собирает `frontend/` и публикует его в runtime-путь `frontend/static/react`.
 
 ## Переменные окружения
 

@@ -1,0 +1,105 @@
+.app-sidebar {
+  position: sticky;
+  top: var(--shell-top-offset, 12px);
+  align-self: start;
+  min-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
+  padding: 22px 18px 18px;
+  border: 1px solid var(--nav-border);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 96%, #fff 4%), color-mix(in srgb, var(--surface-3) 86%, transparent));
+  box-shadow: var(--nav-shadow);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.app-sidebar__main {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+
+.app-sidebar__brand {
+  display: grid;
+  gap: 10px;
+}
+
+.app-sidebar__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.app-sidebar__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-sidebar__title-row strong {
+  font-size: 22px;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.app-sidebar__brand p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.app-sidebar__nav {
+  display: grid;
+  gap: 8px;
+}
+
+.app-sidebar__tab.ui-tab-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 48px;
+  border-radius: 14px;
+  color: var(--muted);
+}
+
+.app-sidebar__tab.ui-tab-btn.active {
+  color: var(--text);
+  background: var(--tab-active-bg);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  box-shadow: 0 10px 24px rgba(51, 39, 25, 0.12);
+}
+
+.app-sidebar__footer {
+  display: grid;
+  gap: 12px;
+}
+
+.app-sidebar__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-sidebar__toolbar .lang-switch,
+.app-sidebar__toolbar .lang-switch__trigger {
+  min-width: 0;
+}
+
+.app-sidebar__save {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .app-sidebar {
+    position: static;
+    min-height: auto;
+  }
+}
