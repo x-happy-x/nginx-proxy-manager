@@ -384,21 +384,22 @@ export default function App() {
   return (
     <I18nContext.Provider value={{ locale, setLocale, t }}>
       <main className="app-root">
-      <TopBar
-        dirty={dirty}
-        busy={busy}
-        isDarkTheme={theme === "dark"}
-        consoleOpen={consoleOpen}
-        onReload={() => void boot()}
-        onSave={() => void saveCurrent()}
-        onToggleTheme={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
-        onToggleConsole={() => setConsoleOpen((v) => !v)}
-      />
+        <section className="app-shell">
+          <TopBar
+            dirty={dirty}
+            busy={busy}
+            isDarkTheme={theme === "dark"}
+            consoleOpen={consoleOpen}
+            onReload={() => void boot()}
+            onSave={() => void saveCurrent()}
+            onToggleTheme={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
+            onToggleConsole={() => setConsoleOpen((v) => !v)}
+          />
 
-      <section className={["workspace", navCollapsed ? "workspace--nav-collapsed" : ""].filter(Boolean).join(" ")}>
-        <SidebarTabs active={activeTab} onChange={setTab} collapsed={navCollapsed} onToggleCollapse={() => setNavCollapsed((prev) => !prev)} />
+          <section className={["workspace", navCollapsed ? "workspace--nav-collapsed" : ""].filter(Boolean).join(" ")}>
+            <SidebarTabs active={activeTab} onChange={setTab} collapsed={navCollapsed} onToggleCollapse={() => setNavCollapsed((prev) => !prev)} />
 
-        <div className="content">
+            <div className="content">
           {activeTab === "overview" ? (
             <OverviewTab
               busy={busy}
@@ -576,52 +577,53 @@ export default function App() {
               onRefresh={() => void run("Refresh route logs", loadRouteLogItems)}
             />
           ) : null}
-        </div>
-      </section>
+            </div>
+          </section>
+        </section>
 
-      <ConsolePanel open={consoleOpen} items={consoleItems} onToggle={() => setConsoleOpen((v) => !v)} onClear={() => setConsoleItems([])} />
+        <ConsolePanel open={consoleOpen} items={consoleItems} onToggle={() => setConsoleOpen((v) => !v)} onClear={() => setConsoleItems([])} />
 
-      <ConfigEditorModal
-        open={configModalOpen}
-        title={configModalTitle}
-        path={configModalPath}
-        editable={configModalEditable}
-        content={configModalContent}
-        busy={busy}
-        onClose={() => setConfigModalOpen(false)}
-        onChange={setConfigModalContent}
-        onSave={() =>
-          void run("Save config", async () => {
-            const res = await writeConfig(configModalId, configModalContent);
-            if (!res.ok) throw new Error(res.error || res.output || "save failed");
-            setConfigModalOpen(false);
-            await loadOverview();
-          })
-        }
-      />
+        <ConfigEditorModal
+          open={configModalOpen}
+          title={configModalTitle}
+          path={configModalPath}
+          editable={configModalEditable}
+          content={configModalContent}
+          busy={busy}
+          onClose={() => setConfigModalOpen(false)}
+          onChange={setConfigModalContent}
+          onSave={() =>
+            void run("Save config", async () => {
+              const res = await writeConfig(configModalId, configModalContent);
+              if (!res.ok) throw new Error(res.error || res.output || "save failed");
+              setConfigModalOpen(false);
+              await loadOverview();
+            })
+          }
+        />
 
-      <CaModal
-        open={caModalOpen}
-        busy={busy}
-        onClose={() => setCaModalOpen(false)}
-        onUpload={(cert, key) =>
-          void run("Upload CA", async () => {
-            const res = await uploadCa(cert, key);
-            if (!res.ok) throw new Error(res.output || res.error || "upload failed");
-            setCaModalOpen(false);
-            await loadCertPart();
-          })
-        }
-        onGenerate={(subject) =>
-          void run("Generate CA", async () => {
-            const res = await generateCa(subject);
-            if (!res.ok) throw new Error(res.output || res.error || "generate failed");
-            setCaModalOpen(false);
-            await loadCertPart();
-          })
-        }
-      />
-    </main>
+        <CaModal
+          open={caModalOpen}
+          busy={busy}
+          onClose={() => setCaModalOpen(false)}
+          onUpload={(cert, key) =>
+            void run("Upload CA", async () => {
+              const res = await uploadCa(cert, key);
+              if (!res.ok) throw new Error(res.output || res.error || "upload failed");
+              setCaModalOpen(false);
+              await loadCertPart();
+            })
+          }
+          onGenerate={(subject) =>
+            void run("Generate CA", async () => {
+              const res = await generateCa(subject);
+              if (!res.ok) throw new Error(res.output || res.error || "generate failed");
+              setCaModalOpen(false);
+              await loadCertPart();
+            })
+          }
+        />
+      </main>
     </I18nContext.Provider>
   );
 }

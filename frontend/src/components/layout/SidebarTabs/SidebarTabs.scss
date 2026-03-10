@@ -1,14 +1,15 @@
 .sidebar-tabs {
-  border: 1px solid var(--nav-border);
-  border-radius: 18px;
-  background: var(--surface-3);
+  border: 0;
+  border-right: 1px solid var(--nav-border);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
-  padding: 10px;
+  padding: 2px 14px 2px 0;
   display: grid;
   gap: 8px;
   align-self: start;
   min-width: 0;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease;
 
   .sidebar-tabs__toggle {
     width: var(--size-icon-btn-topbar);
@@ -64,15 +65,16 @@
 
   .mobile-tabs {
     position: static;
-    border: 1px solid var(--nav-border);
-    border-radius: 16px;
-    background: var(--surface-3);
+    border: 0;
+    border-bottom: 1px solid var(--nav-border);
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 4px;
-    padding: 6px;
-    margin-bottom: 4px;
+    padding: 0 0 12px;
+    margin-bottom: 2px;
 
     .ui-tab-btn {
       min-width: 0;

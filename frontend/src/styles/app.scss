@@ -108,11 +108,21 @@ label,
   gap: 12px;
 }
 
+.app-shell {
+  display: grid;
+  gap: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, var(--surface-3), color-mix(in srgb, var(--surface-3) 82%, transparent));
+  box-shadow: 0 14px 34px rgba(51, 39, 25, 0.06);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: var(--sidebar-width, 230px) 1fr;
   gap: 16px;
-  padding: 0 0 120px;
+  padding: 14px 0 120px;
   transition: grid-template-columns 0.24s ease;
   align-items: start;
 }
@@ -410,6 +420,11 @@ button:focus-visible,
     padding: 10px;
   }
 
+  .app-shell {
+    padding: 10px;
+    border-radius: 20px;
+  }
+
   .tab-section {
     gap: 10px;
   }
@@ -418,6 +433,11 @@ button:focus-visible,
 @media (max-width: 560px) {
   .app-root {
     padding: 8px;
+  }
+
+  .app-shell {
+    padding: 8px;
+    border-radius: 18px;
   }
 
   .section-head {
