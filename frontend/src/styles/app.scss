@@ -104,13 +104,15 @@ label,
   padding: 12px;
   max-width: 1600px;
   margin: 0 auto;
+  display: grid;
+  gap: 12px;
 }
 
 .workspace {
   display: grid;
   grid-template-columns: var(--sidebar-width, 230px) 1fr;
   gap: 16px;
-  padding: 10px 0 120px;
+  padding: 0 0 120px;
   transition: grid-template-columns 0.24s ease;
   align-items: start;
 }
@@ -395,7 +397,7 @@ button:focus-visible,
   .workspace {
     grid-template-columns: 1fr;
     gap: 12px;
-    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 16px;
   }
 
   .content {

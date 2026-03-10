@@ -1,17 +1,13 @@
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--card);
-  backdrop-filter: blur(14px) saturate(1.15);
-  box-shadow: var(--shadow);
-  border-radius: 18px;
+  background: var(--surface-3);
+  box-shadow: none;
+  border-radius: 16px;
 }
 
 .brand {
@@ -44,8 +40,8 @@
   align-items: center;
   gap: 8px;
   padding: 4px;
-  border-radius: 14px;
-  background: var(--control-bg);
+  border-radius: 12px;
+  background: transparent;
   border: 1px solid var(--border);
   min-width: 0;
   justify-self: end;

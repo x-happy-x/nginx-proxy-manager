@@ -1,22 +1,14 @@
 .sidebar-tabs {
   border: 1px solid var(--nav-border);
-  border-radius: 22px;
-  background: var(--nav-bg);
-  backdrop-filter: blur(16px) saturate(1.12);
-  box-shadow: var(--nav-shadow);
+  border-radius: 18px;
+  background: var(--surface-3);
+  box-shadow: none;
   padding: 10px;
   display: grid;
   gap: 8px;
   align-self: start;
-  position: sticky;
-  top: 88px;
   min-width: 0;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-    box-shadow: 0 18px 34px rgba(35, 20, 20, 0.2);
-  }
+  transition: border-color 0.2s ease, background 0.2s ease;
 
   .sidebar-tabs__toggle {
     width: var(--size-icon-btn-topbar);
@@ -71,20 +63,16 @@
   }
 
   .mobile-tabs {
-    position: fixed;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    left: 8px;
-    right: 8px;
-    z-index: 40;
+    position: static;
     border: 1px solid var(--nav-border);
-    border-radius: 18px;
-    background: var(--nav-bg);
-    box-shadow: var(--nav-shadow);
-    backdrop-filter: blur(15px) saturate(1.1);
+    border-radius: 16px;
+    background: var(--surface-3);
+    box-shadow: none;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 4px;
     padding: 6px;
+    margin-bottom: 4px;
 
     .ui-tab-btn {
       min-width: 0;
@@ -104,8 +92,6 @@
 
 @media (max-width: 560px) {
   .mobile-tabs {
-    left: 6px;
-    right: 6px;
     gap: 3px;
     padding: 5px;
     border-radius: 16px;
