@@ -44,14 +44,45 @@ if [ -f "$ENV_FILE" ]; then
   LOG_FILE="${HOME_NET_UI_LOG:-$LOG_FILE}"
 fi
 
+running_pid() {
+  if [ ! -f "$PID_FILE" ]; then
+    return 1
+  fi
+  PID="$(cat "$PID_FILE" 2>/dev/null)"
+  case "$PID" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+  if kill -0 "$PID" 2>/dev/null; then
+    printf '%s\n' "$PID"
+    return 0
+  fi
+  return 1
+}
+
+wait_for_stop() {
+  PID="$1"
+  COUNT=0
+  while kill -0 "$PID" 2>/dev/null; do
+    COUNT=$((COUNT + 1))
+    if [ "$COUNT" -ge 30 ]; then
+      return 1
+    fi
+    sleep 1
+  done
+  return 0
+}
+
 start() {
   [ -d "/opt/var/run" ] || mkdir -p /opt/var/run
   [ -d "/opt/var/log" ] || mkdir -p /opt/var/log
   cd "$APP_DIR" || exit 1
-  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+  if PID="$(running_pid)"; then
     echo "nginx-manager-lite already running"
     return 0
   fi
+  rm -f "$PID_FILE"
   ROUTES_PATH="$ROUTES_PATH" \
   GEN_ROUTES_PATH="$GEN_ROUTES_PATH" \
   LITE_UI_HOST="$HOST" \
@@ -64,22 +95,38 @@ start() {
   LOCAL_CA_CERT="$LOCAL_CA_CERT" \
   LOCAL_CA_KEY="$LOCAL_CA_KEY" \
   nohup "$GO_MANAGER" >>"$LOG_FILE" 2>&1 &
-  echo $! > "$PID_FILE"
+  PID=$!
+  sleep 1
+  if ! kill -0 "$PID" 2>/dev/null; then
+    rm -f "$PID_FILE"
+    echo "failed to start nginx-manager-lite" >&2
+    return 1
+  fi
+  echo "$PID" > "$PID_FILE"
   echo "nginx-manager-lite started"
 }
 
 stop() {
-  if [ -f "$PID_FILE" ]; then
-    kill "$(cat "$PID_FILE")" 2>/dev/null
+  if ! PID="$(running_pid)"; then
     rm -f "$PID_FILE"
-    echo "nginx-manager-lite stopped"
-  else
     echo "nginx-manager-lite not running"
+    return 0
   fi
+  kill "$PID" 2>/dev/null || true
+  if ! wait_for_stop "$PID"; then
+    kill -9 "$PID" 2>/dev/null || true
+    sleep 1
+    if kill -0 "$PID" 2>/dev/null; then
+      echo "failed to stop nginx-manager-lite" >&2
+      return 1
+    fi
+  fi
+  rm -f "$PID_FILE"
+  echo "nginx-manager-lite stopped"
 }
 
 restart() {
-  stop
+  stop || return 1
   start
 }
 

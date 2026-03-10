@@ -12,6 +12,9 @@ set -euo pipefail
 #   SSH_OPTS='-o StrictHostKeyChecking=accept-new'
 #   RESTART_UI=1
 #   RESTART_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet restart'
+#   STOP_BEFORE_UPLOAD=1
+#   STOP_CMD='/opt/etc/init.d/S99nginx-manager-lite stop'
+#   START_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet start'
 #   UPLOAD_APP_ICONS=1
 #   SKIP_INSTALL=1
 #   ROUTER_PASSWORD='your_password' (requires sshpass)
@@ -32,6 +35,9 @@ REMOTE_DIR="${REMOTE_DIR:-/opt/etc/homenet-nginx}"
 SSH_OPTS="${SSH_OPTS:-}"
 RESTART_UI="${RESTART_UI:-0}"
 RESTART_CMD="${RESTART_CMD:-/opt/etc/init.d/S99nginx-manager-lite restart}"
+STOP_BEFORE_UPLOAD="${STOP_BEFORE_UPLOAD:-1}"
+STOP_CMD="${STOP_CMD:-/opt/etc/init.d/S99nginx-manager-lite stop}"
+START_CMD="${START_CMD:-/opt/etc/homenet-nginx/bin/linux-arm64/homenet start}"
 UPLOAD_APP_ICONS="${UPLOAD_APP_ICONS:-1}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 ROUTER_PASSWORD="${ROUTER_PASSWORD:-}"
@@ -108,7 +114,15 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/manager ./m
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/nginx ./nginx
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/homenet ./ctl
 
-echo "[4/6] Prepare remote runtime directories"
+if [[ "${RESTART_UI}" == "1" && "${STOP_BEFORE_UPLOAD}" == "1" ]]; then
+  echo "[4/7] Stop UI service before binary update"
+  run_ssh "${STOP_CMD} || true"
+  run_ssh "i=0; while ps w | grep '${REMOTE_DIR}/bin/linux-arm64/manager' | grep -v grep >/dev/null 2>&1; do i=\$((i + 1)); [ \"\$i\" -ge 30 ] && break; sleep 1; done; ! ps w | grep '${REMOTE_DIR}/bin/linux-arm64/manager' | grep -v grep >/dev/null 2>&1"
+else
+  echo "[4/7] Skip remote stop"
+fi
+
+echo "[5/7] Prepare remote runtime directories"
 run_ssh "mkdir -p '${REMOTE_DIR}/bin/linux-arm64' '${REMOTE_DIR}/frontend/static' '${REMOTE_DIR}/init.d' '${REMOTE_DIR}/config' '${REMOTE_DIR}/.deploy-tmp/config'"
 run_ssh "rm -rf \
   '${REMOTE_DIR}/.git' \
@@ -145,7 +159,7 @@ run_ssh "rm -f \
   '${REMOTE_DIR}/frontend/vite.config.js' \
   '${REMOTE_DIR}/frontend/vite.config.ts'"
 
-echo "[5/6] Upload runtime artifacts"
+echo "[6/7] Upload runtime artifacts"
 cd "${REPO_ROOT}"
 
 tar -cf - \
@@ -164,7 +178,7 @@ run_ssh "if [ ! -f '${REMOTE_DIR}/routes.yml' ]; then cp '${REMOTE_DIR}/.deploy-
 run_ssh "if [ ! -f '${REMOTE_DIR}/config/runtime.env' ]; then cp '${REMOTE_DIR}/.deploy-tmp/config/runtime.env' '${REMOTE_DIR}/config/runtime.env'; fi"
 run_ssh "rm -rf '${REMOTE_DIR}/.deploy-tmp'"
 
-echo "[6/6] Verify remote runtime and restart"
+echo "[7/7] Verify remote runtime and restart"
 run_ssh "chmod +x \
   '${REMOTE_DIR}/init.d/S20-nginx-ips' \
   '${REMOTE_DIR}/init.d/S99nginx-manager-lite' \
@@ -184,7 +198,11 @@ run_ssh "ls -la \
 
 if [[ "${RESTART_UI}" == "1" ]]; then
   echo "Restart UI service"
-  run_ssh "${RESTART_CMD} || true"
+  if [[ "${STOP_BEFORE_UPLOAD}" == "1" ]]; then
+    run_ssh "${START_CMD}"
+  else
+    run_ssh "${RESTART_CMD}"
+  fi
 fi
 
 echo "Done: deployed runtime artifacts to ${SSH_TARGET}:${REMOTE_DIR}"
