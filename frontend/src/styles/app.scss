@@ -435,13 +435,15 @@ button:focus-visible,
 @media (max-width: 560px) {
   .app-root {
     padding: 0;
+    gap: 0;
   }
 
   .app-shell {
     padding: 0 8px 0;
+    border: 0;
     border-radius: 0;
-    border-left: 0;
-    border-right: 0;
+    background: transparent;
+    box-shadow: none;
     --shell-top-offset: 0px;
   }
 
