@@ -11,6 +11,7 @@ export type IconName =
   | "edit"
   | "file-off"
   | "file"
+  | "globe"
   | "key"
   | "logs"
   | "menu"
