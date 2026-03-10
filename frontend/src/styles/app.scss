@@ -454,6 +454,11 @@ button:focus-visible,
   }
 
   .content {
-    padding-inline: 2px;
+    padding: 8px 10px 12px;
+    margin-inline: 6px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 92%, transparent), color-mix(in srgb, var(--surface-3) 80%, transparent));
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 24px rgba(51, 39, 25, 0.04);
   }
 }
