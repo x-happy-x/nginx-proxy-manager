@@ -1,12 +1,17 @@
 .topbar {
+  position: sticky;
+  top: var(--shell-top-offset, 12px);
+  z-index: 24;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 4px 2px 14px;
   border-bottom: 1px solid var(--border);
-  background: transparent;
-  box-shadow: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 94%, transparent), color-mix(in srgb, var(--surface-3) 82%, transparent));
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  box-shadow: 0 8px 20px rgba(51, 39, 25, 0.04);
   border-radius: 0;
 }
 
@@ -70,6 +75,7 @@
     grid-template-columns: 1fr;
     gap: 10px;
     padding: 10px 12px;
+    top: calc(var(--shell-top-offset, 10px) - 2px);
   }
 
   .actions {

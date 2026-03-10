@@ -116,6 +116,7 @@ label,
   border-radius: 24px;
   background: linear-gradient(180deg, var(--surface-3), color-mix(in srgb, var(--surface-3) 82%, transparent));
   box-shadow: 0 14px 34px rgba(51, 39, 25, 0.06);
+  --shell-top-offset: 12px;
 }
 
 .workspace {
@@ -423,6 +424,7 @@ button:focus-visible,
   .app-shell {
     padding: 10px;
     border-radius: 20px;
+    --shell-top-offset: 10px;
   }
 
   .tab-section {
@@ -438,6 +440,7 @@ button:focus-visible,
   .app-shell {
     padding: 8px;
     border-radius: 18px;
+    --shell-top-offset: 8px;
   }
 
   .section-head {
