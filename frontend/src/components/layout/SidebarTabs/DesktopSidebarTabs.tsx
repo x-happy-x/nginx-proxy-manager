@@ -1,4 +1,4 @@
-import { Button, TabButton } from "../../ui";
+import { IconButton, TabButton } from "../../ui";
 import { useI18n } from "../../../i18n";
 import { TABS, type TabKey } from "./tabs";
 
@@ -15,18 +15,16 @@ export function DesktopSidebarTabs({ active, onChange, collapsed, onToggleCollap
 
   return (
     <aside className={["sidebar-tabs", collapsed ? "is-collapsed" : ""].filter(Boolean).join(" ")}>
-      <Button
+      <IconButton
         className="sidebar-tabs__toggle"
-        variant="ghost"
-        compact
         iconName="menu"
+        iconOnly
+        tooltip={collapseTitle}
         onClick={onToggleCollapse}
         title={collapseTitle}
         aria-label={collapseTitle}
         aria-pressed={collapsed}
-      >
-        {collapseTitle}
-      </Button>
+      />
       {TABS.map((tab) => (
         <TabButton
           key={tab.key}

@@ -21,10 +21,12 @@
   min-width: 132px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--card) 82%, transparent);
+  background: rgba(255, 252, 247, 0.56);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .lang-switch__menu .ui-dropdown-item {
@@ -39,6 +41,10 @@
 
 .lang-switch__menu .ui-dropdown-item.active {
   background: var(--tab-active-bg);
+}
+
+html[data-theme="dark"] .lang-switch__menu {
+  background: rgba(38, 35, 31, 0.52);
 }
 
 .lang-switch__check {

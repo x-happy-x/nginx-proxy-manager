@@ -19,24 +19,11 @@
   }
 
   .sidebar-tabs__toggle {
-    width: 100%;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    background: var(--hover-surface);
-    color: var(--muted);
-    padding: 8px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
-    font-size: 12px;
+    width: var(--size-icon-btn-topbar);
+    min-width: var(--size-icon-btn-topbar);
+    min-height: var(--size-icon-btn-topbar);
+    justify-content: center;
     transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-
-    &:hover {
-      background: var(--hover-surface-strong);
-      border-color: var(--border);
-      color: var(--text);
-    }
 
     &:active {
       transform: scale(0.98);
@@ -61,15 +48,7 @@
     justify-items: center;
 
     .sidebar-tabs__toggle {
-      width: var(--size-icon-btn-topbar);
-      min-width: var(--size-icon-btn-topbar);
-      min-height: var(--size-icon-btn-topbar);
-      justify-content: center;
       padding: 8px;
-
-      span {
-        display: none;
-      }
     }
 
     .ui-tab-btn {
