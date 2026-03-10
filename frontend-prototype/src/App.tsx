@@ -23,6 +23,14 @@ function runtimeTone(running: boolean) {
   return running ? "ok" : "danger";
 }
 
+const navGroups = [
+  { id: "overview", label: "Dashboard", icon: "⌁", active: true },
+  { id: "apps", label: "Applications", icon: "◫" },
+  { id: "hosts", label: "Published Hosts", icon: "◎" },
+  { id: "certs", label: "Certificates", icon: "◌" },
+  { id: "network", label: "Network", icon: "≈" },
+];
+
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem("prototype_theme") === "light" ? "light" : "dark"));
   const [busy, setBusy] = useState(true);
@@ -123,142 +131,185 @@ export default function App() {
 
   return (
     <div className="prototype-shell">
-      <header className="prototype-topbar">
-        <div className="prototype-brand">
-          <span className="prototype-brand__eyebrow">Prototype UI</span>
-          <h1>Nginx Manager</h1>
-          <p>Новый визуальный концепт поверх текущего API, без изменения существующего фронта.</p>
-        </div>
-        <div className="prototype-actions">
-          <button className="prototype-button prototype-button--ghost" onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}>
-            {theme === "dark" ? "Light" : "Dark"}
-          </button>
-          <button className="prototype-button prototype-button--accent" onClick={() => void load()} disabled={busy}>
-            {busy ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-      </header>
+      <div className="prototype-frame">
+        <aside className="prototype-sidebar">
+          <div className="sidebar-rail">
+            <div className="rail-brand">N</div>
+            <div className="rail-stack">
+              <span className="rail-dot rail-dot--active" />
+              <span className="rail-chip">B</span>
+              <span className="rail-chip rail-chip--muted">A</span>
+              <span className="rail-chip rail-chip--muted">C</span>
+              <span className="rail-plus">+</span>
+            </div>
+          </div>
 
-      <main className="prototype-main">
-        <section className="prototype-hero">
-          {hero.map((item) => (
-            <article key={item.label} className={`hero-card tone-${item.tone}`}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-              <small>{item.meta}</small>
+          <div className="sidebar-main">
+            <div className="sidebar-brand">
+              <span className="prototype-brand__eyebrow">Prototype UI</span>
+              <div className="sidebar-brand__row">
+                <strong>Nginx Manager</strong>
+                <span className="sidebar-brand__pulse">{busy ? "sync" : "live"}</span>
+              </div>
+              <p>Новый визуальный концепт поверх текущего API.</p>
+            </div>
+
+            <nav className="sidebar-nav" aria-label="Primary">
+              {navGroups.map((item) => (
+                <button key={item.id} className={`sidebar-nav__item${item.active ? " is-active" : ""}`} type="button">
+                  <span className="sidebar-nav__icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="sidebar-footer">
+              <div className="sidebar-status">
+                <span className="eyebrow">Route file</span>
+                <strong>{state.routeFile || "routes.yml"}</strong>
+                <small>{state.uiBind ? `${state.uiBind.host}:${state.uiBind.port}` : "bind unavailable"}</small>
+              </div>
+              <div className="prototype-actions prototype-actions--sidebar">
+                <button className="prototype-button prototype-button--ghost" onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}>
+                  {theme === "dark" ? "Light" : "Dark"}
+                </button>
+                <button className="prototype-button prototype-button--accent" onClick={() => void load()} disabled={busy}>
+                  {busy ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="prototype-main">
+          <header className="prototype-topbar">
+            <div className="prototype-brand">
+              <span className="prototype-brand__eyebrow">Analytic overview</span>
+              <h1>Control surface</h1>
+              <p>Панель навигации собрана в стиле референса: мягкая фиолетовая колонка, внутренняя рейка и выделенный активный пункт.</p>
+            </div>
+          </header>
+
+          <section className="prototype-hero">
+            {hero.map((item) => (
+              <article key={item.label} className={`hero-card tone-${item.tone}`}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.meta}</small>
+              </article>
+            ))}
+          </section>
+
+          {error ? <section className="prototype-banner">{error}</section> : null}
+
+          <section className="prototype-grid">
+            <article className="prototype-panel prototype-panel--primary">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Live topology</span>
+                  <h2>Apps and hosts</h2>
+                </div>
+                <span className="badge">{state.doc?.globals.listen_ips.join(", ") || "no listen ips"}</span>
+              </div>
+              <div className="duo-list">
+                <div className="mini-list">
+                  <h3>Applications</h3>
+                  {spotlightApps.map((app) => (
+                    <div key={app.id} className="mini-row">
+                      <div>
+                        <strong>{app.name}</strong>
+                        <span>{app.id}</span>
+                      </div>
+                      <code>{app.upstream.scheme}://{app.upstream.address}:{app.upstream.port}</code>
+                    </div>
+                  ))}
+                  {!spotlightApps.length ? <p className="empty-state">No apps found.</p> : null}
+                </div>
+                <div className="mini-list">
+                  <h3>Published hosts</h3>
+                  {spotlightHosts.map((host) => (
+                    <div key={host.host} className="mini-row">
+                      <div>
+                        <strong>{host.host}</strong>
+                        <span>{host.kind}</span>
+                      </div>
+                      <code>{host.app_id}</code>
+                    </div>
+                  ))}
+                  {!spotlightHosts.length ? <p className="empty-state">No hosts found.</p> : null}
+                </div>
+              </div>
             </article>
-          ))}
-        </section>
 
-        {error ? <section className="prototype-banner">{error}</section> : null}
-
-        <section className="prototype-grid">
-          <article className="prototype-panel prototype-panel--primary">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Live topology</span>
-                <h2>Apps and hosts</h2>
+            <article className="prototype-panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Routing</span>
+                  <h2>Listeners</h2>
+                </div>
+                <span className="badge">{state.status?.rss_kb ? `${state.status.rss_kb} KB RSS` : "runtime idle"}</span>
               </div>
-              <span className="badge">{state.doc?.globals.listen_ips.join(", ") || "no listen ips"}</span>
-            </div>
-            <div className="duo-list">
-              <div className="mini-list">
-                <h3>Applications</h3>
-                {spotlightApps.map((app) => (
-                  <div key={app.id} className="mini-row">
-                    <div>
-                      <strong>{app.name}</strong>
-                      <span>{app.id}</span>
-                    </div>
-                    <code>{app.upstream.scheme}://{app.upstream.address}:{app.upstream.port}</code>
+              <div className="listener-grid">
+                {listeners.slice(0, 8).map((listener) => (
+                  <div key={`${listener.ip}-${listener.port}-${listener.scheme}`} className="listener-pill">
+                    {formatListener(listener)}
                   </div>
                 ))}
-                {!spotlightApps.length ? <p className="empty-state">No apps found.</p> : null}
+                {!listeners.length ? <p className="empty-state">No listeners reported.</p> : null}
               </div>
-              <div className="mini-list">
-                <h3>Published hosts</h3>
-                {spotlightHosts.map((host) => (
-                  <div key={host.host} className="mini-row">
-                    <div>
-                      <strong>{host.host}</strong>
-                      <span>{host.kind}</span>
-                    </div>
-                    <code>{host.app_id}</code>
+            </article>
+
+            <article className="prototype-panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Security</span>
+                  <h2>Certificates</h2>
+                </div>
+                <span className="badge">{state.doc?.globals.acme.email || "ACME email missing"}</span>
+              </div>
+              <div className="stack-list">
+                {state.certs.slice(0, 6).map((cert) => (
+                  <div key={cert.host} className="stack-row">
+                    <strong>{cert.host}</strong>
+                    <span>{cert.has_key ? "crt + key" : "crt only"}</span>
                   </div>
                 ))}
-                {!spotlightHosts.length ? <p className="empty-state">No hosts found.</p> : null}
+                {!state.certs.length ? <p className="empty-state">No certificates issued.</p> : null}
               </div>
-            </div>
-          </article>
+            </article>
 
-          <article className="prototype-panel">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Routing</span>
-                <h2>Listeners</h2>
-              </div>
-              <span className="badge">{state.status?.rss_kb ? `${state.status.rss_kb} KB RSS` : "runtime idle"}</span>
-            </div>
-            <div className="listener-grid">
-              {listeners.slice(0, 8).map((listener) => (
-                <div key={`${listener.ip}-${listener.port}-${listener.scheme}`} className="listener-pill">
-                  {formatListener(listener)}
+            <article className="prototype-panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Network</span>
+                  <h2>DNS / NDNS</h2>
                 </div>
-              ))}
-              {!listeners.length ? <p className="empty-state">No listeners reported.</p> : null}
-            </div>
-          </article>
-
-          <article className="prototype-panel">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Security</span>
-                <h2>Certificates</h2>
+                <span className="badge">{state.ndnsText}</span>
               </div>
-              <span className="badge">{state.doc?.globals.acme.email || "ACME email missing"}</span>
-            </div>
-            <div className="stack-list">
-              {state.certs.slice(0, 6).map((cert) => (
-                <div key={cert.host} className="stack-row">
-                  <strong>{cert.host}</strong>
-                  <span>{cert.has_key ? "crt + key" : "crt only"}</span>
+              <div className="stack-list">
+                {dnsByHost.map(([host, addresses]) => (
+                  <div key={host} className="stack-row">
+                    <strong>{host}</strong>
+                    <span>{addresses.join(", ")}</span>
+                  </div>
+                ))}
+                {!dnsByHost.length ? <p className="empty-state">No DNS records published.</p> : null}
+              </div>
+            </article>
+
+            <article className="prototype-panel prototype-panel--logs">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Observability</span>
+                  <h2>Recent access log</h2>
                 </div>
-              ))}
-              {!state.certs.length ? <p className="empty-state">No certificates issued.</p> : null}
-            </div>
-          </article>
-
-          <article className="prototype-panel">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Network</span>
-                <h2>DNS / NDNS</h2>
+                <span className="badge">last 10 lines</span>
               </div>
-              <span className="badge">{state.ndnsText}</span>
-            </div>
-            <div className="stack-list">
-              {dnsByHost.map(([host, addresses]) => (
-                <div key={host} className="stack-row">
-                  <strong>{host}</strong>
-                  <span>{addresses.join(", ")}</span>
-                </div>
-              ))}
-              {!dnsByHost.length ? <p className="empty-state">No DNS records published.</p> : null}
-            </div>
-          </article>
-
-          <article className="prototype-panel prototype-panel--logs">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Observability</span>
-                <h2>Recent access log</h2>
-              </div>
-              <span className="badge">last 10 lines</span>
-            </div>
-            <pre className="log-window">{state.logs.join("\n") || "No logs available."}</pre>
-          </article>
-        </section>
-      </main>
+              <pre className="log-window">{state.logs.join("\n") || "No logs available."}</pre>
+            </article>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
