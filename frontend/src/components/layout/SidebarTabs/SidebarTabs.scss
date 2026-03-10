@@ -67,6 +67,7 @@
   }
 
   .mobile-tabs {
+    --mobile-notch: 18px;
     position: fixed;
     left: 0;
     right: 0;
@@ -74,10 +75,16 @@
     z-index: 18;
     border: 0;
     border-top: 1px solid var(--nav-border);
-    border-radius: 18px 18px 0 0;
+    border-radius: 0;
     background: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 94%, transparent), color-mix(in srgb, var(--surface-3) 82%, transparent));
     backdrop-filter: blur(14px) saturate(1.08);
     -webkit-backdrop-filter: blur(14px) saturate(1.08);
+    -webkit-mask:
+      radial-gradient(circle at top left, transparent calc(var(--mobile-notch) - 1px), #000 var(--mobile-notch)) top left / 50.5% 100% no-repeat,
+      radial-gradient(circle at top right, transparent calc(var(--mobile-notch) - 1px), #000 var(--mobile-notch)) top right / 50.5% 100% no-repeat;
+    mask:
+      radial-gradient(circle at top left, transparent calc(var(--mobile-notch) - 1px), #000 var(--mobile-notch)) top left / 50.5% 100% no-repeat,
+      radial-gradient(circle at top right, transparent calc(var(--mobile-notch) - 1px), #000 var(--mobile-notch)) top right / 50.5% 100% no-repeat;
     box-shadow: none;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -105,7 +112,7 @@
   .mobile-tabs {
     gap: 3px;
     padding: 7px 6px calc(7px + env(safe-area-inset-bottom, 0px));
-    border-radius: 16px 16px 0 0;
+    --mobile-notch: 16px;
 
     .ui-tab-btn {
       padding: 8px 2px;
