@@ -58,7 +58,12 @@
   }
 
   &.is-collapsed {
+    justify-items: center;
+
     .sidebar-tabs__toggle {
+      width: var(--size-icon-btn-topbar);
+      min-width: var(--size-icon-btn-topbar);
+      min-height: var(--size-icon-btn-topbar);
       justify-content: center;
       padding: 8px;
 
@@ -68,8 +73,11 @@
     }
 
     .ui-tab-btn {
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
       justify-content: center;
-      padding: 11px 8px;
+      padding: 8px;
     }
   }
 }
