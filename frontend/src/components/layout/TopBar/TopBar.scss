@@ -49,12 +49,7 @@
   border: 1px solid var(--border);
   min-width: 0;
   justify-self: end;
-  overflow-x: auto;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  overflow: visible;
 
   .ui-icon-btn {
     border-radius: var(--radius-md);
@@ -85,6 +80,13 @@
     width: 100%;
     justify-self: stretch;
     justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+  }
+
+  .actions::-webkit-scrollbar {
+    display: none;
   }
 }
 
