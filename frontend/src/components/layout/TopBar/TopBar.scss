@@ -93,6 +93,14 @@
 }
 
 @media (max-width: 640px) {
+  .topbar {
+    top: 0;
+    margin-inline: -8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 10px;
+    border-radius: 0 0 18px 18px;
+    border-bottom-color: var(--nav-border);
+  }
+
   .brand h1 {
     font-size: 18px;
   }

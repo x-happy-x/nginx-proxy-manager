@@ -408,7 +408,7 @@ button:focus-visible,
   .workspace {
     grid-template-columns: 1fr;
     gap: 12px;
-    padding-bottom: 16px;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
   .content {
@@ -434,16 +434,26 @@ button:focus-visible,
 
 @media (max-width: 560px) {
   .app-root {
-    padding: 8px;
+    padding: 0;
   }
 
   .app-shell {
-    padding: 8px;
-    border-radius: 18px;
-    --shell-top-offset: 8px;
+    padding: 0 8px 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    --shell-top-offset: 0px;
   }
 
   .section-head {
     align-items: stretch;
+  }
+
+  .workspace {
+    padding: 12px 0 calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .content {
+    padding-inline: 2px;
   }
 }

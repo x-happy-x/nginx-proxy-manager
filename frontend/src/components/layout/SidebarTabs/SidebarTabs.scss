@@ -67,12 +67,14 @@
   }
 
   .mobile-tabs {
-    position: sticky;
-    top: calc(var(--shell-top-offset, 10px) + 76px);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 18;
     border: 0;
-    border-bottom: 1px solid var(--nav-border);
-    border-radius: 0;
+    border-top: 1px solid var(--nav-border);
+    border-radius: 18px 18px 0 0;
     background: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 94%, transparent), color-mix(in srgb, var(--surface-3) 82%, transparent));
     backdrop-filter: blur(14px) saturate(1.08);
     -webkit-backdrop-filter: blur(14px) saturate(1.08);
@@ -80,8 +82,8 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 4px;
-    padding: 0 0 12px;
-    margin-bottom: 2px;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: 0;
 
     .ui-tab-btn {
       min-width: 0;
@@ -101,10 +103,9 @@
 
 @media (max-width: 560px) {
   .mobile-tabs {
-    top: calc(var(--shell-top-offset, 8px) + 72px);
     gap: 3px;
-    padding: 5px;
-    border-radius: 16px;
+    padding: 7px 6px calc(7px + env(safe-area-inset-bottom, 0px));
+    border-radius: 16px 16px 0 0;
 
     .ui-tab-btn {
       padding: 8px 2px;
