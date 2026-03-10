@@ -9,6 +9,7 @@ set -euo pipefail
 #   ROUTER_USER=root
 #   ROUTER_PORT=22
 #   REMOTE_DIR=/opt/etc/homenet-nginx
+#   UI_SOURCE_DIR=frontend-prototype
 #   SSH_OPTS='-o StrictHostKeyChecking=accept-new'
 #   RESTART_UI=1
 #   RESTART_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet restart'
@@ -32,6 +33,7 @@ ROUTER_HOST="${ROUTER_HOST:-}"
 ROUTER_USER="${ROUTER_USER:-root}"
 ROUTER_PORT="${ROUTER_PORT:-22}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/etc/homenet-nginx}"
+UI_SOURCE_DIR="${UI_SOURCE_DIR:-frontend-prototype}"
 SSH_OPTS="${SSH_OPTS:-}"
 RESTART_UI="${RESTART_UI:-0}"
 RESTART_CMD="${RESTART_CMD:-/opt/etc/init.d/S99nginx-manager-lite restart}"
@@ -68,6 +70,12 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
+UI_SOURCE_PATH="${REPO_ROOT}/${UI_SOURCE_DIR}"
+if [[ ! -d "${UI_SOURCE_PATH}" ]]; then
+  echo "ERROR: UI source directory not found: ${UI_SOURCE_PATH}"
+  exit 1
+fi
+
 SSH_TARGET="${ROUTER_USER}@${ROUTER_HOST}"
 SSH_BASE=(ssh -p "${ROUTER_PORT}")
 if [[ -n "${SSH_OPTS}" ]]; then
@@ -89,7 +97,7 @@ run_ssh() {
 }
 
 echo "[1/6] Install frontend deps"
-cd "${REPO_ROOT}/frontend"
+cd "${UI_SOURCE_PATH}"
 if [[ "${SKIP_INSTALL}" == "1" ]]; then
   echo "Skip install (SKIP_INSTALL=1)"
 else
@@ -149,15 +157,22 @@ run_ssh "rm -f \
   '${REMOTE_DIR}/routes.example.yml' \
   '${REMOTE_DIR}/routes.defaults.yml' \
   '${REMOTE_DIR}/frontend/index.html' \
+  '${REMOTE_DIR}/frontend-prototype/index.html' \
   '${REMOTE_DIR}/frontend/package.json' \
   '${REMOTE_DIR}/frontend/package-lock.json' \
+  '${REMOTE_DIR}/frontend-prototype/package.json' \
+  '${REMOTE_DIR}/frontend-prototype/package-lock.json' \
   '${REMOTE_DIR}/frontend/tsconfig.json' \
   '${REMOTE_DIR}/frontend/tsconfig.node.json' \
   '${REMOTE_DIR}/frontend/tsconfig.node.tsbuildinfo' \
   '${REMOTE_DIR}/frontend/tsconfig.tsbuildinfo' \
+  '${REMOTE_DIR}/frontend-prototype/tsconfig.json' \
+  '${REMOTE_DIR}/frontend-prototype/tsconfig.node.json' \
+  '${REMOTE_DIR}/frontend-prototype/tsconfig.tsbuildinfo' \
   '${REMOTE_DIR}/frontend/vite.config.d.ts' \
   '${REMOTE_DIR}/frontend/vite.config.js' \
-  '${REMOTE_DIR}/frontend/vite.config.ts'"
+  '${REMOTE_DIR}/frontend/vite.config.ts' \
+  '${REMOTE_DIR}/frontend-prototype/vite.config.ts'"
 
 echo "[6/7] Upload runtime artifacts"
 cd "${REPO_ROOT}"

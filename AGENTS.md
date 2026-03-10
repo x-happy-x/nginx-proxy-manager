@@ -6,7 +6,8 @@
 - `bin/linux-*/nginx`: nginx config generator that renders configs from `routes.yml` and reloads nginx.
 - `bin/linux-*/homenet`: CLI tool for setup/start/stop/restart/apply/status/logs.
 - `golang/`: Go source for `manager`, `nginx`, and `homenet`.
-- `frontend/`: React + TypeScript UI source (build output and primary static assets live in `frontend/static/`).
+- `frontend/`: current React + TypeScript UI source kept intact as the existing UI implementation.
+- `frontend-prototype/`: separate prototype UI source; deploy builds this app into `frontend/static/react`.
 - `init.d/`: Entware-style init scripts.
 - `scripts/setup.sh`: helper to install/update the repo on target devices.
 
@@ -32,6 +33,7 @@
 ## Commit & Pull Request Guidelines
 - The repository currently has no commit history; no established commit message convention exists.
 - For new commits, use clear, imperative subjects (e.g., "Add local CA upload flow").
+- After every meaningful code/config change, create commits grouped by intent and deploy the updated runtime to the router.
 - PRs should include a brief summary, the reason for change, and any config or env var updates.
 - If UI behavior changes, add a short note about how it was verified (commands + outcome).
 
