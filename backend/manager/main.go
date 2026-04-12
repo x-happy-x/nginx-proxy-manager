@@ -17,7 +17,7 @@ func main() {
 	}
 	loadRuntimeEnv(baseDir)
 	nginxConfRoot := getenv("NGINX_CONF_ROOT", "/etc/nginx")
-	routePath := getenv("ROUTES_PATH", "/opt/etc/homenet-nginx/routes.v2.1.yml")
+	routePath := getenv("ROUTES_PATH", "/opt/etc/homenet/nginx/routes.v2.1.yml")
 	a := &app{
 		baseDir:          baseDir,
 		staticDir:        resolvePath(baseDir, getenv("STATIC_ROOT", filepath.Join("frontend", "static"))),

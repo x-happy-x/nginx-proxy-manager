@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/schema"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 var errEmptyPath = errors.New("empty_path")

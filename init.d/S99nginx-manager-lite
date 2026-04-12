@@ -18,7 +18,13 @@ while [ -L "$SCRIPT_PATH" ]; do
   esac
 done
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
-APP_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+APP_DIR_DEFAULT="/opt/etc/homenet/nginx"
+APP_DIR_CANDIDATE="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+if [ -x "$APP_DIR_CANDIDATE/bin/linux-arm64/manager" ]; then
+  APP_DIR="$APP_DIR_CANDIDATE"
+else
+  APP_DIR="$APP_DIR_DEFAULT"
+fi
 GO_MANAGER="$APP_DIR/bin/linux-arm64/manager"
 ENV_FILE="$APP_DIR/config/runtime.env"
 ROUTES_PATH="$APP_DIR/routes.yml"
@@ -38,11 +44,17 @@ LOCAL_CA_KEY="/opt/etc/nginx/local-ca/ca.key"
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   . "$ENV_FILE"
+  APP_DIR="${HOME_NET_APP_DIR:-$APP_DIR}"
   HOST="${LITE_UI_HOST:-$HOST}"
   PORT="${LITE_UI_PORT:-$PORT}"
   PID_FILE="${HOME_NET_UI_PID:-$PID_FILE}"
   LOG_FILE="${HOME_NET_UI_LOG:-$LOG_FILE}"
 fi
+
+GO_MANAGER="$APP_DIR/bin/linux-arm64/manager"
+ENV_FILE="$APP_DIR/config/runtime.env"
+ROUTES_PATH="${ROUTES_PATH:-$APP_DIR/routes.yml}"
+GEN_ROUTES_PATH="${GEN_ROUTES_PATH:-$APP_DIR/bin/linux-arm64/nginx}"
 
 running_pid() {
   if [ ! -f "$PID_FILE" ]; then

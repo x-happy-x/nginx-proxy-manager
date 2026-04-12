@@ -25,10 +25,10 @@ sh scripts/setup.sh
 ```
 
 После запуска `scripts/setup.sh`:
-- репозиторий будет установлен в `/opt/etc/homenet-nginx` или обновлен;
+- репозиторий будет установлен в `/opt/etc/homenet/nginx` или обновлен;
 - локальный `config/runtime.env` будет сохранен при обновлении;
 - файлы `init.d/S20-nginx-ips` и `init.d/S99nginx-manager-lite` будут
-  симлинкнуты в `/opt/etc/init.d/`;
+  установлены как обычные исполняемые файлы в `/opt/etc/init.d/`;
 - `S20-nginx-ips` добавит IP на `br0` и запустит nginx;
 - `S99nginx-manager-lite` запустит UI (или перезапустит, если уже работает).
 
@@ -59,8 +59,9 @@ bin/linux-amd64/homenet logs 100
 ```
 
 На роутере те же команды вызываются через `bin/linux-arm64/homenet`.
+При deploy/setup бинарник также ставится в `/opt/bin/homenet`, чтобы им можно было пользоваться из любого каталога.
 
-`setup` создает симлинки в `/opt/etc/init.d` для `init.d/S*` и перезапускает их по порядку.
+`setup` устанавливает файлы `init.d/S*` в `/opt/etc/init.d` и перезапускает их по порядку.
 `apply` запускает отдельный генератор nginx (`bin/.../nginx --config <routes>`).
 
 ## Init.d (Entware)
@@ -79,7 +80,7 @@ opkg install nginx
 ## Запуск
 
 ```sh
-cd /opt/etc/homenet-nginx
+cd /opt/etc/homenet/nginx
 bin/linux-arm64/manager
 ```
 
@@ -93,7 +94,7 @@ bin/linux-arm64/manager
 ## Переменные окружения
 
 - `CONFIG_ENV_PATH` — альтернативный путь к env-файлу runtime (по умолчанию `config/runtime.env`)
-- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/etc/homenet-nginx/routes.v2.1.yml` для manager, в init.d у нас используется `/opt/etc/homenet-nginx/routes.yml`)
+- `ROUTES_PATH` — путь к `routes.yml` (по умолчанию `/opt/etc/homenet/nginx/routes.v2.1.yml` для manager, в init.d у нас используется `/opt/etc/homenet/nginx/routes.yml`)
 - `GEN_ROUTES_PATH` — путь к бинарнику генератора nginx
 - `STATIC_ROOT` — корень primary static assets (по умолчанию `frontend/static`)
 - `REACT_INDEX_REL` — относительный путь к React entrypoint внутри `STATIC_ROOT` (по умолчанию `react/index.html`)
@@ -194,7 +195,7 @@ ws_proxy:
 ## Пример запуска с кастомными путями
 
 ```sh
-CONFIG_ENV_PATH=/opt/etc/homenet-nginx/config/runtime.env \
+CONFIG_ENV_PATH=/opt/etc/homenet/nginx/config/runtime.env \
 bin/linux-arm64/manager
 ```
 

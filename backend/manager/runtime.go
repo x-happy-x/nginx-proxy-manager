@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/envfile"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/envfile"
 )
 
 func loadRuntimeEnv(baseDir string) {

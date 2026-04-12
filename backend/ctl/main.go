@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/envfile"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/envfile"
 )
 
 type cli struct {
@@ -32,12 +32,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	rootDir := filepath.Dir(exe)
-	if wd, err := os.Getwd(); err == nil && fileExists(filepath.Join(wd, "init.d")) {
-		rootDir = wd
-	} else if resolved, ok := findProjectRoot(rootDir); ok {
-		rootDir = resolved
-	}
+	rootDir := resolveRootDir(exe)
 	loadRuntimeEnv(rootDir)
 	c := &cli{
 		scriptDir:     rootDir,
@@ -90,6 +85,19 @@ func loadRuntimeEnv(rootDir string) {
 	_ = envfile.Load(path)
 }
 
+func resolveRootDir(exe string) string {
+	if appDir := strings.TrimSpace(os.Getenv("HOME_NET_APP_DIR")); appDir != "" {
+		return appDir
+	}
+	if wd, err := os.Getwd(); err == nil && fileExists(filepath.Join(wd, "init.d")) {
+		return wd
+	}
+	if resolved, ok := findProjectRoot(filepath.Dir(exe)); ok {
+		return resolved
+	}
+	return "/opt/etc/homenet/nginx"
+}
+
 func getenv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
@@ -108,13 +116,13 @@ func (c *cli) usage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: homenet <command>")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  setup      Link managed init.d scripts and restart them in order")
-	fmt.Fprintln(w, "  links      Link managed init.d scripts only")
+	fmt.Fprintln(w, "  setup      Install managed init.d scripts and restart them in order")
+	fmt.Fprintln(w, "  links      Install managed init.d scripts only")
 	fmt.Fprintln(w, "  start      Start managed scripts in order")
 	fmt.Fprintln(w, "  stop       Stop managed scripts in reverse order")
 	fmt.Fprintln(w, "  restart    Restart managed scripts in order")
 	fmt.Fprintln(w, "  apply      Apply routes via generator")
-	fmt.Fprintln(w, "  status     Show symlink and runtime status")
+	fmt.Fprintln(w, "  status     Show installed init scripts and runtime status")
 	fmt.Fprintln(w, "  logs [N]   Tail UI log (default: 80 lines)")
 	fmt.Fprintln(w, "  help       Show this help")
 }
@@ -156,13 +164,10 @@ func (c *cli) linkScripts() error {
 		src := filepath.Join(c.srcDir, name)
 		dst := filepath.Join(c.dstDir, name)
 		_ = os.Remove(dst)
-		if err := os.Symlink(src, dst); err != nil {
+		if err := copyFile(src, dst, 0o755); err != nil {
 			return err
 		}
-		if err := os.Chmod(src, 0o755); err != nil {
-			return err
-		}
-		fmt.Printf("linked: %s -> %s\n", dst, src)
+		fmt.Printf("installed: %s <- %s\n", dst, src)
 	}
 	return nil
 }
@@ -221,10 +226,12 @@ func (c *cli) status(w io.Writer) error {
 		src := filepath.Join(c.srcDir, name)
 		dst := filepath.Join(c.dstDir, name)
 		linkState := "missing"
-		if target, err := os.Readlink(dst); err == nil {
-			linkState = "linked -> " + target
-		} else if _, err := os.Stat(dst); err == nil {
-			linkState = "exists (not symlink)"
+		if info, err := os.Stat(dst); err == nil {
+			if info.Mode().IsRegular() {
+				linkState = "installed"
+			} else {
+				linkState = "exists (not regular file)"
+			}
 		}
 		runState := "unknown"
 		if name == "S99nginx-manager-lite" {
@@ -239,6 +246,25 @@ func (c *cli) status(w io.Writer) error {
 		}
 	}
 	return nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 func (c *cli) readRunningPID() (int, bool) {

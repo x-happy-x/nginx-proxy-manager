@@ -8,14 +8,15 @@ set -euo pipefail
 # Optional env:
 #   ROUTER_USER=root
 #   ROUTER_PORT=22
-#   REMOTE_DIR=/opt/etc/homenet-nginx
+#   REMOTE_DIR=/opt/etc/homenet/nginx
+#   BIN_DIR=/opt/bin
 #   UI_SOURCE_DIR=frontend
 #   SSH_OPTS='-o StrictHostKeyChecking=accept-new'
 #   RESTART_UI=1
-#   RESTART_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet restart'
+#   RESTART_CMD='/opt/bin/homenet restart'
 #   STOP_BEFORE_UPLOAD=1
 #   STOP_CMD='/opt/etc/init.d/S99nginx-manager-lite stop'
-#   START_CMD='/opt/etc/homenet-nginx/bin/linux-arm64/homenet start'
+#   START_CMD='/opt/bin/homenet start'
 #   UPLOAD_APP_ICONS=1
 #   SKIP_INSTALL=1
 #   ROUTER_PASSWORD='your_password' (requires sshpass)
@@ -32,14 +33,16 @@ fi
 ROUTER_HOST="${ROUTER_HOST:-}"
 ROUTER_USER="${ROUTER_USER:-root}"
 ROUTER_PORT="${ROUTER_PORT:-22}"
-REMOTE_DIR="${REMOTE_DIR:-/opt/etc/homenet-nginx}"
+REMOTE_DIR="${REMOTE_DIR:-/opt/etc/homenet/nginx}"
+LEGACY_REMOTE_DIR="${LEGACY_REMOTE_DIR:-/opt/etc/homenet-nginx}"
+BIN_DIR="${BIN_DIR:-/opt/bin}"
 UI_SOURCE_DIR="${UI_SOURCE_DIR:-frontend}"
 SSH_OPTS="${SSH_OPTS:-}"
 RESTART_UI="${RESTART_UI:-0}"
 RESTART_CMD="${RESTART_CMD:-/opt/etc/init.d/S99nginx-manager-lite restart}"
 STOP_BEFORE_UPLOAD="${STOP_BEFORE_UPLOAD:-1}"
 STOP_CMD="${STOP_CMD:-/opt/etc/init.d/S99nginx-manager-lite stop}"
-START_CMD="${START_CMD:-/opt/etc/homenet-nginx/bin/linux-arm64/homenet start}"
+START_CMD="${START_CMD:-/opt/bin/homenet start}"
 UPLOAD_APP_ICONS="${UPLOAD_APP_ICONS:-1}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 ROUTER_PASSWORD="${ROUTER_PASSWORD:-}"
@@ -117,7 +120,7 @@ if [[ ! -f "${REPO_ROOT}/frontend/static/react/index.html" ]]; then
 fi
 
 echo "[3/6] Build linux-arm64 binaries"
-cd "${REPO_ROOT}/golang"
+cd "${REPO_ROOT}/backend"
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/manager ./manager
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/nginx ./nginx
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../bin/linux-arm64/homenet ./ctl
@@ -131,6 +134,10 @@ else
 fi
 
 echo "[5/7] Prepare remote runtime directories"
+run_ssh "if [ ! -d '${REMOTE_DIR}' ] && [ -d '${LEGACY_REMOTE_DIR}' ]; then \
+  mkdir -p \"\$(dirname '${REMOTE_DIR}')\"; \
+  mv '${LEGACY_REMOTE_DIR}' '${REMOTE_DIR}'; \
+fi"
 run_ssh "mkdir -p '${REMOTE_DIR}/bin/linux-arm64' '${REMOTE_DIR}/frontend/static' '${REMOTE_DIR}/init.d' '${REMOTE_DIR}/config' '${REMOTE_DIR}/.deploy-tmp/config'"
 run_ssh "rm -rf \
   '${REMOTE_DIR}/.git' \
@@ -139,7 +146,7 @@ run_ssh "rm -rf \
   '${REMOTE_DIR}/lite-ui' \
   '${REMOTE_DIR}/screenshots' \
   '${REMOTE_DIR}/static' \
-  '${REMOTE_DIR}/golang' \
+  '${REMOTE_DIR}/backend' \
   '${REMOTE_DIR}/docs' \
   '${REMOTE_DIR}/scripts' \
   '${REMOTE_DIR}/bin/linux-amd64' \
@@ -191,6 +198,9 @@ fi
 tar -cf - routes.yml config/runtime.env | "${SSH_BASE[@]}" "${SSH_TARGET}" "tar -xf - -C '${REMOTE_DIR}/.deploy-tmp'"
 run_ssh "if [ ! -f '${REMOTE_DIR}/routes.yml' ]; then cp '${REMOTE_DIR}/.deploy-tmp/routes.yml' '${REMOTE_DIR}/routes.yml'; fi"
 run_ssh "if [ ! -f '${REMOTE_DIR}/config/runtime.env' ]; then cp '${REMOTE_DIR}/.deploy-tmp/config/runtime.env' '${REMOTE_DIR}/config/runtime.env'; fi"
+run_ssh "if [ -f '${REMOTE_DIR}/config/runtime.env' ]; then \
+  sed -i 's#/opt/etc/homenet-nginx#/opt/etc/homenet/nginx#g' '${REMOTE_DIR}/config/runtime.env'; \
+fi"
 run_ssh "rm -rf '${REMOTE_DIR}/.deploy-tmp'"
 
 echo "[7/7] Verify remote runtime and restart"
@@ -200,11 +210,18 @@ run_ssh "chmod +x \
   '${REMOTE_DIR}/bin/linux-arm64/manager' \
   '${REMOTE_DIR}/bin/linux-arm64/nginx' \
   '${REMOTE_DIR}/bin/linux-arm64/homenet'"
+run_ssh "if [ -d '${BIN_DIR}' ]; then \
+  cp -f '${REMOTE_DIR}/bin/linux-arm64/homenet' '${BIN_DIR}/homenet'; \
+  chmod 755 '${BIN_DIR}/homenet'; \
+fi"
 run_ssh "if [ -d /opt/etc/init.d ]; then \
-  ln -sf '${REMOTE_DIR}/init.d/S20-nginx-ips' /opt/etc/init.d/S20-nginx-ips; \
-  ln -sf '${REMOTE_DIR}/init.d/S99nginx-manager-lite' /opt/etc/init.d/S99nginx-manager-lite; \
+  cp -f '${REMOTE_DIR}/init.d/S20-nginx-ips' /opt/etc/init.d/S20-nginx-ips; \
+  chmod 755 /opt/etc/init.d/S20-nginx-ips; \
+  cp -f '${REMOTE_DIR}/init.d/S99nginx-manager-lite' /opt/etc/init.d/S99nginx-manager-lite; \
+  chmod 755 /opt/etc/init.d/S99nginx-manager-lite; \
 fi"
 run_ssh "ls -la \
+  '${BIN_DIR}/homenet' \
   '${REMOTE_DIR}/frontend/static/react/index.html' \
   '${REMOTE_DIR}/frontend/static/icons/menu.svg' \
   '${REMOTE_DIR}/bin/linux-arm64/manager' \

@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/schema"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 func (a *app) listRouteFiles() response {
@@ -55,7 +56,11 @@ func (a *app) backupRoutesFile() (bool, string, string) {
 	if ext == "" {
 		ext = ".yml"
 	}
-	dst := filepath.Join(filepath.Dir(src), fmt.Sprintf("%s.%s.bak%s", base, time.Now().Format("20060102-150405"), ext))
+	backupDir := filepath.Join(filepath.Dir(src), "backups")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return false, err.Error(), ""
+	}
+	dst := filepath.Join(backupDir, fmt.Sprintf("%s.%s.bak%s", base, time.Now().Format("20060102-150405"), ext))
 	if err := osWriteFile(dst, body, 0o644); err != nil {
 		return false, err.Error(), ""
 	}

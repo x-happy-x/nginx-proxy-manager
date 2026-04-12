@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/schema"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 func (a *app) saveLocalCA(certPEM, keyPEM string) (bool, string) {

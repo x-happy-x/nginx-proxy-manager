@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/envfile"
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/schema"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/envfile"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 type generator struct {

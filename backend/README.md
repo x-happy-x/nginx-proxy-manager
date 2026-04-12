@@ -1,18 +1,18 @@
 # Go Rewrite
 
-`golang/manager`:
+`backend/manager`:
 - HTTP API manager compatible with the current frontend
 - serves `frontend/static/`
 - manages routes, CA/certs, nDNS, static hosts, nginx status/configs
 
-`golang/nginx`:
+`backend/nginx`:
 - standalone nginx config generator CLI
 - reads `routes v2.1`
 - writes managed nginx configs and reloads nginx
 
-`golang/ctl`:
+`backend/ctl`:
 - standalone CLI management tool
-- links `init.d` scripts
+- installs `init.d` scripts into the runtime init.d directory
 - starts/stops/restarts services
 - runs `apply`
 - prints status and tails logs
@@ -20,7 +20,7 @@
 Build examples:
 
 ```sh
-cd golang
+cd backend
 go build -o ../bin/linux-amd64/manager ./manager
 go build -o ../bin/linux-amd64/nginx ./nginx
 go build -o ../bin/linux-amd64/homenet ./ctl

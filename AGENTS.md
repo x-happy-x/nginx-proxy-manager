@@ -5,7 +5,7 @@
 - `bin/linux-*/manager`: HTTP server that edits `routes.yml`, serves the UI, and exposes the API.
 - `bin/linux-*/nginx`: nginx config generator that renders configs from `routes.yml` and reloads nginx.
 - `bin/linux-*/homenet`: CLI tool for setup/start/stop/restart/apply/status/logs.
-- `golang/`: Go source for `manager`, `nginx`, and `homenet`.
+- `backend/`: Go source for `manager`, `nginx`, and `homenet`.
 - `frontend/`: primary React + TypeScript UI source; deploy builds this app into `frontend/static/react`.
 - `init.d/`: Entware-style init scripts.
 - `scripts/setup.sh`: helper to install/update the repo on target devices.

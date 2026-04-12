@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/amagomedsharipov/nginx-proxy-manager/golang/internal/schema"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 func (a *app) ensureStubCert(certDir string) (string, string) {
