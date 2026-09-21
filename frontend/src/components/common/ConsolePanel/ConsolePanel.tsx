@@ -56,6 +56,8 @@ export function ConsolePanel({ items, open, onToggle, onClear }: Props) {
     document.body.classList.add("is-console-resizing");
   };
 
+  if (!open) return null;
+
   return (
     <div className={`console ${open ? "open" : ""}`} style={{ height }}>
       <div className="console-header">

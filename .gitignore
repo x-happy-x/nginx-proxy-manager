@@ -1,0 +1,10 @@
+.local/
+.preview/
+.runtime/
+__pycache__/
+*.next
+node_modules/
+frontend/tsconfig.tsbuildinfo
+*.log
+bin/windows-amd64/
+backups/

@@ -319,6 +319,30 @@ label,
   flex-wrap: wrap;
 }
 
+html[data-theme="dark"] {
+  body { font-family: Inter, system-ui, sans-serif; }
+  .app-shell, .app-sidebar, .panel, .card-item, .ui-panel, .tab-section > article {
+    border-radius: 14px;
+    transition: transform .45s cubic-bezier(.22,1,.36,1), box-shadow .45s cubic-bezier(.22,1,.36,1), border-color .25s ease;
+  }
+  .panel:hover, .card-item:hover, .ui-panel:hover, .tab-section > article:hover {
+    transform: translateY(-3px);
+    border-color: #44464a;
+    box-shadow: 0 20px 50px rgba(0,0,0,.5);
+  }
+  .app-sidebar { animation: homenet-rise .65s cubic-bezier(.22,1,.36,1) both; }
+  .content { animation: homenet-rise .65s .06s cubic-bezier(.22,1,.36,1) both; }
+  .app-sidebar__nav { position: relative; padding: 4px; border: 1px solid var(--border); border-radius: 11px; background: #0d0e10; }
+  .app-sidebar__indicator { position: absolute; z-index: 0; left: 4px; right: 4px; height: 40px; border: 1px solid #36373b; border-radius: 7px; background: #202124; box-shadow: 0 2px 10px rgba(0,0,0,.45); transform: translateY(calc(var(--tab-index) * 48px)); transition: transform .55s cubic-bezier(.22,1,.36,1); }
+  .app-sidebar__tab.ui-tab-btn { position: relative; z-index: 1; min-height: 40px; border-radius: 7px; transition: transform .4s cubic-bezier(.22,1,.36,1), background .25s ease; }
+  .app-sidebar__tab.ui-tab-btn:hover { transform: translateX(3px); }
+  .app-sidebar__tab.ui-tab-btn.active { background: transparent; border-color: transparent; box-shadow: none; }
+  .ui-btn, .ui-icon-btn, button, input, select, textarea { transition: transform .35s cubic-bezier(.22,1,.36,1), background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+  .ui-btn:hover, .ui-icon-btn:hover { transform: translateY(-2px); }
+}
+@keyframes homenet-rise { from { opacity: 0; transform: translateY(12px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
 .tab-section .actions-row .ui-icon-btn--icon-only {
   width: var(--size-icon-btn);
   height: var(--size-icon-btn);

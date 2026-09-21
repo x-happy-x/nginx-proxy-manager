@@ -51,7 +51,7 @@ export type RouteHost = {
     local_record_ip?: string;
   };
   tls?: {
-    cert_policy: "auto_local_ca" | "auto_acme" | "self_signed" | "off";
+    cert_policy: "auto_local_ca" | "auto_acme" | "self_signed" | "keenetic" | "off";
     cert_ref: string;
     san: string[];
   };
@@ -169,4 +169,19 @@ export type ConsoleItem = {
   level: "info" | "error";
   title: string;
   message: string;
+};
+
+export type DmsApp = {
+  app: string;
+  manifest_version?: string;
+  release_id?: string;
+  applied_at?: string;
+  status: string;
+  healthcheck_url?: string;
+  service_init_name?: string;
+  route_apps?: string[];
+  hosts?: string[];
+  artifacts?: string[];
+  release_count: number;
+  metadata: boolean;
 };

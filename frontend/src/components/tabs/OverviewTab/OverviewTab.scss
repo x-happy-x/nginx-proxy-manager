@@ -1,3 +1,30 @@
+.overview-tab .summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.overview-tab .summary-card {
+  display: grid;
+  gap: 6px;
+
+  .summary-card__label {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  strong {
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  small {
+    color: var(--muted);
+  }
+}
+
 .overview-tab .panel-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -35,6 +62,15 @@
     margin-top: 8px;
   }
 
+  .inline-stats {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
   .mono {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.75rem;
@@ -46,13 +82,28 @@
   grid-column: 1 / -1;
 }
 
-.overview-tab .cfg-grid {
+.overview-tab .cfg-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 8px;
 }
 
-.overview-tab .cfg-card {
+.overview-tab .cfg-list__head,
+.overview-tab .cfg-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(260px, 1.7fr) minmax(220px, 1.1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.overview-tab .cfg-list__head {
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-tab .cfg-row {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px;
@@ -64,23 +115,35 @@
   }
 
   p {
-    margin: 0 0 8px;
+    margin: 0;
   }
 }
 
+.overview-tab .cfg-row__meta {
+  justify-content: flex-start;
+}
+
+.overview-tab .cfg-row__actions {
+  justify-self: end;
+}
+
 @media (max-width: 1200px) {
+  .overview-tab .summary-grid,
   .overview-tab .panel-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 820px) {
+  .overview-tab .summary-grid,
   .overview-tab .panel-grid {
     grid-template-columns: 1fr;
   }
 
-  .overview-tab .cfg-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  .overview-tab .cfg-list__head,
+  .overview-tab .cfg-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 
@@ -94,7 +157,11 @@
     gap: 4px;
   }
 
-  .overview-tab .cfg-grid {
+  .overview-tab .cfg-list__head {
+    display: none;
+  }
+
+  .overview-tab .cfg-row {
     grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { Tooltip } from "@x-happy-x/ui-kit";
 
 type Props = {
   tooltip: string;
@@ -7,5 +6,9 @@ type Props = {
 };
 
 export function TooltipAnchor({ tooltip, children }: Props) {
-  return <Tooltip content={tooltip}>{children as ReactElement}</Tooltip>;
+  return (
+    <span className="tooltip-anchor" title={tooltip}>
+      {children}
+    </span>
+  );
 }

@@ -1,4 +1,5 @@
 import "./AppSidebar.scss";
+import type { CSSProperties } from "react";
 import { Button, IconButton, TabButton } from "../../ui";
 import { useI18n } from "../../../i18n";
 import { LanguageMenu } from "../TopBar/LanguageMenu";
@@ -24,15 +25,16 @@ export function AppSidebar({ active, dirty, busy, isDarkTheme, consoleOpen, onCh
     <aside className="app-sidebar">
       <div className="app-sidebar__main">
         <div className="app-sidebar__brand">
-          <span className="app-sidebar__eyebrow">Legacy UI</span>
+          <span className="app-sidebar__eyebrow">Home network control plane</span>
           <div className="app-sidebar__title-row">
             <strong>{t("top.title")}</strong>
             {dirty ? <span className="chip-token chip-token--warning">{t("common.unsaved")}</span> : <span className="chip-token chip-token--soft">live</span>}
           </div>
-          <p>Новая левая панель заменила старые верхнюю и боковую панели в основном интерфейсе.</p>
+          <p>Маршруты, DNS, сертификаты и состояние локальных сервисов.</p>
         </div>
 
-        <nav className="app-sidebar__nav" aria-label="Primary">
+        <nav className="app-sidebar__nav" aria-label="Primary" style={{ "--tab-index": TABS.findIndex((tab) => tab.key === active) } as CSSProperties}>
+          <i className="app-sidebar__indicator" />
           {TABS.map((tab) => (
             <TabButton
               key={tab.key}

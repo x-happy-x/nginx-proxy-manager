@@ -1,7 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { TabButton as UiKitTabButton } from "@x-happy-x/ui-kit";
 import { UiIcon, type IconName } from "../UiIcon";
-
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   active?: boolean;
   children: ReactNode;
@@ -9,19 +7,25 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   iconOnly?: boolean;
   tooltip?: string;
 };
-
-export function TabButton({ active = false, className = "", children, iconName, iconOnly = false, tooltip, ...rest }: Props) {
-  const cls = ["ui-tab-btn", active ? "active" : "", iconOnly ? "icon-only" : "", className].filter(Boolean).join(" ");
+export function TabButton({
+  active,
+  className = "",
+  children,
+  iconName,
+  iconOnly,
+  tooltip,
+  ...rest
+}: Props) {
   return (
-    <UiKitTabButton
-      active={active}
-      className={cls}
-      icon={iconName ? <UiIcon name={iconName} /> : null}
-      iconOnly={iconOnly}
-      tooltip={tooltip}
+    <button
+      type="button"
+      className={`ui-tab-btn ${active ? "active" : ""} ${iconOnly ? "icon-only" : ""} ${className}`}
+      aria-current={active ? "page" : undefined}
+      title={tooltip}
       {...rest}
     >
-      {children}
-    </UiKitTabButton>
+      {iconName ? <UiIcon name={iconName} /> : null}
+      <span className="ui-tab-btn__label">{children}</span>
+    </button>
   );
 }
