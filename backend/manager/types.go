@@ -12,10 +12,14 @@ type app struct {
 	localCACert      string
 	localCAKey       string
 	ndmcBin          string
+	ndmcRunner       func(string) (bool, string)
 	ipHostDeleteMode string
 	genRoutesPath    string
 	activeRoutesPath string
 	mu               sync.RWMutex
+	operationMu      sync.Mutex
+	telemetryMu      sync.Mutex
+	telemetry        *telemetryStore
 }
 
 type response map[string]any

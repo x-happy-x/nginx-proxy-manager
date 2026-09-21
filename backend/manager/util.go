@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func fileExists(path string) bool {
@@ -14,7 +16,9 @@ func fileExists(path string) bool {
 }
 
 func runCommand(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -50,6 +54,9 @@ func atoiDefault(value string, fallback int) int {
 }
 
 func mapString(v any) string {
+	if v == nil {
+		return ""
+	}
 	if s, ok := v.(string); ok {
 		return strings.TrimSpace(s)
 	}

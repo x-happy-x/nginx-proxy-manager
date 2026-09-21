@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"gopkg.in/yaml.v3"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +30,24 @@ func (a *app) setRoutesPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	root, err := filepath.Abs(a.baseDir)
+	if err != nil {
+		return "", err
+	}
+	ext := strings.ToLower(filepath.Ext(resolved))
+	if filepath.Dir(resolved) != root || (ext != ".yml" && ext != ".yaml") {
+		return "", fmt.Errorf("select a YAML routes file in the HomeNet project directory")
+	}
+	if actual, err := filepath.EvalSymlinks(resolved); err == nil && actual != resolved {
+		return "", fmt.Errorf("symlink route profiles are not allowed")
+	}
+	if _, err := os.Stat(resolved); err == nil {
+		if _, err := schema.LoadRoutes(resolved); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
 	a.mu.Lock()
 	a.activeRoutesPath = resolved
 	a.mu.Unlock()
@@ -34,10 +55,29 @@ func (a *app) setRoutesPath(path string) (string, error) {
 }
 
 func (a *app) handle(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "same-origin")
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	switch r.Method {
 	case http.MethodGet:
 		a.handleGet(w, r)
 	case http.MethodPost:
+		if origin := r.Header.Get("Origin"); origin != "" {
+			parsed, err := url.Parse(origin)
+			if err != nil || parsed.Host != r.Host {
+				a.writeJSON(w, http.StatusForbidden, response{"ok": false, "error": "cross_origin_write_denied"})
+				return
+			}
+		}
+		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+			a.writeJSON(w, http.StatusForbidden, response{"ok": false, "error": "cross_site_write_denied"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		a.operationMu.Lock()
+		defer a.operationMu.Unlock()
 		a.handlePost(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -76,9 +116,9 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		if logType == "" {
 			logType = "access"
 		}
-		logFile := "/opt/var/log/nginx/access.log"
+		logFile := getenv("NGINX_ACCESS_LOG", "/opt/var/log/homenet/access.log")
 		if logType != "access" {
-			logFile = "/opt/var/log/nginx/error.log"
+			logFile = getenv("NGINX_ERROR_LOG", "/opt/var/log/homenet/error.log")
 		}
 		lines, err := readLogFile(logFile, limit, r.URL.Query().Get("filter"))
 		if err != nil {
@@ -88,10 +128,35 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "lines": lines})
 	case "/api/nginx/route-logs":
 		a.handleRouteLogs(w, r, false)
+	case "/api/nginx/stats":
+		a.handleStats(w, r)
+	case "/api/dns/plan":
+		routes, err := schema.LoadRoutes(a.routesPath())
+		if err != nil {
+			a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
+			return
+		}
+		plan, err := a.previewMihomoDNS(routes)
+		if err != nil {
+			a.writeJSON(w, 400, response{"ok": false, "error": err.Error(), "plan": plan})
+			return
+		}
+		a.writeJSON(w, 200, response{"ok": true, "plan": plan})
 	case "/api/nginx/route-logs/errors":
 		a.handleRouteLogs(w, r, true)
 	case "/api/nginx/status":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "status": a.nginxStatus()})
+	case "/api/dms/apps":
+		items, err := listDMSApps(getenv("DMS_ROOT", "/opt/dms"))
+		if err != nil {
+			a.writeJSON(w, http.StatusInternalServerError, response{"ok": false, "error": err.Error()})
+			return
+		}
+		a.writeJSON(w, http.StatusOK, response{
+			"ok":              true,
+			"items":           items,
+			"service_version": dmsServiceVersion(getenv("DMS_SERVICE_BIN", "/opt/bin/dms-service")),
+		})
 	case "/api/nginx/configs":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "items": a.configCatalog()})
 	case "/api/nginx/config/read":
@@ -118,7 +183,7 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.sendPEM(w, a.localCACert, "local-ca.crt")
 	case "/api/cert/download":
 		host := r.URL.Query().Get("host")
-		if host == "" {
+		if !validRouterHost(host) {
 			http.Error(w, "host required", http.StatusBadRequest)
 			return
 		}
@@ -181,6 +246,10 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "schema_version_must_be_2_1"})
 			return
 		}
+		if err := schema.ResolveAutoPorts(&routes); err != nil {
+			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": err.Error()})
+			return
+		}
 		if err := schema.SaveRoutes(a.routesPath(), routes); err != nil {
 			a.writeJSON(w, http.StatusInternalServerError, response{"ok": false, "error": err.Error()})
 			return
@@ -208,39 +277,14 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 	case "/api/routes/backup":
 		ok, out, filePath := a.backupRoutesFile()
 		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": out, "path": filePath})
+	case "/api/apply/check":
+		ok, output := a.checkRoutes()
+		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": output})
 	case "/api/apply":
-		ok, output := a.applyRoutes()
-		if ok {
-			routes, err := schema.LoadRoutes(a.routesPath())
-			if err != nil {
-				a.writeJSON(w, http.StatusInternalServerError, response{"ok": false, "output": err.Error()})
-				return
-			}
-			ndnsOK, ndnsOut := a.syncNDNSFromRoutes(routes)
-			dnsOK, dnsOut := a.syncLocalDNS(routes)
-			output = strings.TrimRight(output, "\n")
-			if ndnsOut != "" {
-				if output != "" {
-					output += "\n"
-				}
-				output += ndnsOut
-			}
-			if dnsOut != "" {
-				if output != "" {
-					output += "\n"
-				}
-				output += dnsOut
-			}
-			ok = ok && ndnsOK && dnsOK
-		}
+		ok, output := a.applyManagedRoutes()
 		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": output})
 	case "/api/stub/apply":
-		var payload map[string]any
-		if !a.decodeJSON(w, r, &payload) {
-			return
-		}
-		ok, out := a.applyStubConfig(payload)
-		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": out})
+		a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "Save stub settings in routes, then use Apply to validate and activate safely"})
 	case "/api/stub/upload":
 		var payload struct {
 			Content string `json:"content"`
@@ -265,6 +309,27 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		item := a.configByID(strings.TrimSpace(payload.ID))
 		if item == nil {
 			a.writeJSON(w, http.StatusNotFound, response{"ok": false, "error": "config_not_found"})
+			return
+		}
+		if !item.Editable {
+			a.writeJSON(w, http.StatusForbidden, response{"ok": false, "error": "configuration is generated or protected; edit routes instead"})
+			return
+		}
+		if item.ID == "routes_v21" {
+			var routes schema.Routes
+			if err := yaml.Unmarshal([]byte(payload.Content), &routes); err != nil {
+				a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
+				return
+			}
+			if err := schema.ResolveAutoPorts(&routes); err != nil {
+				a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
+				return
+			}
+			if err := schema.SaveRoutes(a.routesPath(), routes); err != nil {
+				a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
+				return
+			}
+			a.writeJSON(w, 200, response{"ok": true, "output": "Saved validated routes draft; Apply activates it"})
 			return
 		}
 		if item.Path == "" {
@@ -311,7 +376,7 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		if !a.decodeJSON(w, r, &payload) {
 			return
 		}
-		if strings.TrimSpace(payload.Host) == "" {
+		if !validRouterHost(payload.Host) {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "host_required"})
 			return
 		}
@@ -327,7 +392,7 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		if !a.decodeJSON(w, r, &payload) {
 			return
 		}
-		if strings.TrimSpace(payload.Host) == "" {
+		if !validRouterHost(payload.Host) {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "host_required"})
 			return
 		}
@@ -353,7 +418,7 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		if !a.decodeJSON(w, r, &payload) {
 			return
 		}
-		if strings.TrimSpace(payload.Host) == "" || strings.TrimSpace(payload.Address) == "" {
+		if !validRouterHost(payload.Host) || !validRouterIP(payload.Address) {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "host_address_required"})
 			return
 		}
@@ -363,6 +428,9 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 			ok, out = a.runNDMC("ip host " + payload.Host + " " + payload.Address)
 		} else {
 			ok, out = a.deleteIPHost(payload.Host, payload.Address)
+		}
+		if ok {
+			ok, out = a.runNDMC("system configuration save")
 		}
 		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": out})
 	case "/api/ndns/proxy/save", "/api/ndns/proxy/delete":

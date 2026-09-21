@@ -1,9 +1,12 @@
 package schema
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -264,9 +267,9 @@ func NormalizeRoutes(in Routes) Routes {
 		out.Globals.Stub.Root = in.Globals.Stub.Root
 	}
 	out.Globals.ACME.Email = in.Globals.ACME.Email
-	out.Apps = in.Apps
-	out.Hosts = in.Hosts
-	out.Certs = in.Certs
+	out.Apps = append([]App{}, in.Apps...)
+	out.Hosts = append([]Host{}, in.Hosts...)
+	out.Certs = append([]Certificate{}, in.Certs...)
 	for i := range out.Apps {
 		if out.Apps[i].Upstream.Port == 0 {
 			out.Apps[i].Upstream.Port = 80
@@ -276,6 +279,9 @@ func NormalizeRoutes(in Routes) Routes {
 		}
 	}
 	for i := range out.Hosts {
+		out.Hosts[i].Endpoints = append([]Endpoint{}, in.Hosts[i].Endpoints...)
+		out.Hosts[i].DNS.Publish = append([]string{}, in.Hosts[i].DNS.Publish...)
+		out.Hosts[i].TLS.SAN = append([]string{}, in.Hosts[i].TLS.SAN...)
 		if out.Hosts[i].DNS.LocalRecordIP == "" {
 			out.Hosts[i].DNS.LocalRecordIP = "auto"
 		}
@@ -291,10 +297,16 @@ func NormalizeRoutes(in Routes) Routes {
 		for j := range out.Hosts[i].Endpoints {
 			ep := &out.Hosts[i].Endpoints[j]
 			if ep.Listen.Protocol == "" {
-				ep.Listen.Protocol = "https"
+				ep.Listen.Protocol = "http"
+				if ep.Name == "web" {
+					ep.Listen.Protocol = "https"
+				}
 			}
 			if ep.Name == "web" && ep.Behavior.Redirect == "" {
-				ep.Behavior.Redirect = "https"
+				ep.Behavior.Redirect = "off"
+				if ep.Listen.Protocol == "https" {
+					ep.Behavior.Redirect = "https"
+				}
 			}
 			if ep.Behavior.NDNSDomain == "" {
 				ep.Behavior.NDNSDomain = "ndns"
@@ -342,17 +354,96 @@ func LoadRoutes(path string) (Routes, error) {
 	if routes.SchemaVersion != "2.1" {
 		return Routes{}, ErrSchemaVersion
 	}
+	if err := ValidateRoutes(routes); err != nil {
+		return Routes{}, err
+	}
 	return NormalizeRoutes(routes), nil
 }
 
 func SaveRoutes(path string, routes Routes) error {
+	if err := ValidateRoutes(routes); err != nil {
+		return err
+	}
 	payload := NormalizeRoutes(routes)
-	body, err := yaml.Marshal(payload)
+	body, err := renderRoutesYAML(payload)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, body, 0o644)
+	file, err := os.CreateTemp(filepath.Dir(path), ".routes-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return err
+	}
+	if _, err := file.Write(body); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
+}
+
+func renderRoutesYAML(routes Routes) ([]byte, error) {
+	sections := []struct {
+		comment string
+		key     string
+		value   any
+	}{
+		{
+			comment: "Schema version for the routes file format.",
+			key:     "schema_version",
+			value:   routes.SchemaVersion,
+		},
+		{
+			comment: "Global nginx and UI settings shared by all apps and hosts.",
+			key:     "globals",
+			value:   routes.Globals,
+		},
+		{
+			comment: "Backend apps that define upstream targets and websocket options.",
+			key:     "apps",
+			value:   routes.Apps,
+		},
+		{
+			comment: "Public or private hosts mapped to apps, TLS, DNS and endpoint behavior.",
+			key:     "hosts",
+			value:   routes.Hosts,
+		},
+		{
+			comment: "Optional custom certificate bindings for specific hosts.",
+			key:     "certs",
+			value:   routes.Certs,
+		},
+	}
+
+	var out bytes.Buffer
+	for i, section := range sections {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString("# ")
+		out.WriteString(section.comment)
+		out.WriteByte('\n')
+
+		block, err := yaml.Marshal(map[string]any{section.key: section.value})
+		if err != nil {
+			return nil, fmt.Errorf("marshal %s: %w", section.key, err)
+		}
+		out.WriteString(strings.TrimRight(string(block), "\n"))
+		out.WriteByte('\n')
+	}
+
+	return out.Bytes(), nil
 }

@@ -17,10 +17,14 @@ func (a *app) nginxStatus() nginxStatus {
 		Listeners:       []string{},
 		ParsedListeners: []parsedListener{},
 	}
-	if out, err := runCommand("pidof", "nginx"); err == nil {
-		for _, item := range strings.Fields(strings.TrimSpace(out)) {
-			if _, err := strconv.Atoi(item); err == nil {
-				status.PIDs = append(status.PIDs, item)
+	mainConf := getenv("NGINX_MAIN_CONF", filepath.Join(a.nginxConfRoot, "nginx.conf"))
+	nginxBinary := getenv("NGINX_BINARY", "/usr/sbin/nginx")
+	pidPath := getenv("NGINX_PID", filepath.Join(a.nginxConfRoot, "nginx.pid"))
+	if body, err := os.ReadFile(pidPath); err == nil {
+		pid := strings.TrimSpace(string(body))
+		if _, err := strconv.Atoi(pid); err == nil {
+			if cmdline, err := os.ReadFile(filepath.Join("/proc", pid, "cmdline")); err == nil && strings.Contains(string(cmdline), mainConf) {
+				status.PIDs = append(status.PIDs, pid)
 			}
 		}
 	}
@@ -39,12 +43,12 @@ func (a *app) nginxStatus() nginxStatus {
 			}
 		}
 	}
-	if out, err := runCommand("nginx", "-v"); err == nil {
+	if out, err := runCommand(nginxBinary, "-v"); err == nil {
 		status.Version = strings.TrimSpace(out)
 	} else {
 		status.Version = "nginx not found"
 	}
-	if out, err := runCommand("nginx", "-T"); err == nil {
+	if out, err := runCommand(nginxBinary, "-p", a.nginxConfRoot+string(os.PathSeparator), "-c", mainConf, "-T"); err == nil {
 		files := []string{}
 		for _, line := range strings.Split(out, "\n") {
 			if strings.HasPrefix(line, "# configuration file ") {
@@ -66,23 +70,38 @@ func (a *app) nginxStatus() nginxStatus {
 
 func filterNginxListeners(out string, pids []string) []string {
 	lines := []string{}
-	for _, line := range strings.Split(out, "\n") {
-		if !strings.Contains(line, "nginx") {
-			continue
+	known := map[string]bool{}
+	for _, pid := range pids {
+		if value, err := strconv.Atoi(pid); err == nil && value > 1 {
+			known[strconv.Itoa(value)] = true
 		}
-		if len(pids) > 0 {
-			match := false
-			for _, pid := range pids {
-				if strings.Contains(line, "pid="+pid) || strings.Contains(line, "/"+pid) {
+	}
+	if len(known) == 0 {
+		return lines
+	}
+	ssPID := regexp.MustCompile(`\bpid=([0-9]+)(?:,|\))`)
+	for _, line := range strings.Split(out, "\n") {
+		match := false
+		for _, pid := range ssPID.FindAllStringSubmatch(line, -1) {
+			if known[pid[1]] {
+				match = true
+				break
+			}
+		}
+		if !match {
+			// BusyBox netstat reports PID/program. Program names can be "null"
+			// or a configuration basename for Keenetic's modified nginx.
+			for _, field := range strings.Fields(line) {
+				pid, _, slash := strings.Cut(field, "/")
+				if slash && known[pid] {
 					match = true
 					break
 				}
 			}
-			if !match {
-				continue
-			}
 		}
-		lines = append(lines, line)
+		if match {
+			lines = append(lines, line)
+		}
 	}
 	return lines
 }
@@ -196,6 +215,12 @@ func (a *app) configCatalog() []configItem {
 	}
 	seen := map[string]struct{}{}
 	for idx, path := range files {
+		if strings.Contains(filepath.Base(path), "keenetic") || strings.HasSuffix(path, ".key") {
+			continue
+		}
+		if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(a.nginxConfRoot)+string(os.PathSeparator)) {
+			continue
+		}
 		if _, ok := seen[path]; ok {
 			continue
 		}
@@ -209,7 +234,7 @@ func (a *app) configCatalog() []configItem {
 			Title:    filepath.Base(path),
 			Path:     path,
 			Type:     itemType,
-			Editable: true,
+			Editable: false,
 		})
 	}
 	for _, item := range candidates {

@@ -1,0 +1,70 @@
+#!/bin/sh
+# HomeNet has its own config, PID and listeners. Never signal Keenetic's nginx.
+set -eu
+APP_DIR="${HOME_NET_APP_DIR:-/opt/etc/homenet/nginx}"
+if [ -f "$APP_DIR/config/runtime.env" ]; then
+  set -a
+  . "$APP_DIR/config/runtime.env"
+  set +a
+fi
+BINARY="${NGINX_BINARY:-/usr/sbin/nginx}"
+ROOT="${NGINX_CONF_ROOT:-/opt/etc/homenet/proxy}"
+CONF="${NGINX_MAIN_CONF:-$ROOT/nginx.conf}"
+PID_FILE="${NGINX_PID:-$ROOT/nginx.pid}"
+case "$ROOT" in /opt/etc/homenet/*) ;; *) echo "Refusing non-HomeNet config root" >&2; exit 1;; esac
+case "$CONF:$PID_FILE" in "$ROOT/"*:"$ROOT/"*) ;; *) echo "Config and PID must be inside HomeNet root" >&2; exit 1;; esac
+case "$BINARY" in /*) ;; *) echo "Nginx binary must be an absolute path" >&2; exit 1;; esac
+case "$ROOT/$CONF/$PID_FILE" in */../*|*/./*) echo "Relative path components are forbidden" >&2; exit 1;; esac
+validate_identity() {
+  # Read only the main config's explicit pid directive. A config with a different
+  # PID could otherwise target Keenetic's own master even with an explicit -c.
+  configured_pid="$(awk '$1 == "pid" { gsub(/[";\r]/, "", $2); print $2 }' "$CONF")"
+  [ "$configured_pid" = "$PID_FILE" ] || {
+    echo "Config PID does not match the dedicated HomeNet PID file" >&2
+    return 1
+  }
+}
+running() {
+  [ -f "$PID_FILE" ] || return 1
+  PID="$(cat "$PID_FILE")"
+  case "$PID" in ''|*[!0-9]*) return 1;; esac
+  [ "$PID" -gt 1 ] || return 1
+  [ -r "/proc/$PID/cmdline" ] || return 1
+  cmdline="$(tr '\000' ' ' < "/proc/$PID/cmdline")"
+  printf '%s\n' "$cmdline" | grep -F "$CONF" >/dev/null || return 1
+  printf '%s\n' "$cmdline" | grep -F "$BINARY" >/dev/null || return 1
+  printf '%s\n' "$cmdline" | grep -F 'nginx: master process' >/dev/null || return 1
+  kill -0 "$PID" 2>/dev/null
+}
+start() {
+  validate_identity
+  if running; then echo "HomeNet proxy already running ($PID)"; return; fi
+  if [ -f "$PID_FILE" ]; then
+    [ ! -L "$PID_FILE" ] || { echo "Refusing a symlink PID file" >&2; return 1; }
+    stale_pid="$(cat "$PID_FILE")"
+    case "$stale_pid" in
+      '') ;;
+      *[!0-9]*) echo "Invalid dedicated PID file" >&2; return 1 ;;
+    esac
+    # /opt persists over reboot; Linux may reuse the former PID. Identity was
+    # checked above, so clear only our stale file and never signal its occupant.
+    rm -f "$PID_FILE"
+  fi
+  "$BINARY" -p "$ROOT/" -c "$CONF" -t
+  "$BINARY" -p "$ROOT/" -c "$CONF"
+}
+case "${1:-start}" in
+ start) start ;;
+ reload|restart)
+   validate_identity
+   if running; then
+     "$BINARY" -p "$ROOT/" -c "$CONF" -t
+     # Recheck after validation and signal exactly the verified process.
+     running || { echo "Dedicated master changed during validation" >&2; exit 1; }
+     kill -HUP "$PID"
+   else start; fi
+   ;;
+ stop) if running; then kill -QUIT "$PID"; fi ;;
+ status) if running; then echo "HomeNet proxy running ($PID)"; else echo "HomeNet proxy stopped"; exit 1; fi ;;
+ *) echo "Usage: $0 {start|reload|restart|stop|status}"; exit 2 ;;
+esac
