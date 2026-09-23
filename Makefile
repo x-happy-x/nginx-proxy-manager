@@ -1,4 +1,4 @@
-DMS_DIR ?= ../../go/dms
+DMS_DIR ?= ../dms
 
 .PHONY: test build deploy
 
@@ -14,7 +14,7 @@ build:
 
 deploy:
 	$(MAKE) -C $(DMS_DIR) build
-	set -a; . ../../lms/lms-client/scripts/deploy-routerd.env; set +a; \
+	set -a; . ../lms-client/scripts/deploy-routerd.env; set +a; \
 	DMS_ROUTER_PASSWORD="$$ROUTER_PASSWORD" $(DMS_DIR)/bin/dms-client apply \
 		--config ./dms.yml \
 		--service-bin $(DMS_DIR)/bin/dms-service-linux-arm64
