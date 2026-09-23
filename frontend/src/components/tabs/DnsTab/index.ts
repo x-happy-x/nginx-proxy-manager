@@ -1,1 +1,0 @@
-export { DnsTab } from "./DnsTab";

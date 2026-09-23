@@ -1,1 +1,0 @@
-export { CertsTab } from "./CertsTab";
