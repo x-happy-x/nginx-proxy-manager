@@ -140,7 +140,9 @@ function normalizeNdnsItems(items: NdnsProxy[]): NdnsProxy[] {
 }
 
 export default function App() {
-  const theme = "dark";
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+  );
   const [locale, setLocale] = useState<Locale>("ru");
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
     tabFromHash(window.location.hash),
@@ -180,6 +182,7 @@ export default function App() {
 
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [consoleItems, setConsoleItems] = useState<ConsoleItem[]>([]);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [configModalTitle, setConfigModalTitle] = useState("");
@@ -202,67 +205,87 @@ export default function App() {
     title: string;
     description: string;
     icon: string;
+    group: "main" | "network" | "system";
+    hint: string;
   }> = [
     {
       id: "overview",
       title: "Обзор",
       description: "Трафик, состояние системы и ключевые показатели.",
       icon: "overview",
+      group: "main",
+      hint: "Трафик и состояние",
     },
     {
       id: "servers",
       title: "Сервисы",
       description: "Ваши приложения. Доступ из дома и из любой точки мира.",
       icon: "servers",
+      group: "main",
+      hint: "Приложения и домены",
     },
     {
       id: "logs",
       title: "Журнал запросов",
       description: "Каждый запрос, его источник и путь до приложения.",
       icon: "logs",
+      group: "main",
+      hint: "История обращений",
     },
     {
       id: "dns",
       title: "DNS и KeenDNS",
       description: "Локальные DNS-записи и публичные входы роутера.",
       icon: "dns",
+      group: "network",
+      hint: "Имена и внешние входы",
     },
     {
       id: "certs",
       title: "Сертификаты",
       description: "TLS, локальный центр сертификации и выпуск сертификатов.",
       icon: "certs",
+      group: "network",
+      hint: "TLS и центр сертификации",
     },
     {
       id: "advanced",
       title: "Маршрутизация",
       description: "Расширенные настройки хостов, портов и приложений.",
       icon: "advanced",
+      group: "network",
+      hint: "Точные параметры прокси",
     },
     {
       id: "system",
       title: "Система",
       description: "Файлы конфигурации и состояние nginx.",
-      icon: "advanced",
+      icon: "system",
+      group: "system",
+      hint: "Конфигурация и процессы",
     },
     {
       id: "dms",
       title: "Развёртывания",
       description: "Установленные приложения и версии релизов.",
       icon: "dms",
+      group: "system",
+      hint: "Версии и артефакты",
     },
     {
       id: "routing",
       title: "Логи nginx",
       description: "Исходные журналы доступа и ошибок.",
-      icon: "logs",
+      icon: "nginx",
+      group: "system",
+      hint: "Диагностика nginx",
     },
   ];
   const currentNav = nav.find((item) => item.id === activeTab) || nav[0];
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("theme", theme);
+    localStorage.setItem("homenet-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -301,6 +324,7 @@ export default function App() {
 
   const setTab = (tab: TabKey) => {
     setActiveTab(tab);
+    setMobileNavOpen(false);
     const nextHash = `#/${tab}`;
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", nextHash);
@@ -450,6 +474,7 @@ export default function App() {
       setNotice({ title, message: "Операция выполнена.", error: false });
     } catch (error) {
       pushLog(title, errText(error), "error");
+      setConsoleOpen(true);
     } finally {
       setBusy(false);
     }
@@ -620,25 +645,54 @@ export default function App() {
               HomeNet<small>PROXY MANAGER</small>
             </span>
           </a>
+          <button
+            className="mobile-nav-toggle"
+            aria-expanded={mobileNavOpen}
+            aria-label={mobileNavOpen ? "Закрыть меню" : "Открыть меню"}
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            <Glyph name={mobileNavOpen ? "close" : "menu"} size={21} />
+          </button>
           <div className="workspace-label">
             <span className="live-dot" /> Домашняя сеть{" "}
             <span className="badge subtle">LOCAL</span>
           </div>
-          <div className="nav-label">УПРАВЛЕНИЕ</div>
-          <nav aria-label="Основная навигация">
-            {nav.map((item, index) => (
-              <button
-                key={item.id}
-                onClick={() => setTab(item.id)}
-                className={`${item.id === activeTab ? "active" : ""} ${index === 5 ? "nav-divider" : ""}`}
-                aria-current={item.id === activeTab ? "page" : undefined}
-                aria-label={item.title}
-                title={item.title}
-              >
-                <Glyph name={item.icon} size={19} />
-                <span>{item.title}</span>
-                {item.id === "servers" && <small>{doc.apps.length}</small>}
-              </button>
+          <nav
+            aria-label="Основная навигация"
+            className={mobileNavOpen ? "mobile-open" : ""}
+          >
+            {([
+              ["main", "РАБОЧЕЕ ПРОСТРАНСТВО"],
+              ["network", "СЕТЬ И БЕЗОПАСНОСТЬ"],
+              ["system", "СИСТЕМА"],
+            ] as const).map(([group, label]) => (
+              <div className="nav-group" key={group}>
+                <div className="nav-label">{label}</div>
+                {nav
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setTab(item.id)}
+                      className={item.id === activeTab ? "active" : ""}
+                      aria-current={
+                        item.id === activeTab ? "page" : undefined
+                      }
+                      title={item.title}
+                    >
+                      <span className="nav-icon">
+                        <Glyph name={item.icon} size={18} />
+                      </span>
+                      <span className="nav-copy">
+                        <strong>{item.title}</strong>
+                        <em>{item.hint}</em>
+                      </span>
+                      {item.id === "servers" && (
+                        <small>{doc.apps.length}</small>
+                      )}
+                    </button>
+                  ))}
+              </div>
             ))}
           </nav>
           <div className="sidebar-bottom">
@@ -660,12 +714,38 @@ export default function App() {
             </div>
             <StatusPill status={status} />
             <button
-              className="icon-plain"
-              title="Журнал операций"
-              aria-label="Журнал операций"
+              className="icon-plain theme-toggle"
+              title={
+                theme === "dark"
+                  ? "Включить светлую тему"
+                  : "Включить тёмную тему"
+              }
+              aria-label={
+                theme === "dark"
+                  ? "Включить светлую тему"
+                  : "Включить тёмную тему"
+              }
+              aria-pressed={theme === "dark"}
+              onClick={() =>
+                setTheme((current) =>
+                  current === "dark" ? "light" : "dark",
+                )
+              }
+            >
+              <Glyph name={theme === "dark" ? "sun" : "moon"} size={19} />
+            </button>
+            <button
+              className="operations-trigger"
+              title="Центр операций"
+              aria-label="Открыть центр операций"
+              aria-expanded={consoleOpen}
               onClick={() => setConsoleOpen(!consoleOpen)}
             >
               <Glyph name="logs" size={19} />
+              <span>Операции</span>
+              {consoleItems.length > 0 && (
+                <small>{Math.min(consoleItems.length, 99)}</small>
+              )}
             </button>
           </header>
           <div className="page-content">

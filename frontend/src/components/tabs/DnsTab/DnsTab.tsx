@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { NdnsProxy } from "../../../types";
 import "./DnsTab.scss";
-import { CardIconActions, CheckboxChip, FieldLabel, IconButton, Panel, RadioChips } from "../../ui";
+import { Button, CardIconActions, CheckboxChip, FieldLabel, IconButton, Panel, RadioChips, UiIcon } from "../../ui";
 import { useI18n } from "../../../i18n";
 
 type DnsGrouped = { host: string; addresses: string[] };
@@ -36,6 +36,7 @@ export function DnsTab({
   const { t } = useI18n();
   const [newHost, setNewHost] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const [query, setQuery] = useState("");
   const [ndnsDrafts, setNdnsDrafts] = useState<Record<string, NdnsProxy>>({});
   const [ndnsModes, setNdnsModes] = useState<Record<string, "view" | "edit">>({});
 
@@ -47,6 +48,17 @@ export function DnsTab({
       })),
     [dnsItems],
   );
+  const visibleRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((item) =>
+      `${item.host} ${item.addressesText}`.toLowerCase().includes(needle),
+    );
+  }, [query, rows]);
+  const localCount = rows.filter((item) => item.host.endsWith(".local")).length;
+  const publicCount = rows.filter((item) =>
+    item.host.endsWith(".crubs.crazedns.ru"),
+  ).length;
 
   const clearDraft = (name: string) => {
     setNdnsDrafts((prev) => {
@@ -96,16 +108,59 @@ export function DnsTab({
   return (
     <section className="tab-section dns-tab">
       <Panel className="panel">
-        <div className="section-head">
-          <h2>{t("dns.title")}</h2>
-          <IconButton
-            iconName="refresh"
-            iconOnly
-            tooltip={t("common.refresh")}
-            onClick={onRefreshDns}
-            disabled={busy}
-          />
+        <div className="section-head dns-section-head">
+          <div className="section-title-block">
+            <span className="section-icon"><UiIcon name="dns" /></span>
+            <div>
+              <h2>{t("dns.title")}</h2>
+              <p>Записи локального резолвера Keenetic</p>
+            </div>
+          </div>
+          <Button iconName="refresh" compact onClick={onRefreshDns} disabled={busy}>
+            {t("common.refresh")}
+          </Button>
         </div>
+        <div className="dns-stats" aria-label="Сводка DNS">
+          <div><strong>{rows.length}</strong><span>всего записей</span></div>
+          <div><strong>{localCount}</strong><span>локальных</span></div>
+          <div><strong>{publicCount}</strong><span>публичная зона</span></div>
+        </div>
+        <div className="dns-add-card">
+          <div className="dns-add-copy">
+            <strong>Новая DNS-запись</strong>
+            <span>Свяжите доменное имя с IP-адресом в домашней сети.</span>
+          </div>
+          <div className="row-3">
+            <FieldLabel text={t("dns.host")}>
+              <input value={newHost} onChange={(e) => setNewHost(e.target.value)} placeholder={t("ph.host_example")} />
+            </FieldLabel>
+            <FieldLabel text={t("dns.address")}>
+              <input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="192.168.1.2" />
+            </FieldLabel>
+            <Button
+              iconName="plus"
+              variant="accent"
+              onClick={() => {
+                onAddDnsHost(newHost, newAddress);
+                setNewHost("");
+                setNewAddress("");
+              }}
+              disabled={!newHost || !newAddress || busy}
+            >
+              {t("common.add")}
+            </Button>
+          </div>
+        </div>
+        <label className="dns-search">
+          <UiIcon name="search" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Найти домен или IP-адрес"
+            aria-label="Поиск DNS-записей"
+          />
+          <span>{visibleRows.length} из {rows.length}</span>
+        </label>
         <div className="table-wrap">
           <table>
             <thead>
@@ -116,11 +171,12 @@ export function DnsTab({
               </tr>
             </thead>
             <tbody>
-              {rows.map((item) => (
-                <tr key={item.host}>
-                  <td>{item.host}</td>
-                  <td>
+              {visibleRows.map((item) => (
+                <tr key={`${item.host}:${item.addressesText}`}>
+                  <td data-label={t("dns.host")}><strong>{item.host}</strong></td>
+                  <td data-label={t("dns.addresses")}>
                     <input
+                      aria-label={`IP-адреса для ${item.host}`}
                       defaultValue={item.addressesText}
                       onBlur={(e) => {
                         const next = e.target.value.split(",").map((v) => v.trim()).filter(Boolean);
@@ -128,7 +184,7 @@ export function DnsTab({
                       }}
                     />
                   </td>
-                  <td>
+                  <td data-label={t("dns.actions")}>
                     <IconButton
                       iconName="trash"
                       iconOnly
@@ -141,28 +197,24 @@ export function DnsTab({
             </tbody>
           </table>
         </div>
-        <div className="row-3">
-          <FieldLabel text={t("dns.host")}>
-            <input value={newHost} onChange={(e) => setNewHost(e.target.value)} placeholder={t("ph.host_example")} />
-          </FieldLabel>
-          <FieldLabel text={t("dns.address")}>
-            <input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="192.168.1.2" />
-          </FieldLabel>
-          <div>
-            <IconButton
-              iconName="plus"
-              iconOnly
-              tooltip={t("common.add")}
-              onClick={() => onAddDnsHost(newHost, newAddress)}
-              disabled={!newHost || !newAddress || busy}
-            />
+        {visibleRows.length === 0 && rows.length > 0 && (
+          <div className="dns-empty-search">
+            По запросу «{query}» записей не найдено.
           </div>
-        </div>
+        )}
       </Panel>
 
       <Panel className="panel">
-        <h2>{t("dns.ndns_proxies")}</h2>
-        <p className="muted">{ndnsHttpText}</p>
+        <div className="section-head dns-section-head">
+          <div className="section-title-block">
+            <span className="section-icon"><UiIcon name="globe" /></span>
+            <div>
+              <h2>{t("dns.ndns_proxies")}</h2>
+              <p>Публичные входы KeenDNS и их локальные назначения</p>
+            </div>
+          </div>
+          <div className="ndns-listen"><span>{ndnsItems.length} входов</span><strong>{ndnsHttpText}</strong></div>
+        </div>
         <div className="ndns-grid">
           {ndnsItems.map((item) => {
             const isEditing = ndnsModes[item.name] === "edit";
@@ -170,7 +222,7 @@ export function DnsTab({
             return (
               <div key={item.name} className="ndns-card">
                 <div className="ndns-card-head">
-                  <strong>{item.name}</strong>
+                  <div className="ndns-name"><UiIcon name="globe" /><strong>{item.name}</strong></div>
                   <div className="actions-row">
                     <CardIconActions
                       actions={[

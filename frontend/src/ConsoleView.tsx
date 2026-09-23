@@ -52,6 +52,19 @@ export function Glyph({ name, size = 20 }: { name: string; size?: number }) {
         <circle cx="8" cy="18" r="2" />
       </>
     ),
+    system: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+      </>
+    ),
+    nginx: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="m7 9 3 3-3 3M13 15h4" />
+      </>
+    ),
+    menu: <path d="M4 7h16M4 12h16M4 17h16" />,
     refresh: (
       <>
         <path d="M20 7v5h-5M4 17v-5h5" />
@@ -68,6 +81,13 @@ export function Glyph({ name, size = 20 }: { name: string; size?: number }) {
       </>
     ),
     bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7Z" />,
+    moon: <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />,
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </>
+    ),
     dms: (
       <>
         <path d="m12 3 9 5-9 5-9-5ZM3 8v9l9 5 9-5V8M12 13v9" />
@@ -591,6 +611,32 @@ type ServiceDraft = {
   proxyIp: string;
   externalPort: string;
 };
+
+const PUBLIC_DOMAIN_SUFFIX = "crubs.crazedns.ru";
+const PUBLIC_DOMAIN_ENDING = `.${PUBLIC_DOMAIN_SUFFIX}`;
+
+function publicDomainLabel(host: string): string {
+  const normalized = host.trim().toLowerCase().replace(/\.$/, "");
+  return normalized.endsWith(PUBLIC_DOMAIN_ENDING)
+    ? normalized.slice(0, -PUBLIC_DOMAIN_ENDING.length)
+    : "";
+}
+
+function fullPublicDomain(label: string): string {
+  return label ? `${label}.${PUBLIC_DOMAIN_SUFFIX}` : "";
+}
+
+function normalizePublicDomainInput(value: string): string {
+  let normalized = value.trim().toLowerCase();
+  normalized = normalized.replace(/^https?:\/\//, "").split(/[/:?#]/, 1)[0];
+  if (normalized.endsWith(PUBLIC_DOMAIN_ENDING)) {
+    normalized = normalized.slice(0, -PUBLIC_DOMAIN_ENDING.length);
+  } else if (normalized === PUBLIC_DOMAIN_SUFFIX) {
+    normalized = "";
+  }
+  return normalized.replace(/^\.+|\.+$/g, "");
+}
+
 export function Services({
   doc,
   onChange,
@@ -617,7 +663,9 @@ export function Services({
   );
   const edit = (app?: RouteApp) => {
     const hosts = doc.hosts.filter((h) => h.app_id === app?.id);
-    const external = hosts.find((h) => h.kind === "public");
+    const external = hosts.find(
+      (h) => h.kind === "public" && !!publicDomainLabel(h.host),
+    );
     const dnsHost = external || hosts[0];
     const ndns = external?.endpoints?.find((ep) => ep.behavior?.ndns_profile);
     setEditing(!!app);
@@ -629,7 +677,7 @@ export function Services({
       port: app?.upstream.port || 80,
       scheme: app?.upstream.scheme || "http",
       local: hosts.find((h) => h.kind === "private")?.host || "",
-      public: external?.host || "",
+      public: external ? publicDomainLabel(external.host) : "",
       proxyIp:
         dnsHost?.dns?.local_record_ip && dnsHost.dns.local_record_ip !== "auto"
           ? dnsHost.dns.local_record_ip
@@ -646,10 +694,11 @@ export function Services({
       name: draft.name.trim(),
       address: draft.address.trim(),
       local: draft.local.trim().toLowerCase(),
-      public: draft.public.trim().toLowerCase(),
+      public: normalizePublicDomainInput(draft.public),
       proxyIp: draft.proxyIp.trim(),
     };
-    const domains = [d.local, d.public].filter(Boolean);
+    const publicDomain = fullPublicDomain(d.public);
+    const domains = [d.local, publicDomain].filter(Boolean);
     if (
       !d.name ||
       !d.address ||
@@ -671,6 +720,15 @@ export function Services({
     ) {
       setError(
         "Укажите хотя бы один домен без протокола, порта и пути, например sub.local.",
+      );
+      return;
+    }
+    if (
+      d.public &&
+      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(d.public)
+    ) {
+      setError(
+        `Укажите один поддомен: только латинские буквы, цифры и дефис. Зона ${PUBLIC_DOMAIN_SUFFIX} добавляется автоматически.`,
       );
       return;
     }
@@ -713,7 +771,9 @@ export function Services({
     const current = doc.hosts.filter((host) => host.app_id === id),
       managed = [
         current.find((h) => h.kind === "private"),
-        current.find((h) => h.kind === "public"),
+        current.find(
+          (h) => h.kind === "public" && !!publicDomainLabel(h.host),
+        ),
       ].filter(Boolean) as RouteHost[];
     const makeHost = (
       domain: string,
@@ -796,7 +856,7 @@ export function Services({
       hosts: [
         ...doc.hosts.filter((h) => !managed.includes(h)),
         ...(d.local ? [makeHost(d.local, "private")] : []),
-        ...(d.public ? [makeHost(d.public, "public")] : []),
+        ...(publicDomain ? [makeHost(publicDomain, "public")] : []),
       ],
     });
     setDraft(null);
@@ -1031,13 +1091,30 @@ export function Services({
                 </label>
                 <label>
                   Публичный домен
-                  <input
-                    placeholder="sub.crubs.crazedns.ru"
-                    value={draft.public}
-                    onChange={(e) =>
-                      setDraft({ ...draft, public: e.target.value })
-                    }
-                  />
+                  <span className="domain-compose">
+                    <input
+                      aria-label="Поддомен публичного сервиса"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      inputMode="url"
+                      maxLength={63}
+                      pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                      placeholder="sub"
+                      value={draft.public}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          public: normalizePublicDomainInput(e.target.value),
+                        })
+                      }
+                    />
+                    <span className="domain-suffix">
+                      .{PUBLIC_DOMAIN_SUFFIX}
+                    </span>
+                  </span>
+                  <small className="field-hint">
+                    Введите только поддомен — публичная зона закреплена.
+                  </small>
                 </label>
               </div>
               <p className="quiet-note">
@@ -1076,7 +1153,9 @@ export function Services({
                 )}
               </div>
               <div className="route-preview">
-                <span>{draft.public || draft.local || "домен"}</span>
+                <span>
+                  {fullPublicDomain(draft.public) || draft.local || "домен"}
+                </span>
                 <Glyph name="arrow" size={16} />
                 <span>{draft.proxyIp || "прокси"}</span>
                 <Glyph name="arrow" size={16} />

@@ -1,35 +1,95 @@
+.certs-tab { display: grid; gap: 18px; }
 .certs-tab .panel {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--surface);
-  padding: 12px;
+  padding: 22px;
   display: grid;
-  gap: 10px;
+  gap: 15px;
+  box-shadow: var(--shadow-md);
 }
-
-.certs-tab .cert-grid {
+.certs-overview-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 18px; }
+.cert-policy-card .ui-radio-chips { align-self: start; }
+.ca-status-card { align-content: space-between; background: linear-gradient(145deg, var(--surface), var(--surface-2)) !important; }
+.ca-status-head { display: flex; align-items: flex-start; gap: 13px; }
+.ca-status-icon {
+  width: 44px;
+  height: 44px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+  place-items: center;
+  flex: none;
+  border-radius: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
 }
+.ca-status-icon.installed { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.ca-status-icon .ui-icon { width: 21px; height: 21px; }
+.ca-status-head .eyebrow { margin: 0 0 4px; }
+.ca-status-head h2 { font-size: 16px; }
+.ca-status-head p { margin-top: 5px; font-size: 11px; line-height: 1.5; }
+.ca-status-card .actions-row { align-items: stretch; }
 
+.certs-tab .cert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 10px; }
 .certs-tab .cert-card {
+  min-width: 0;
   border: 1px solid var(--line);
   background: var(--surface-2);
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 13px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.cert-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cert-card-head > div { min-width: 0; display: grid; gap: 4px; }
+.cert-card-head strong { overflow-wrap: anywhere; }
+.cert-card-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-radius: 10px;
+}
+.cert-card-icon .ui-icon { width: 17px; height: 17px; }
+.cert-state { width: max-content; padding: 2px 6px; border-radius: 999px; font-size: 9px; color: var(--warn); background: var(--warn-soft); }
+.cert-state.complete { color: var(--ok); background: var(--ok-soft); }
+.certs-tab .cert-card .mono {
+  margin: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--subtle-panel);
+  font: 10px/1.45 "Cascadia Code", Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cert-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cert-actions .ui-btn { flex: 1 1 auto; font-size: 10px; padding-inline: 8px; }
+.cert-actions .cert-delete { color: var(--danger); }
+.cert-empty { grid-column: 1 / -1; min-height: 220px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; }
+.cert-empty .ui-icon { width: 28px; height: 28px; opacity: .65; }
+.cert-empty strong { color: var(--text); }
+.cert-empty span { font-size: 11px; }
 
-  p {
-    margin: 6px 0;
-  }
+@media (max-width: 1050px) {
+  .certs-overview-grid { grid-template-columns: 1fr; }
+}
 
-  .mono {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.75rem;
-    color: var(--muted);
-  }
+@media (max-width: 760px) {
+  .certs-tab .panel { padding: 16px; border-radius: 14px; }
+  .certs-tab .cert-grid { grid-template-columns: 1fr; }
+  .ca-status-card .actions-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .ca-status-card .actions-row .ui-btn:last-child { grid-column: 1 / -1; }
+}
 
-  .actions-row {
-    margin-top: 6px;
-  }
+@media (max-width: 420px) {
+  .ca-status-head { display: grid; }
+  .ca-status-card .actions-row { grid-template-columns: 1fr; }
+  .ca-status-card .actions-row .ui-btn:last-child { grid-column: auto; }
+  .cert-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }

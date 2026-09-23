@@ -21,6 +21,7 @@ export type IconName =
   | "plus"
   | "refresh"
   | "save"
+  | "search"
   | "server"
   | "test"
   | "theme"
