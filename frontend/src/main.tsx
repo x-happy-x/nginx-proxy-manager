@@ -1,15 +1,18 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/layout.css";
+import "./styles/pages.css";
 
-const savedTheme = window.localStorage.getItem("homenet-theme");
-const initialTheme =
-  savedTheme === "light" || savedTheme === "dark"
-    ? savedTheme
-    : window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-document.documentElement.dataset.theme = initialTheme;
+// index.html sets the theme before first paint; this covers a missing or stale attribute.
+if (!document.documentElement.dataset.theme) {
+  document.documentElement.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
