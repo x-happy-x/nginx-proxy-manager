@@ -3,6 +3,7 @@ import type { IconName } from "./components/ui/Icon";
 
 export type PageKey =
   | "overview"
+  | "apps"
   | "servers"
   | "logs"
   | "dns"
@@ -26,6 +27,13 @@ export const NAV: NavItem[] = [
     title: "Обзор",
     description: "Трафик через прокси, ошибки и состояние системы.",
     icon: "overview",
+    group: "main",
+  },
+  {
+    id: "apps",
+    title: "Приложения",
+    description: "Все сервисы дома — по устройствам, в один клик.",
+    icon: "apps",
     group: "main",
   },
   {
