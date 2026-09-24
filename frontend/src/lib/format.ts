@@ -82,6 +82,11 @@ export function shortDate(value: unknown): string {
   return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
 }
 
+/** `nginx -v` output ("nginx version: WebServer/1.0") reduced to the version itself. */
+export function nginxVersion(value: string | undefined): string {
+  return (value || "").replace(/^\s*nginx version:\s*/i, "").trim();
+}
+
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err || "Неизвестная ошибка");

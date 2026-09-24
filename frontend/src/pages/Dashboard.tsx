@@ -3,7 +3,7 @@ import { fetchStats, type ProxyStats } from "../api";
 import type { NginxStatus, RoutesDocument } from "../types";
 import { Icon, type IconName } from "../components/ui/Icon";
 import { Alert, EmptyState, Segmented } from "../components/ui/controls";
-import { bytes, compact, count, ms, number, timeOf } from "../lib/format";
+import { bytes, compact, count, ms, nginxVersion, number, timeOf } from "../lib/format";
 import { PageHeader } from "../navigation";
 
 type Period = "1h" | "6h" | "24h";
@@ -239,7 +239,7 @@ export function Dashboard({
               </div>
               <div>
                 <dt>Версия nginx</dt>
-                <dd className="mono">{status?.version || "—"}</dd>
+                <dd className="mono">{nginxVersion(status?.version) || "—"}</dd>
               </div>
               <div>
                 <dt>Память</dt>

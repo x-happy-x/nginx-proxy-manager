@@ -1,7 +1,7 @@
 import type { CertItem, ConfigItem, NginxStatus, RoutesDocument } from "../types";
 import { Icon } from "../components/ui/Icon";
 import { EmptyState, Field } from "../components/ui/controls";
-import { bytes, count, dateTime, number } from "../lib/format";
+import { bytes, count, dateTime, nginxVersion, number } from "../lib/format";
 import { PageHeader } from "../navigation";
 import { StatusBadge } from "./Dashboard";
 
@@ -125,7 +125,7 @@ export function System({
               <dl className="kv">
                 <div>
                   <dt>Версия</dt>
-                  <dd className="mono">{status.version || "—"}</dd>
+                  <dd className="mono">{nginxVersion(status.version) || "—"}</dd>
                 </div>
                 <div>
                   <dt>PID</dt>
