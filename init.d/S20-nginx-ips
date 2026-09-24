@@ -12,3 +12,6 @@ for entry in ${PROXY_INTERFACE_IPS:-}; do
     ip addr add "$cidr" dev "$dev"
   fi
 done
+# Firmware TLS SNI filter exemption for these aliases; ndm re-applies it after netfilter rebuilds.
+hook="/opt/etc/ndm/netfilter.d/60-homenet-tls-sni.sh"
+[ ! -x "$hook" ] || type=iptables table=mangle HOME_NET_APP_DIR="$APP_DIR" "$hook"

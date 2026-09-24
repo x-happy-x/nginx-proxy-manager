@@ -8,6 +8,7 @@
 - `backend/`: Go source for `manager`, `nginx`, and `homenet`.
 - `frontend/`: primary React + TypeScript UI source; deploy builds this app into `frontend/static/react`.
 - `init.d/`: Entware-style init scripts.
+- `netfilter.d/`: ndm netfilter hooks installed to `/opt/etc/ndm/netfilter.d/` (TLS SNI exemption for the proxy aliases).
 - `scripts/setup.sh`: helper to install/update the repo on target devices.
 
 ## Build, Test, and Development Commands

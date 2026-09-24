@@ -8,6 +8,7 @@
 - Отдельный nginx: `/opt/etc/homenet/proxy/nginx.conf`, `/opt/etc/homenet/proxy/nginx.pid` и вложенные управляемые конфиги.
 - Логи прокси: `/opt/var/log/homenet/`; лог менеджера: `/opt/var/log/nginx-manager-lite.log`.
 - Init-скрипты: `S20-nginx-ips`, `S98nginx-local-conf`, `S99nginx-manager-lite`.
+- Хук `/opt/etc/ndm/netfilter.d/60-homenet-tls-sni.sh` и его правила `mangle INPUT` с комментарием `homenet_tls_sni`: исключение алиасов из фильтра SNI прошивки на порту 443. Проверка: `iptables -t mangle -S INPUT | grep homenet_tls_sni`; снять: `type=iptables table=mangle sh /opt/etc/ndm/netfilter.d/60-homenet-tls-sni.sh remove`. Без исключения HTTPS для имён вне домена KeenDNS зависает на рукопожатии, а счётчик `DROP` в `iptables -t mangle -L _NDM_HTTP_INPUT_TLS_PASS_ -v -n` растёт.
 - Последняя успешно применённая схема: `/opt/etc/homenet/nginx/.runtime/applied.yml`; путь переопределяется `APPLIED_ROUTES_PATH`.
 - Собственный блок `# BEGIN HOMENET MANAGED HOSTS` / `# END HOMENET MANAGED HOSTS` в системном hosts. На этом роутере `/etc/hosts` разрешается в `/tmp/hosts`.
 

@@ -27,6 +27,7 @@ import yaml
 APP = "/opt/etc/homenet/nginx"
 PROXY = "/opt/etc/homenet/proxy"
 MANAGER_PID = "/opt/var/run/nginx-manager-lite.pid"
+TLS_HOOK = "/opt/etc/ndm/netfilter.d/60-homenet-tls-sni.sh"
 HOSTS_BEGIN = b"# BEGIN HOMENET MANAGED HOSTS"
 HOSTS_END = b"# END HOMENET MANAGED HOSTS"
 MANAGED_HEADERS = (b"managed by homenet-nginx-yaml", b"managed by crubs-nginx-yaml")
@@ -359,6 +360,8 @@ def main():
     router.run("mkdir -p "+q(release+"/before/installed-init"))
     for name in ["S20-nginx-ips","S98nginx-local-conf","S99nginx-manager-lite"]:
         router.run("cat "+q("/opt/etc/init.d/"+name)+" > "+q(release+"/before/installed-init/"+name)+" && chmod 755 "+q(release+"/before/installed-init/"+name))
+    tls_hook_existed=router.exists(TLS_HOOK)
+    if tls_hook_existed: router.run("cp -p "+q(TLS_HOOK)+" "+q(release+"/before/tls-hook.sh"))
     proxy_existed=router.exists(PROXY+"/nginx.conf")
     if router.exists(PROXY): router.run("cp -a "+q(PROXY)+" "+q(release+"/before/proxy"))
     router.upload(release+"/rollback-files.py",remote_rollback_source().encode(),0o600)
@@ -371,6 +374,7 @@ def main():
         if file.is_file(): router.upload(release+"/static/"+file.relative_to(root/"frontend/static").as_posix(),file.read_bytes(),0o644)
     for file in (root/"init.d").glob("S*"):
         if file.is_file(): router.upload(release+"/init.d/"+file.name,file.read_bytes(),0o755)
+    router.upload(release+"/tls-hook.sh",(root/"netfilter.d"/Path(TLS_HOOK).name).read_bytes(),0o755)
     if not proxy_existed or not router.exists(APP+"/.runtime/applied.yml"):
         router.run("mkdir -p "+q(PROXY+"/conf.d")+" "+q(PROXY+"/sites-enabled")+" "+q(PROXY+"/snippets")+" /opt/var/log/homenet")
         router.upload(PROXY+"/nginx.conf",(root/"config/nginx.conf").read_bytes(),0o644)
@@ -437,6 +441,9 @@ def main():
         "cp -a "+q(release+"/before/app/init.d/.")+" "+q(APP+"/init.d/")+"\n"+
         "if [ -d "+q(release+"/before/app/.runtime")+" ]; then cp -a "+q(release+"/before/app/.runtime/.")+" "+q(APP+"/.runtime/")+"; else rm -f "+q(APP+"/.runtime/applied.yml")+" "+q(APP+"/.runtime/keenetic.sha256")+"; fi\n"+
         "for name in S20-nginx-ips S98nginx-local-conf S99nginx-manager-lite; do cp -p "+q(release+"/before/installed-init")+"/\"$name\" /opt/etc/init.d/\"$name\".restore && mv /opt/etc/init.d/\"$name\".restore /opt/etc/init.d/\"$name\"; done\n"+
+        ("cp -p "+q(release+"/before/tls-hook.sh")+" "+q(TLS_HOOK+".restore")+" && mv "+q(TLS_HOOK+".restore")+" "+q(TLS_HOOK)+"\n"
+         if tls_hook_existed else
+         "if [ -f "+q(TLS_HOOK)+" ]; then type=iptables table=mangle sh "+q(TLS_HOOK)+" remove || failed=1; rm -f "+q(TLS_HOOK)+"; fi\n")+
         "sh "+q(APP+"/init.d/S99nginx-manager-lite")+" start\n"+
         "[ \"$failed\" -eq 0 ]\n"
     )
@@ -462,6 +469,10 @@ def main():
                    " && cp -a "+q(release+"/init.d/.")+" "+q(APP+"/init.d/"))
         for name in ["S20-nginx-ips","S98nginx-local-conf","S99nginx-manager-lite"]:
             router.run("cp -p "+q(APP+"/init.d/"+name)+" "+q("/opt/etc/init.d/"+name+".new")+" && mv "+q("/opt/etc/init.d/"+name+".new")+" "+q("/opt/etc/init.d/"+name))
+        # Exempt only the proxy aliases from the firmware TLS SNI filter on port 443.
+        router.run("mkdir -p "+q(str(Path(TLS_HOOK).parent).replace("\\","/"))+" && cp -p "+q(release+"/tls-hook.sh")+" "+q(TLS_HOOK+".new")+" && mv "+q(TLS_HOOK+".new")+" "+q(TLS_HOOK)+" && type=iptables table=mangle sh "+q(TLS_HOOK))
+        if "homenet_tls_sni" not in router.run("iptables -t mangle -S INPUT"):
+            raise RuntimeError("TLS SNI exemption for the proxy aliases was not installed")
         router.run("sh "+q(APP+"/init.d/S99nginx-manager-lite")+" restart")
         time.sleep(2)
         live=f"http://{args.host}:63412"
