@@ -4,7 +4,7 @@ import { NAV, NAV_GROUPS, type PageKey } from "../navigation";
 import { Icon } from "./ui/Icon";
 import { Modal } from "./ui/Modal";
 import { EmptyState } from "./ui/controls";
-import { count } from "../lib/format";
+import { count, nginxVersion } from "../lib/format";
 
 /* ---------- Sidebar ---------- */
 
@@ -70,7 +70,7 @@ export function Sidebar({
           <small>
             {status
               ? status.running
-                ? `nginx ${status.version || ""} работает`.replace("  ", " ")
+                ? `Прокси работает${nginxVersion(status.version) ? ` · ${nginxVersion(status.version)}` : ""}`
                 : "nginx остановлен"
               : "Нет данных о прокси"}
           </small>
