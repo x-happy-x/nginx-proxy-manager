@@ -162,6 +162,12 @@ apps:
     address: 192.168.99.20
     port: 4161
     scheme: http
+- id: xkeen-net
+  name: XKeen Net · профиль Mihomo
+  upstream:
+    address: 192.168.1.1
+    port: 9109
+    scheme: http
 hosts:
 - host: ha.crubs.store
   kind: public
@@ -603,6 +609,24 @@ hosts:
 - host: account.local
   kind: private
   app_id: account
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+- host: xkeen-net.local
+  kind: private
+  app_id: xkeen-net
   dns:
     publish:
     - local
