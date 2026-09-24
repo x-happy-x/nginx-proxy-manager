@@ -49,7 +49,8 @@ func TestPreviewHasNoFilesystemSideEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 4 {
+	// maps, proxy snippet, stub, host config and 502/504 pages for the local and public entrances.
+	if len(files) != 8 {
 		t.Fatalf("files: %d", len(files))
 	}
 	if exists(g.confRoot) {
