@@ -1,6 +1,7 @@
 """Stage or deploy HomeNet without restarting Keenetic nginx or Mihomo.
 
-Credentials: ROUTER_PASSWORD environment variable or an interactive prompt.
+Credentials: --key with an SSH private key, otherwise the ROUTER_PASSWORD
+environment variable or an interactive prompt.
 The remote watchdog restores only this deployment's files and domain records.
 """
 from __future__ import annotations
@@ -190,14 +191,17 @@ def remote_rollback_source():
     return source
 
 class Router:
-    def __init__(self, host, port, user, password, local):
+    def __init__(self, host, port, user, password, local, key_filename=None):
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         known = local / "router-known-hosts"
         if known.exists():
             self.client.load_host_keys(str(known))
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(host, port=port, username=user, password=password, timeout=12)
+        if key_filename:
+            self.client.connect(host, port=port, username=user, key_filename=key_filename, look_for_keys=False, allow_agent=False, timeout=12)
+        else:
+            self.client.connect(host, port=port, username=user, password=password, timeout=12)
         self.client.save_host_keys(str(known))
     def run(self, command, timeout=60):
         _, out, err = self.client.exec_command(command, timeout=timeout)
@@ -311,6 +315,7 @@ def main():
     parser.add_argument("--host",default="192.168.1.1")
     parser.add_argument("--port",type=int,default=222)
     parser.add_argument("--user",default="root")
+    parser.add_argument("--key",help="SSH private key for the router, used instead of a password")
     parser.add_argument("--activate",action="store_true",help="Apply routes and promote the staged runtime after all checks")
     parser.add_argument("--routes",default="routes.yml",help="Candidate routes; use an exported live config for subsequent upgrades")
     args=parser.parse_args()
@@ -325,8 +330,9 @@ def main():
     required += [root/"frontend/static/react/index.html",root/args.routes]
     for file in required:
         if not file.is_file(): raise RuntimeError(f"Build artifact missing: {file}")
-    password=os.environ.get("ROUTER_PASSWORD") or getpass.getpass("Router password: ")
-    router=Router(args.host,args.port,args.user,password,local)
+    key=os.path.expanduser(args.key) if args.key else None
+    password=None if key else os.environ.get("ROUTER_PASSWORD") or getpass.getpass("Router password: ")
+    router=Router(args.host,args.port,args.user,password,local,key)
     router_python=router.run("command -v python3").strip()
     if not router_python.startswith("/") or any(c in router_python for c in "\r\n\x00"):
         raise RuntimeError("An absolute router python3 path is required for rollback; no deployment started")
