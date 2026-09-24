@@ -345,7 +345,7 @@ def main():
     result={"release":release,"activated":False}
     router.run("mkdir -p "+q(release+"/before"))
     before=router.run("ndmc -c 'show running-config'")
-    (local/("running-before-"+stamp+".txt")).write_text(before)
+    (local/("running-before-"+stamp+".txt")).write_text(before,encoding="utf-8")
     doc=yaml.safe_load((root/args.routes).read_text(encoding="utf-8"))
     # Snapshot only HomeNet files plus system hosts. The network config is never replaced.
     router.run("cp -a "+q(APP)+" "+q(release+"/before/app")+" && cp -p /etc/hosts "+q(release+"/before/hosts"))
@@ -399,7 +399,7 @@ def main():
     except Exception:
         router.run("pid=$(cat "+q(release+"/manager.pid")+"); if tr '\\000' ' ' < /proc/$pid/cmdline | grep -F "+q(release+"/bin/manager")+" >/dev/null; then kill \"$pid\"; fi")
         raise
-    (local/("preflight-"+stamp+".json")).write_text(json.dumps(check,ensure_ascii=False,indent=2))
+    (local/("preflight-"+stamp+".json")).write_text(json.dumps(check,ensure_ascii=False,indent=2),encoding="utf-8")
     if not check.get("ok"):
         router.run("kill $(cat "+q(release+"/manager.pid")+")")
         raise RuntimeError("Preflight failed: "+str(check.get("output")))
@@ -450,7 +450,7 @@ def main():
         # Mihomo keep serving traffic throughout the staged apply/promotion.
         router.run(rollback_helper+" stop-manager "+q(APP+"/bin/linux-arm64/manager")+" "+q(MANAGER_PID))
         applied=local_api(base,"/api/apply",{},timeout=120)
-        (local/("apply-"+stamp+".json")).write_text(json.dumps(applied,ensure_ascii=False,indent=2))
+        (local/("apply-"+stamp+".json")).write_text(json.dumps(applied,ensure_ascii=False,indent=2),encoding="utf-8")
         if not applied.get("ok"): raise RuntimeError(str(applied.get("output")))
         print(applied.get("output",""),flush=True)
         # Move replacement executables atomically; never overwrite a running inode.
@@ -481,7 +481,7 @@ def main():
             raise RuntimeError("Internet health probe changed during deployment")
         router.run("touch "+q(release+"/COMMITTED"))
         result["activated"]=True;result["url"]=live;result["rollback"]=release+"/rollback.sh"
-        (local/"last-deployment.json").write_text(json.dumps(result,indent=2))
+        (local/"last-deployment.json").write_text(json.dumps(result,indent=2),encoding="utf-8")
         print(json.dumps(result),flush=True)
     except Exception:
         router.run("sh "+q(release+"/rollback.sh"))
