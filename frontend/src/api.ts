@@ -94,6 +94,29 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
   return parseJson<T>(res);
 }
 
+export type LauncherDevice = { id: string; name: string; kind: string; note?: string; addresses: string[] };
+export type LauncherLink = { id: string; title: string; url: string; device: string; description?: string; art?: string };
+export type LauncherAppOverride = { title?: string; device?: string; description?: string; art?: string; hidden?: boolean };
+export type LauncherConfig = {
+  devices: LauncherDevice[];
+  links: LauncherLink[];
+  apps: Record<string, LauncherAppOverride>;
+  order?: string[];
+};
+
+export async function fetchLauncher(): Promise<LauncherConfig | null> {
+  return (await parseJson<{ ok: boolean; config: LauncherConfig | null }>(await fetch("/api/launcher"))).config;
+}
+
+export async function saveLauncher(config: LauncherConfig): Promise<ApiOk> {
+  return postJson<ApiOk>("/api/launcher", config);
+}
+
+export async function fetchLauncherStatus(targets: string[]): Promise<Record<string, { ok: boolean; ms: number }>> {
+  const query = targets.map((t) => "t=" + encodeURIComponent(t)).join("&");
+  return (await parseJson<{ ok: boolean; status: Record<string, { ok: boolean; ms: number }> }>(await fetch("/api/launcher/status?" + query))).status;
+}
+
 export async function fetchRoutes(): Promise<RoutesDocument> {
   return parseJson<RoutesDocument>(await fetch("/api/routes"));
 }

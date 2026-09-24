@@ -61,6 +61,7 @@ import {
 import { CaDialog, ConfigEditorDialog } from "./components/dialogs";
 import { Dashboard } from "./pages/Dashboard";
 import { Services } from "./pages/Services";
+import { Launcher } from "./pages/Launcher";
 import { RequestLog, type LogMode } from "./pages/RequestLog";
 import { Dns, type DnsGrouped } from "./pages/Dns";
 import { Certs } from "./pages/Certs";
@@ -583,6 +584,7 @@ export default function App() {
         />
         <main className="page" id="main">
           {page === "overview" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
+          {page === "apps" ? <Launcher doc={doc} /> : null}
           {page === "servers" ? (
             <Services doc={doc} busy={busy} onChange={setDoc} onAdvanced={() => navigate("advanced")} />
           ) : null}

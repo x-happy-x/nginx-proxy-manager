@@ -87,6 +87,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	switch path {
+	case "/api/launcher":
+		a.handleLauncherGet(w)
+	case "/api/launcher/status":
+		a.handleLauncherStatus(w, r)
 	case "/api/routes":
 		routes, err := schema.LoadRoutes(a.routesPath())
 		if err != nil {
@@ -236,6 +240,8 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	switch path {
+	case "/api/launcher":
+		a.handleLauncherSave(w, r)
 	case "/api/routes":
 		var routes schema.Routes
 		if err := json.NewDecoder(r.Body).Decode(&routes); err != nil {

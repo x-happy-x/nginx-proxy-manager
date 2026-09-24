@@ -1,0 +1,409 @@
+/* ---------- Launcher ("Приложения") ---------- */
+
+.launcher {
+  display: grid;
+  gap: 28px;
+  margin-top: 8px;
+}
+
+.launcher-loading {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.launcher-group {
+  display: grid;
+  gap: 12px;
+  border-radius: var(--radius-xl);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.launcher-group.is-drop {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.launcher-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.launcher-group-title {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.launcher-group-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.launcher-group-title span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.launcher-group-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.launcher-group-count small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.launcher-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.launcher-cards .launcher-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.launcher-tiles .launcher-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.launcher-empty {
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Service icon: shared by tiles, cards, group headers and the picker. */
+.svc-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+/* ---------- tiles ---------- */
+
+.lt {
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+
+.lt:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.lt-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lt-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lt-text strong {
+  font-size: 14px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lt-text span {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lt-state {
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.lt-up {
+  background: var(--status-good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-good) 25%, transparent);
+}
+
+.lt-down {
+  background: var(--status-critical);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-critical) 25%, transparent);
+}
+
+.lt-pending {
+  background: var(--series-neutral);
+  opacity: 0.6;
+}
+
+.lt-unknown {
+  display: none;
+}
+
+.lt-tiles {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.lt-tiles:hover {
+  border-color: hsl(var(--hue) 60% 55% / 0.6);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.lt-tiles .lt-text span {
+  color: var(--text-3);
+}
+
+/* ---------- cards with artwork ---------- */
+
+.lt-cards {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 176px;
+  padding: 16px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  color: #fff;
+  isolation: isolate;
+  box-shadow: 0 10px 28px hsl(var(--hue) 50% 12% / 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lt-cards:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px hsl(var(--hue) 60% 14% / 0.5);
+}
+
+.lt-cards::after {
+  /* Keeps text readable over any artwork. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(4, 7, 12, 0.05) 0%, rgba(4, 7, 12, 0.15) 45%, rgba(4, 7, 12, 0.72) 100%);
+}
+
+.card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -2;
+  transition: transform 0.4s ease;
+}
+
+.lt-cards:hover .card-art {
+  transform: scale(1.04);
+}
+
+.lt-cards .lt-body {
+  align-items: flex-start;
+}
+
+.lt-cards .lt-text strong {
+  font-size: 16px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+
+.lt-cards .lt-text span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.lt-links {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lt-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+  text-decoration: none;
+}
+
+.lt-links a:hover {
+  background: rgba(255, 255, 255, 0.22);
+  text-decoration: none;
+}
+
+/* ---------- editing ---------- */
+
+.is-editing .lt {
+  cursor: grab;
+}
+
+.is-editing .lt:active {
+  cursor: grabbing;
+}
+
+.lt.is-hidden {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.lt-edit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  z-index: 2;
+}
+
+.lt-grip {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  color: var(--text-3);
+}
+
+.launcher-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.launcher-editor-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 150px;
+  padding: 16px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  isolation: isolate;
+  color: #fff;
+}
+
+.launcher-editor-preview .lt-text span {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.art-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.art-option {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.art-option:hover {
+  border-color: var(--border-strong);
+}
+
+.art-option.is-active {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  color: var(--text);
+}
+
+.device-list {
+  display: grid;
+  gap: 10px;
+}
+
+.device-row {
+  display: grid;
+  grid-template-columns: 34px minmax(120px, 1fr) 130px minmax(140px, 1.2fr) minmax(180px, 1.6fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.device-row-tools {
+  display: flex;
+  gap: 2px;
+}
+
+.icon.flip {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 760px) {
+  .launcher-cards .launcher-grid,
+  .launcher-tiles .launcher-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lt-cards {
+    min-height: 150px;
+  }
+
+  .device-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .device-row > select,
+  .device-row > input:nth-of-type(2),
+  .device-row > input:nth-of-type(3) {
+    grid-column: 2 / -1;
+  }
+}
+
+/* Compact tiles are narrow: show the edit bar on hover so names stay readable. */
+@media (hover: hover) {
+  .launcher-tiles .lt-edit {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .launcher-tiles .lt:hover .lt-edit,
+  .launcher-tiles .lt:focus-within .lt-edit {
+    opacity: 1;
+  }
+}
