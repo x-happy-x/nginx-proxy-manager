@@ -35,6 +35,7 @@ type generator struct {
 	confRoot, mainConf, binary                                                 string
 	nginxListenIPs, localCACert, localCAKey, leRoot                            string
 	sitesEnabled, acmeWebroot, selfDir, mapsConf, proxySnippet, routeAccessLog string
+	errorsDir                                                                  string
 	preview                                                                    bool
 	command                                                                    func(string, ...string) error
 	verifyProcess                                                              func() error
@@ -88,7 +89,7 @@ func main() {
 }
 
 func newGenerator(root string) *generator {
-	return &generator{confRoot: root, localCACert: filepath.Join(root, "local-ca", "ca.crt"), localCAKey: filepath.Join(root, "local-ca", "ca.key"), leRoot: "/opt/etc/letsencrypt", sitesEnabled: filepath.Join(root, "sites-enabled"), acmeWebroot: "/opt/var/www/_letsencrypt", selfDir: filepath.Join(root, "selfsigned"), mapsConf: filepath.Join(root, "conf.d", "npm_maps_v3.conf"), proxySnippet: filepath.Join(root, "snippets", "npm_proxy_v3.conf"), routeAccessLog: "/opt/var/log/nginx/route_access.log"}
+	return &generator{confRoot: root, localCACert: filepath.Join(root, "local-ca", "ca.crt"), localCAKey: filepath.Join(root, "local-ca", "ca.key"), leRoot: "/opt/etc/letsencrypt", sitesEnabled: filepath.Join(root, "sites-enabled"), errorsDir: filepath.Join(root, "errors"), acmeWebroot: "/opt/var/www/_letsencrypt", selfDir: filepath.Join(root, "selfsigned"), mapsConf: filepath.Join(root, "conf.d", "npm_maps_v3.conf"), proxySnippet: filepath.Join(root, "snippets", "npm_proxy_v3.conf"), routeAccessLog: "/opt/var/log/nginx/route_access.log"}
 }
 func fatal(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
 func loadRuntimeEnv(baseDir string) {
@@ -210,6 +211,7 @@ func (g *generator) render(routes schema.Routes) (map[string]string, error) {
 		}
 		files[filepath.Join(g.sitesEnabled, host.Host+".conf")] = managedHeader + content
 	}
+	g.addUnavailablePages(routes, apps, files)
 	return files, nil
 }
 
@@ -364,17 +366,21 @@ func (g *generator) apply(routes schema.Routes) error {
 	sg.confRoot, sg.mainConf = stage, rebase(g.mainConf)
 	sg.sitesEnabled, sg.mapsConf, sg.proxySnippet, sg.selfDir = rebase(g.sitesEnabled), rebase(g.mapsConf), rebase(g.proxySnippet), rebase(g.selfDir)
 	sg.localCACert, sg.localCAKey = rebase(g.localCACert), rebase(g.localCAKey)
+	sg.errorsDir = rebase(g.errorsDir)
 	remove := map[string]bool{}
-	entries, err := os.ReadDir(g.sitesEnabled)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	for _, entry := range entries {
-		path := filepath.Join(g.sitesEnabled, entry.Name())
-		if !entry.IsDir() && owned(path) {
-			remove[path] = true
-			if err := os.Remove(rebase(path)); err != nil {
-				return err
+	// Owned host configs and error pages are regenerated; stale ones are removed.
+	for _, dir := range []string{g.sitesEnabled, g.errorsDir} {
+		entries, err := os.ReadDir(dir)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			if !entry.IsDir() && owned(path) {
+				remove[path] = true
+				if err := os.Remove(rebase(path)); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -779,7 +785,7 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 			}
 		}
 		publicHTTPS := ep.Behavior.NDNSSSLRedirect == nil || *ep.Behavior.NDNSSSLRedirect
-		pb := proxyBlock(g, app, host, "/", external, publicHTTPS)
+		pb := g.unavailableDirectives(host.Host, external) + "\n  " + proxyBlock(g, app, host, "/", external, publicHTTPS)
 		ws := host.WSProxy
 		if !ws.Enabled {
 			ws = app.WSProxy
