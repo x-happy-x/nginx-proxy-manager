@@ -14,6 +14,20 @@ import { Tag, formatClock, type Tone } from "./shared";
 
 const ALL_BANDS = [1, 3, 5, 7, 8, 20, 28, 38, 40, 41];
 const DEFAULT_BANDS = [1, 3, 7, 20, 38];
+// What each band really is: downlink frequency, duplex (TDD shares one
+// channel for both directions).
+const BAND_INFO: Record<number, string> = {
+  1: "2100 МГц",
+  3: "1800 МГц",
+  5: "850 МГц",
+  7: "2600 МГц",
+  8: "900 МГц",
+  20: "800 МГц",
+  28: "700 МГц",
+  38: "2600 TDD",
+  40: "2300 TDD",
+  41: "2500 TDD",
+};
 const MARKS_KEY = "homenet.lte.marks";
 
 type Mark = { label: string; at: number; rsrp: number; sinr: number; rsrq: number; band: string; pci: number; enb: string; carriers: string; mhz: number; peak: number };
@@ -323,15 +337,31 @@ export function Antenna() {
           </div>
         </header>
         <div className="card card-body net-survey-form">
-          <div className="net-form-paths">
-            {ALL_BANDS.map((b) => (
-              <label key={b} className="net-check-label">
-                <input type="checkbox" checked={bands.includes(b)} onChange={(e) => setBands((list) => (e.target.checked ? [...list, b].sort((x, y) => x - y) : list.filter((x) => x !== b)))} />
-                <span>
+          <div className="net-band-chips" role="group" aria-label="Диапазоны для обзора">
+            <button
+              type="button"
+              className={`net-band-chip is-all${bands.length === ALL_BANDS.length ? " is-on" : ""}`}
+              aria-pressed={bands.length === ALL_BANDS.length}
+              onClick={() => setBands(bands.length === ALL_BANDS.length ? [] : [...ALL_BANDS])}
+            >
+              <b>Все</b>
+              <small>{ALL_BANDS.length} диапазонов</small>
+            </button>
+            {ALL_BANDS.map((b) => {
+              const on = bands.includes(b);
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  className={`net-band-chip${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => setBands((list) => (on ? list.filter((x) => x !== b) : [...list, b].sort((x, y) => x - y)))}
+                >
                   <b>B{b}</b>
-                </span>
-              </label>
-            ))}
+                  <small>{BAND_INFO[b]}</small>
+                </button>
+              );
+            })}
           </div>
           <div className="net-mark-row">
             <input value={surveyLabel} onChange={(e) => setSurveyLabel(e.target.value)} placeholder="Положение антенны (необязательно)" aria-label="Положение антенны" />
