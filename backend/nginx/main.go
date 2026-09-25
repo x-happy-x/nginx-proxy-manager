@@ -32,6 +32,7 @@ import (
 const managedHeader = "# managed by homenet-nginx-yaml\n"
 
 type generator struct {
+	gatewayEnabled                                                             bool
 	confRoot, mainConf, binary                                                 string
 	nginxListenIPs, localCACert, localCAKey, leRoot                            string
 	sitesEnabled, acmeWebroot, selfDir, mapsConf, proxySnippet, routeAccessLog string
@@ -163,6 +164,7 @@ func (g *generator) verifyDedicatedProcess() error {
 }
 
 func (g *generator) render(routes schema.Routes) (map[string]string, error) {
+	g.gatewayEnabled = routes.Globals.AccessGateway
 	if err := schema.ValidateRoutes(routes); err != nil {
 		return nil, err
 	}
@@ -733,6 +735,9 @@ func proxyBlock(g *generator, app schema.App, host schema.Host, path string, ext
 		forwardedProto = "https"
 	}
 	lines := []string{fmt.Sprintf("location %s {", path), fmt.Sprintf("  proxy_pass %s://%s;", scheme, net.JoinHostPort(app.Upstream.Address, strconv.Itoa(app.Upstream.Port))), "  include " + quote(g.proxySnippet) + ";", "  proxy_set_header Host " + hostHeader + ";", "  proxy_set_header X-Forwarded-Proto " + forwardedProto + ";"}
+	if g.gatewayEnabled && host.AccessApp != "" {
+		lines = append(lines, "  auth_request /_gate/check;", "  error_page 401 = /_gate/login;", "  proxy_set_header X-Auth-User \"\";", "  proxy_set_header X-Auth-Role \"\";")
+	}
 	if scheme == "https" {
 		lines = append(lines, "  proxy_ssl_server_name on;")
 		if host.VerifyUpstreamSSL {
@@ -786,6 +791,18 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 		}
 		publicHTTPS := ep.Behavior.NDNSSSLRedirect == nil || *ep.Behavior.NDNSSSLRedirect
 		pb := g.unavailableDirectives(host.Host, external) + "\n  " + proxyBlock(g, app, host, "/", external, publicHTTPS)
+		if g.gatewayEnabled {
+			pb += "\n" + gatewayLocations(host.Host, external && publicHTTPS)
+			for _, path := range host.AccessPassthrough {
+				bypass := host
+				bypass.AccessApp = ""
+				location := "= " + path
+				if strings.HasSuffix(path, "/") {
+					location = "^~ " + path
+				}
+				pb += "\n" + proxyBlock(g, app, bypass, location, external, publicHTTPS)
+			}
+		}
 		ws := host.WSProxy
 		if !ws.Enabled {
 			ws = app.WSProxy

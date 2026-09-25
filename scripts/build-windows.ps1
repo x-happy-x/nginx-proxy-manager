@@ -15,7 +15,7 @@ try {
         $suffix = if ($target[0] -eq 'windows') { '.exe' } else { '' }
         $outputRoot = Join-Path $projectRoot "bin/$($target[0])-$($target[1])"
         New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-        foreach ($pair in @(@('manager','manager'), @('nginx','nginx'), @('ctl','homenet'))) {
+        foreach ($pair in @(@('manager','manager'), @('nginx','nginx'), @('ctl','homenet'), @('gateway','gateway'))) {
             go build -trimpath -ldflags '-s -w' -o (Join-Path $outputRoot ($pair[1]+$suffix)) "./$($pair[0])"
             if ($LASTEXITCODE -ne 0) { throw "Build failed: $($pair[0])" }
         }

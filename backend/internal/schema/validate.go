@@ -129,6 +129,14 @@ func ValidateRoutes(r Routes) error {
 	hosts := map[string]bool{}
 	ndnsNames := map[string]bool{}
 	for _, host := range r.Hosts {
+		for _, path := range host.AccessPassthrough {
+			if !validPath(path) || path == "/" || strings.HasPrefix(path, "/_gate") {
+				return fmt.Errorf("host %q: invalid access_passthrough", host.Host)
+			}
+		}
+		if host.AccessApp != "" && !identifierPattern.MatchString(host.AccessApp) {
+			return fmt.Errorf("host %q: invalid access_app", host.Host)
+		}
 		name := strings.ToLower(host.Host)
 		if !ValidHostname(host.Host) || hosts[name] {
 			return fmt.Errorf("invalid or duplicate hostname %q", host.Host)

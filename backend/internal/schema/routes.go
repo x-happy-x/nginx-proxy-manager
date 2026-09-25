@@ -20,12 +20,13 @@ type Routes struct {
 }
 
 type Globals struct {
-	SSLMode   string   `yaml:"ssl_mode" json:"ssl_mode"`
-	ListenIPs []string `yaml:"listen_ips" json:"listen_ips"`
-	Ports     Ports    `yaml:"ports" json:"ports"`
-	UI        UIBind   `yaml:"ui" json:"ui"`
-	Stub      Stub     `yaml:"stub" json:"stub"`
-	ACME      ACME     `yaml:"acme" json:"acme"`
+	AccessGateway bool     `yaml:"access_gateway,omitempty" json:"access_gateway,omitempty"`
+	SSLMode       string   `yaml:"ssl_mode" json:"ssl_mode"`
+	ListenIPs     []string `yaml:"listen_ips" json:"listen_ips"`
+	Ports         Ports    `yaml:"ports" json:"ports"`
+	UI            UIBind   `yaml:"ui" json:"ui"`
+	Stub          Stub     `yaml:"stub" json:"stub"`
+	ACME          ACME     `yaml:"acme" json:"acme"`
 }
 
 type Ports struct {
@@ -70,6 +71,8 @@ type WSProxy struct {
 }
 
 type Host struct {
+	AccessApp         string     `yaml:"access_app,omitempty" json:"access_app,omitempty"`
+	AccessPassthrough []string   `yaml:"access_passthrough,omitempty" json:"access_passthrough,omitempty"`
 	Host              string     `yaml:"host" json:"host"`
 	Kind              string     `yaml:"kind" json:"kind"`
 	AppID             string     `yaml:"app_id" json:"app_id"`

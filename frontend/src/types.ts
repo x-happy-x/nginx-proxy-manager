@@ -62,6 +62,7 @@ export type RouteHost = {
 export type RoutesDocument = {
   schema_version: 2.1;
   globals: {
+    access_gateway?: boolean;
     ssl_mode: SslMode;
     listen_ips: string[];
     ports: {
