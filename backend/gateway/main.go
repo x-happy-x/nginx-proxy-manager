@@ -225,9 +225,14 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		return
 	}
 	uri, _ := url.ParseRequestURI(r.Header.Get("X-Gate-URI"))
+	api := p.App == "lms_node" && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/")
+	if api {
+		w.Header().Set("X-Gate-Error", "Account login and password are missing")
+	}
 	if p.App == "lms_node" && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/") && r.Header.Get("Authorization") != "" {
 		login, password, valid := r.BasicAuth()
 		if scheme != "https" || !valid || login == "" || password == "" || len(login) > 128 || len(password) > 1024 {
+			w.Header().Set("X-Gate-Error", "Use HTTPS and fill both Account login and password")
 			http.Error(w, "HTTPS and Account credentials required", 401)
 			return
 		}
@@ -236,6 +241,7 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		if code == 200 && (p.MinRole != "admin" || identity.Role == "admin") {
 			w.WriteHeader(204)
 		} else if code == 401 {
+			w.Header().Set("X-Gate-Error", "Account rejected the login or password")
 			http.Error(w, "Invalid Account credentials", 401)
 		} else if code == 200 || code == 403 || code == 429 {
 			http.Error(w, "Access denied", 403)

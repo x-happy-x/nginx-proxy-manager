@@ -738,6 +738,7 @@ func proxyBlock(g *generator, app schema.App, host schema.Host, path string, ext
 	if g.gatewayEnabled && host.AccessApp != "" {
 		lines = append(lines, "  auth_request /_gate/check;", "  proxy_set_header X-Auth-User \"\";", "  proxy_set_header X-Auth-Role \"\";")
 		if host.AccessApp == "lms_node" && path == "^~ /api/ui/" {
+			lines = append(lines, "  auth_request_set $lms_auth_error $upstream_http_x_gate_error;")
 			lines = append(lines, "  error_page 401 = @lms_api_401;", "  error_page 403 = @lms_api_403;", "  error_page 500 = @lms_api_503;", "  proxy_set_header Authorization \"\";")
 		} else {
 			lines = append(lines, "  error_page 401 = /_gate/login;")
@@ -802,6 +803,9 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 				pb += "\n" + proxyBlock(g, app, host, "^~ /api/ui/", external, publicHTTPS)
 				for _, code := range []int{401, 403, 503} {
 					message := map[int]string{401: "Account login and password required", 403: "Account access denied or too many login attempts", 503: "Account unavailable"}[code]
+					if code == 401 {
+						message = "$lms_auth_error"
+					}
 					pb += fmt.Sprintf("\nlocation @lms_api_%d {\n  default_type application/json;\n  add_header Cache-Control no-store always;\n  return %d '{\"error\":\"%s\"}';\n}\n", code, code, message)
 				}
 			}
