@@ -68,3 +68,25 @@ func TestLMSAPIKeepsAuthWithoutBrowserRedirect(t *testing.T) {
 		t.Fatal("local and external API must stay protected")
 	}
 }
+
+func TestGatewayIPLinksKeepAuthorityAndProtection(t *testing.T) {
+	r := testRoutes()
+	r.Globals.AccessGateway = true
+	r.Hosts[0].AccessApp = "homenet"
+	r.Hosts[0].AccessIPPort = 22004
+	g := testGenerator(t)
+	files, e := g.render(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var all string
+	for _, b := range files {
+		all += b
+	}
+	if !strings.Contains(all, ":22004") || !strings.Contains(all, "proxy_set_header X-Gate-Host "+r.Globals.ListenIPs[0]+":22004;") {
+		t.Fatal("IP authority missing")
+	}
+	if strings.Count(all, "auth_request /_gate/check;") < 3 {
+		t.Fatal("IP route unprotected")
+	}
+}

@@ -27,6 +27,8 @@ function readView(): View {
 }
 
 export function Launcher({ doc }: { doc: RoutesDocument | null }) {
+  const [links,setLinks] = useState<Record<string,{ip_url?:string;domain_url?:string}>>({});
+  useEffect(()=>{fetch("/api/portal").then(r=>r.json()).then(d=>setLinks(d.links||{})).catch(()=>{})},[]);
   const [cfg, setCfg] = useState<LauncherConfig | null>(null);
   const [saved, setSaved] = useState("");
   const [fresh, setFresh] = useState(false);
@@ -59,7 +61,7 @@ export function Launcher({ doc }: { doc: RoutesDocument | null }) {
       });
   }, []);
 
-  const items = useMemo(() => (cfg ? buildItems(doc, cfg) : []), [doc, cfg]);
+  const items = useMemo(() => (cfg ? buildItems(doc, cfg, links) : []), [doc, cfg, links]);
 
   // Apps served by the router itself get live CPU/RAM of the process group
   // that listens on their upstream port.

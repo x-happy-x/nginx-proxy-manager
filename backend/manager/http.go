@@ -55,6 +55,9 @@ func (a *app) setRoutesPath(path string) (string, error) {
 }
 
 func (a *app) handle(w http.ResponseWriter, r *http.Request) {
+	if a.accessGuard(w, r) {
+		return
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	if strings.HasPrefix(r.URL.Path, "/api/") {
@@ -265,6 +268,26 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&routes); err != nil {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "invalid_json"})
 			return
+		}
+		if os.Getenv("HOMENET_ACCESS_ENABLED") == "1" {
+			routes.Globals.AccessGateway = true
+			previous, _ := schema.LoadRoutes(a.routesPath())
+			for i := range routes.Hosts {
+				h := &routes.Hosts[i]
+				if h.AppID != "account" {
+					h.AccessApp = "homenet"
+					if h.AppID == "lms-client" {
+						h.AccessApp = "lms_node"
+					}
+				}
+				if len(previous.Hosts) > 0 {
+					for _, old := range previous.Hosts {
+						if old.Host == h.Host && h.AccessIPPort == 0 {
+							h.AccessIPPort = old.AccessIPPort
+						}
+					}
+				}
+			}
 		}
 		if routes.SchemaVersion != "2.1" {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "schema_version_must_be_2_1"})

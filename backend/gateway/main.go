@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/access"
 	"html/template"
 	"io"
 	"log"
@@ -24,10 +25,12 @@ import (
 )
 
 type hostPolicy struct {
-	App     string `json:"app"`
-	MinRole string `json:"min_role"`
+	Resource string `json:"resource,omitempty"`
+	App      string `json:"app"`
+	MinRole  string `json:"min_role"`
 }
 type configuration struct {
+	AccountIPURL string                `json:"account_ip_url,omitempty"`
 	Secret       string                `json:"secret"`
 	AccountAPI   string                `json:"account_api"`
 	AccountURL   string                `json:"account_url"`
@@ -204,6 +207,25 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.callback(w, r, host, scheme)
 	case "/_gate/emergency":
 		g.emergency(w, r, host, scheme)
+	case "/_gate/users":
+		capture := newCapture()
+		g.check(capture, r, host, scheme, policy)
+		if capture.code != 204 || capture.Header().Get("X-Gate-Role") != "admin" {
+			http.Error(w, "Administrator required", 403)
+			return
+		}
+		token := readCookie(r, "kartoteka_session", "")
+		g.mu.Lock()
+		sess, exists := g.sessions[readCookie(r, "homenet_gate", scheme)]
+		g.mu.Unlock()
+		if exists {
+			token = sess.Token
+		}
+		var result json.RawMessage
+		status := g.account("users", map[string]string{"token": token}, &result)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		w.Write(result)
 	case "/_gate/logout":
 		if r.Method != "POST" || r.Header.Get("Origin") != scheme+"://"+host {
 			http.Error(w, "Forbidden", 403)
@@ -220,16 +242,35 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme string, p hostPolicy) {
+	cfg, err := access.Load()
+	if err != nil {
+		http.Error(w, "Access configuration unavailable", 503)
+		return
+	}
+	rule := cfg.Apps[p.Resource]
+	portal := p.Resource == "homenet"
+	grant := func(login, role string) bool {
+		if p.Resource != "" && !portal && !access.Allowed(rule, login, role) {
+			http.Error(w, "Access denied", 403)
+			return false
+		}
+		w.Header().Set("X-Gate-Login", login)
+		w.Header().Set("X-Gate-Role", role)
+		w.WriteHeader(204)
+		return true
+	}
+	public := p.Resource != "" && (portal || rule.Mode == "public")
+
 	if p.App == "" {
 		http.Error(w, "No protected application", 403)
 		return
 	}
 	uri, _ := url.ParseRequestURI(r.Header.Get("X-Gate-URI"))
-	api := p.App == "lms_node" && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/")
+	api := (p.App == "lms_node" || p.Resource == "lms-client") && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/")
 	if api {
 		w.Header().Set("X-Gate-Error", "Account login and password are missing")
 	}
-	if p.App == "lms_node" && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/") && r.Header.Get("Authorization") != "" {
+	if (p.App == "lms_node" || p.Resource == "lms-client") && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/") && r.Header.Get("Authorization") != "" {
 		login, password, valid := r.BasicAuth()
 		if scheme != "https" || !valid || login == "" || password == "" || len(login) > 128 || len(password) > 1024 {
 			w.Header().Set("X-Gate-Error", "Use HTTPS and fill both Account login and password")
@@ -239,7 +280,7 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		var identity struct{ Login, Role string }
 		code := g.account("basic", map[string]string{"login": login, "password": password, "app": p.App, "ip": r.Header.Get("X-Gate-IP")}, &identity)
 		if code == 200 && (p.MinRole != "admin" || identity.Role == "admin") {
-			w.WriteHeader(204)
+			grant(identity.Login, identity.Role)
 		} else if code == 401 {
 			w.Header().Set("X-Gate-Error", "Account rejected the login or password")
 			http.Error(w, "Invalid Account credentials", 401)
@@ -258,7 +299,7 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 	if ok && s.Host == scheme+"://"+host && time.Now().Before(s.Until) {
 		if s.Emergency {
 			if outage {
-				w.WriteHeader(204)
+				grant("router-admin", "admin")
 				return
 			}
 			http.Error(w, "Account recovered; sign in again", 401)
@@ -268,6 +309,10 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		s = session{}
 	}
 	if outage {
+		if public {
+			grant("", "guest")
+			return
+		}
 		http.Error(w, "Account unavailable; emergency sign-in required", 401)
 		return
 	}
@@ -276,12 +321,20 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		token = readCookie(r, "kartoteka_session", "")
 	}
 	if token == "" {
+		if public {
+			grant("", "guest")
+			return
+		}
 		http.Error(w, "Sign in", 401)
 		return
 	}
 	var identity struct{ Login, Role string }
 	code := g.account("check", map[string]string{"token": token, "app": p.App}, &identity)
 	if code != 200 {
+		if public {
+			grant("", "guest")
+			return
+		}
 		if code == 401 || code == 403 {
 			http.Error(w, "Access denied", code)
 		} else {
@@ -293,7 +346,7 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		http.Error(w, "Administrator access required", 403)
 		return
 	}
-	w.WriteHeader(204)
+	grant(identity.Login, identity.Role)
 }
 func (g *gateway) login(w http.ResponseWriter, r *http.Request, host, scheme string, p hostPolicy) {
 	if r.Method != "GET" {
@@ -316,7 +369,15 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request, host, scheme str
 	g.mu.Unlock()
 	setCookie(w, "homenet_flow", state, scheme, 300)
 	callback := scheme + "://" + host + "/_gate/callback"
-	dest := g.cfg.AccountURL + "/gateway/authorize?" + url.Values{"redirect_uri": {callback}, "state": {state}}.Encode()
+	accountURL := g.cfg.AccountURL
+	name := host
+	if h, _, e := net.SplitHostPort(host); e == nil {
+		name = h
+	}
+	if net.ParseIP(name) != nil && g.cfg.AccountIPURL != "" {
+		accountURL = g.cfg.AccountIPURL
+	}
+	dest := accountURL + "/gateway/authorize?" + url.Values{"redirect_uri": {callback}, "state": {state}}.Encode()
 	if g.down() {
 		dest = g.cfg.EmergencyURL + "?state=" + state
 	}
@@ -486,3 +547,13 @@ func (g *gateway) routerPassword(password string) bool {
 	defer resp.Body.Close()
 	return resp.StatusCode == 200
 }
+
+type capture struct {
+	h    http.Header
+	code int
+}
+
+func newCapture() *capture                     { return &capture{h: http.Header{}} }
+func (c *capture) Header() http.Header         { return c.h }
+func (c *capture) WriteHeader(n int)           { c.code = n }
+func (c *capture) Write(b []byte) (int, error) { return len(b), nil }

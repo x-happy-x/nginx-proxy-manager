@@ -1,5 +1,34 @@
 # Account gateway
 
+HomeNet now owns application grants in `/opt/etc/homenet/access.json` (0600).
+Each `apps` entry is keyed by the routes app ID (manual links use `link:<id>`),
+with `mode: admin|users|public`, `users: [Account login]`, and optional `ip_url`
+and `domain_url`. Missing rules are administrator-only. Changes apply on the next
+request, without restarting nginx. Account supplies identity and the `homenet`
+administrator role; it does not grant access to an individual router application.
+
+Gateway host entries use `app: homenet` and `resource: <routes app ID>`.
+HomeNet itself serves a curated portal to guests; every management API independently
+requires an administrator, also on the direct IP port. Enable this guard with
+`HOMENET_ACCESS_ENABLED=1` in `config/runtime.env`. The frontend does not enforce
+security on its own. Its Access screen edits grants and optional URL overrides.
+User names come from Account through an administrator-only directory endpoint.
+Emergency router administrator sessions retain management access during an outage.
+
+For router applications, `access_ip_port` creates a distinct HTTP listener on the
+proxy's listen IPs, protected by the same gateway. Register each exact IP:port
+authority in gateway.json and each HTTP callback in Account gateway.json.
+`account_ip_url` selects the LAN Account URL when login starts at an IP address.
+Domain links use the configured public host; IP links use the registered IP proxy
+or the upstream. Native backend addresses and manual external links retain their
+own authentication. Marking those links public controls portal visibility; it does
+not change a third-party server's login or firewall.
+
+Deploy from the user's current route draft when deliberately applying their host
+changes; preserve both the prior draft and prior applied file in the backup.
+Back up access.json, gateway.json, runtime.env, binaries, UI and proxy configs.
+Never restore obsolete `.local` hosts during an update.
+
 `backend/gateway` builds a small Go service listening only on `127.0.0.1:63415`.
 The dedicated nginx uses `auth_request`; page bodies, downloads and WebSockets
 continue directly to their original upstream. The firmware nginx is untouched.
