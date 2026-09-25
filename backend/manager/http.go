@@ -76,6 +76,12 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		// Network probes take seconds and touch no config: keep them off
+		// the operation lock so an analysis never blocks an apply.
+		if strings.HasPrefix(r.URL.Path, "/api/network/") {
+			a.handleNetworkPost(w, r)
+			return
+		}
 		a.operationMu.Lock()
 		defer a.operationMu.Unlock()
 		a.handlePost(w, r)
@@ -93,6 +99,12 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.handleLauncherStatus(w, r)
 	case "/api/resources":
 		a.handleResources(w, r)
+	case "/api/network":
+		a.handleNetwork(w, r)
+	case "/api/network/scan":
+		a.handleScanGet(w)
+	case "/api/network/topology":
+		a.handleTopology(w)
 	case "/api/routes":
 		routes, err := schema.LoadRoutes(a.routesPath())
 		if err != nil {

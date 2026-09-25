@@ -207,7 +207,6 @@ function KeeneticSection({ data, history }: { data: ResourcesPayload; history: R
   const times = history.map((s) => s.t);
   const memPct = now.mem_total ? (now.mem_used / now.mem_total) * 100 : 0;
   const hottest = now.temps.reduce((a, b) => (b.temp > (a?.temp ?? -1) ? b : a), now.temps[0]);
-  const wan = now.interfaces.find((i) => i.wan);
   const tempTone: Tone = now.temp_max >= 90 ? "critical" : now.temp_max >= 80 ? "warning" : "good";
   const memTone: Tone = memPct >= 92 ? "critical" : memPct >= 85 ? "warning" : "good";
   const connRatio = now.conns_max ? now.conns / now.conns_max : 0;
@@ -247,28 +246,15 @@ function KeeneticSection({ data, history }: { data: ResourcesPayload; history: R
           <TimeChart label="Температура" times={times} series={[{ label: "Температура", values: series(history, (s) => s.temp || null) }]} format={(v) => `${v.toFixed(1)} °C`} max={100} height={70} />
         </div>
         <div className="card res-kpi">
-          <span className="res-kpi-label">Интернет {wan ? `(${wan.name})` : ""}</span>
-          <strong className="res-kpi-value res-kpi-traffic">
-            <span>↓ {formatBps(wan?.rx_bps || 0)}</span>
-            <span>↑ {formatBps(wan?.tx_bps || 0)}</span>
-          </strong>
-          <Legend series={[{ label: "Входящий", values: [] }, { label: "Исходящий", values: [] }]} />
-          <TimeChart
-            label="Трафик через интернет-подключение"
-            times={times}
-            series={[{ label: "↓ входящий", values: series(history, (s) => s.rx) }, { label: "↑ исходящий", values: series(history, (s) => s.tx) }]}
-            format={formatBps}
-            height={70}
-            area={false}
-          />
+          <span className="res-kpi-label">Соединения (conntrack)</span>
+          <strong className="res-kpi-value">{number(now.conns)} <small>из {number(now.conns_max)}</small></strong>
+          <span className="res-kpi-sub">
+            {connRatio > 0.7 ? <StatusNote tone={connRatio > 0.9 ? "critical" : "warning"}>таблица заполнена на {pct(connRatio * 100)}</StatusNote> : "трафик и интерфейсы — в разделе «Сеть»"}
+          </span>
+          <TimeChart label="Число соединений" times={times} series={[{ label: "Соединения", values: series(history, (s) => s.conns) }]} format={(v) => number(Math.round(v))} height={70} />
         </div>
       </div>
       <div className="res-strip">
-        <div className="card res-mini">
-          <span className="res-kpi-label">Соединения (conntrack)</span>
-          <strong>{number(now.conns)} <small>из {number(now.conns_max)}</small></strong>
-          <Meter value={now.conns} max={now.conns_max} tone={connRatio > 0.9 ? "critical" : connRatio > 0.7 ? "warning" : undefined} />
-        </div>
         {now.disks.map((d) => {
           const used = d.total - d.free;
           const freeRatio = d.total ? d.free / d.total : 1;
@@ -282,16 +268,6 @@ function KeeneticSection({ data, history }: { data: ResourcesPayload; history: R
             </div>
           );
         })}
-        <div className="card res-mini res-mini-list">
-          <span className="res-kpi-label">Интерфейсы</span>
-          {now.interfaces.slice(0, 4).map((i) => (
-            <div key={i.name} className="res-iface">
-              <span className="mono">{i.name}{i.wan ? " · WAN" : ""}</span>
-              <span>↓ {formatBps(i.rx_bps)}</span>
-              <span>↑ {formatBps(i.tx_bps)}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );
@@ -439,12 +415,9 @@ function MikrotikSection({ data, history }: { data: ResourcesPayload; history: M
   const sys = mt.system;
   const times = history.map((s) => s.t);
   const signal = mt.signal;
-  const lte = sys?.interfaces.find((i) => i.type === "lte");
   const memUsed = sys ? sys.memory_total - sys.memory_free : 0;
   const diskFreeRatio = sys && sys.disk_total ? sys.disk_free / sys.disk_total : 1;
   const diskTone: Tone | undefined = diskFreeRatio < 0.05 ? "critical" : diskFreeRatio < 0.15 ? "warning" : undefined;
-  const quality = signal?.quality ?? 0;
-  const qualityTone: Tone = quality >= 60 ? "good" : quality >= 35 ? "warning" : "critical";
 
   return (
     <section className="res-section">
@@ -452,7 +425,7 @@ function MikrotikSection({ data, history }: { data: ResourcesPayload; history: M
         <div>
           <h2>MikroTik 192.168.188.1{sys ? ` · ${sys.board}` : ""}</h2>
           <p>
-            {sys ? `RouterOS ${sys.version} · аптайм ${formatUptime(sys.uptime_seconds)} · ${sys.cpu_count} ядра` : "LTE-роутер выше Keenetic"} · данные Netping
+            {sys ? `RouterOS ${sys.version} · аптайм ${formatUptime(sys.uptime_seconds)} · ${sys.cpu_count} ядра` : "LTE-роутер выше Keenetic"} · RouterOS API
           </p>
         </div>
         {mt.internet_ok !== undefined ? (
@@ -472,52 +445,34 @@ function MikrotikSection({ data, history }: { data: ResourcesPayload; history: M
             <div className="card res-kpi">
               <span className="res-kpi-label">Память</span>
               <strong className="res-kpi-value">{mb(memUsed)} <small>из {mb(sys.memory_total)}</small></strong>
-              <span className="res-kpi-sub">
-                {diskTone ? <StatusNote tone={diskTone}>диск: свободно {mb(sys.disk_free)} из {mb(sys.disk_total)}</StatusNote> : `диск: свободно ${mb(sys.disk_free)} из ${mb(sys.disk_total)}`}
-              </span>
+              <span className="res-kpi-sub">{pct(sys.memory_total ? (memUsed / sys.memory_total) * 100 : 0)} занято</span>
               <TimeChart label="Память MikroTik" times={times} series={[{ label: "Память", values: history.map((s) => s.mem) }]} format={mb} max={sys.memory_total} height={70} />
             </div>
             <div className="card res-kpi">
-              <span className="res-kpi-label">LTE {signal?.operator ? `· ${signal.operator}` : ""}{signal?.band ? ` · ${signal.band.split(" ")[0]}` : ""}</span>
-              <strong className="res-kpi-value">{signal ? `${quality} %` : "—"}</strong>
+              <span className="res-kpi-label">Диск</span>
+              <strong className="res-kpi-value">{mb(sys.disk_total - sys.disk_free)} <small>из {mb(sys.disk_total)}</small></strong>
               <span className="res-kpi-sub">
-                <StatusNote tone={qualityTone}>{qualityTone === "good" ? "хороший сигнал" : qualityTone === "warning" ? "средний сигнал" : "слабый сигнал"}</StatusNote>
-                {signal ? ` RSRP ${signal.rsrp} · SINR ${signal.sinr}` : ""}
+                {diskTone ? <StatusNote tone={diskTone}>свободно {mb(sys.disk_free)}</StatusNote> : `свободно ${mb(sys.disk_free)}`}
               </span>
-              <TimeChart label="SINR сигнала LTE" times={times} series={[{ label: "SINR, дБ", values: history.map((s) => s.sinr) }]} format={(v) => `${v.toFixed(0)} дБ`} height={70} />
+              <Meter value={sys.disk_total - sys.disk_free} max={sys.disk_total} tone={diskTone} />
             </div>
             <div className="card res-kpi">
-              <span className="res-kpi-label">Трафик LTE</span>
-              <strong className="res-kpi-value res-kpi-traffic">
-                <span>↓ {formatBps(lte?.rx_bps || 0)}</span>
-                <span>↑ {formatBps(lte?.tx_bps || 0)}</span>
-              </strong>
-              <Legend series={[{ label: "Входящий", values: [] }, { label: "Исходящий", values: [] }]} />
-              <TimeChart
-                label="Трафик LTE"
-                times={times}
-                series={[{ label: "↓ входящий", values: history.map((s) => s.rx) }, { label: "↑ исходящий", values: history.map((s) => s.tx) }]}
-                format={formatBps}
-                height={70}
-                area={false}
-              />
+              <span className="res-kpi-label">LTE и трафик</span>
+              <strong className="res-kpi-value">{signal?.quality != null ? `${signal.quality} %` : "—"}</strong>
+              <span className="res-kpi-sub">сигнал, трафик, интерфейсы и проверки — в разделе «Сеть»</span>
+              <a className="btn btn-sm btn-secondary" href="#/network">Открыть «Сеть»</a>
             </div>
           </div>
-          <div className="res-strip">
-            {sys.interfaces.filter((i) => i.type !== "loopback").map((i) => (
-              <div key={i.name} className="card res-mini">
-                <span className="res-kpi-label">{i.name} · {i.type}</span>
-                <strong>{i.running ? "работает" : "не подключён"}</strong>
-                <span className="res-kpi-sub">↓ {formatBps(i.rx_bps)} · ↑ {formatBps(i.tx_bps)}</span>
-              </div>
-            ))}
-            {sys.sensors.map((s) => (
-              <div key={s.name} className="card res-mini">
-                <span className="res-kpi-label">{s.name}</span>
-                <strong>{s.value} {s.unit === "C" ? "°C" : s.unit}</strong>
-              </div>
-            ))}
-          </div>
+          {sys.sensors.length ? (
+            <div className="res-strip">
+              {sys.sensors.map((s) => (
+                <div key={s.name} className="card res-mini">
+                  <span className="res-kpi-label">{s.name}</span>
+                  <strong>{s.value} {s.unit === "C" ? "°C" : s.unit}</strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </>
       ) : null}
     </section>

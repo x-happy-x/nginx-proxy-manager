@@ -63,6 +63,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Services } from "./pages/Services";
 import { Launcher } from "./pages/Launcher";
 import { Resources } from "./pages/Resources";
+import { Network } from "./pages/Network";
 import { RequestLog, type LogMode } from "./pages/RequestLog";
 import { Dns, type DnsGrouped } from "./pages/Dns";
 import { Certs } from "./pages/Certs";
@@ -587,6 +588,7 @@ export default function App() {
           {page === "overview" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
           {page === "apps" ? <Launcher doc={doc} /> : null}
           {page === "resources" ? <Resources /> : null}
+          {page === "network" ? <Network /> : null}
           {page === "servers" ? (
             <Services doc={doc} busy={busy} onChange={setDoc} onAdvanced={() => navigate("advanced")} />
           ) : null}
