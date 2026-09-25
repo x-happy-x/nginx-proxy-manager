@@ -117,6 +117,65 @@ export async function fetchLauncherStatus(targets: string[]): Promise<Record<str
   return (await parseJson<{ ok: boolean; status: Record<string, { ok: boolean; ms: number }> }>(await fetch("/api/launcher/status?" + query))).status;
 }
 
+export type AppUsage = { cpu: number; rss: number };
+export type AppGroupUsage = { id: string; name: string; kind: "app" | "system"; cpu: number; rss: number; procs: number; pids: number[]; ports: number[] };
+export type ResourceSample = { t: number; cpu: number; mem: number; swap: number; temp: number; rx: number; tx: number; conns: number; apps: Record<string, AppUsage> };
+export type MikrotikSample = { t: number; cpu: number; mem: number; rx: number; tx: number; rsrp: number; sinr: number };
+export type SystemSnapshot = {
+  time: string;
+  hostname: string;
+  cores: number;
+  uptime_sec: number;
+  load: [number, number, number];
+  cpu: number;
+  mem_total: number;
+  mem_used: number;
+  mem_cache: number;
+  swap_total: number;
+  swap_used: number;
+  temps: Array<{ name: string; temp: number }>;
+  temp_max: number;
+  disks: Array<{ path: string; total: number; free: number }>;
+  conns: number;
+  conns_max: number;
+  interfaces: Array<{ name: string; rx_bytes: number; tx_bytes: number; rx_bps: number; tx_bps: number; wan?: boolean }>;
+  apps: AppGroupUsage[];
+  top: Array<{ pid: number; name: string; group: string; cpu: number; rss: number }>;
+  processes: number;
+};
+export type MikrotikState = {
+  error?: string;
+  online?: boolean;
+  internet_ok?: boolean;
+  whitelist_ok?: boolean;
+  signal?: { status?: string; operator?: string; band?: string; rssi?: number; rsrp?: number; rsrq?: number; sinr?: number; cqi?: number; quality?: number };
+  system?: {
+    board: string;
+    version: string;
+    architecture: string;
+    uptime_seconds: number;
+    cpu_load: number;
+    cpu_count: number;
+    memory_total: number;
+    memory_free: number;
+    disk_total: number;
+    disk_free: number;
+    sensors: Array<{ name: string; value: number; unit: string }>;
+    interfaces: Array<{ name: string; type: string; running: boolean; rx_bps: number; tx_bps: number }>;
+  };
+};
+export type ResourcesPayload = {
+  now: SystemSnapshot;
+  history: ResourceSample[];
+  mikrotik: MikrotikState;
+  mikrotik_history: MikrotikSample[];
+  interval_sec: number;
+};
+
+export async function fetchResources(since = 0): Promise<ResourcesPayload> {
+  return parseJson<ResourcesPayload>(await fetch("/api/resources?since=" + since));
+}
+
 export async function fetchRoutes(): Promise<RoutesDocument> {
   return parseJson<RoutesDocument>(await fetch("/api/routes"));
 }

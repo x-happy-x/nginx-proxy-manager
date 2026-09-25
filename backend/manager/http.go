@@ -91,6 +91,8 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.handleLauncherGet(w)
 	case "/api/launcher/status":
 		a.handleLauncherStatus(w, r)
+	case "/api/resources":
+		a.handleResources(w, r)
 	case "/api/routes":
 		routes, err := schema.LoadRoutes(a.routesPath())
 		if err != nil {

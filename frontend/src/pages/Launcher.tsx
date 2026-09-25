@@ -8,6 +8,10 @@ import { PageHeader } from "../navigation";
 import { errText } from "../lib/format";
 import { ART_KEYS, artFor, CardArt, deviceArt, ServiceIcon } from "../features/launcher/art";
 import { buildItems, defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "../features/launcher/model";
+import { useResources } from "./Resources";
+import { bytes } from "../lib/format";
+
+type Usage = { cpu: number; rss: number; name: string };
 
 type View = "cards" | "tiles";
 type Probe = { ok: boolean; ms: number };
@@ -56,6 +60,24 @@ export function Launcher({ doc }: { doc: RoutesDocument | null }) {
   }, []);
 
   const items = useMemo(() => (cfg ? buildItems(doc, cfg) : []), [doc, cfg]);
+
+  // Apps served by the router itself get live CPU/RAM of the process group
+  // that listens on their upstream port.
+  const { data: resources } = useResources(false);
+  const usageFor = useMemo(() => {
+    const routerAddrs = new Set(cfg?.devices.find((d) => d.kind === "router")?.addresses || []);
+    const byPort = new Map<number, Usage>();
+    for (const group of resources?.now.apps || []) {
+      for (const port of group.ports) byPort.set(port, { cpu: group.cpu, rss: group.rss, name: group.name });
+    }
+    return (item: LauncherItem): Usage | undefined => {
+      if (!item.probe) return undefined;
+      const i = item.probe.lastIndexOf(":");
+      const host = item.probe.slice(0, i);
+      if (!routerAddrs.has(host)) return undefined;
+      return byPort.get(Number(item.probe.slice(i + 1)));
+    };
+  }, [resources, cfg]);
 
   const probeTargets = useMemo(() => [...new Set(items.map((i) => i.probe).filter(Boolean) as string[])], [items]);
   const refreshStatus = useCallback(() => {
@@ -236,6 +258,7 @@ export function Launcher({ doc }: { doc: RoutesDocument | null }) {
                       view={view}
                       probe={item.probe ? status[item.probe] : undefined}
                       probeKnown={!statusLoaded || !item.probe || item.probe in status}
+                      usage={usageFor(item)}
                       editing={editing}
                       onEdit={() => setEditItem(item)}
                       onToggleHidden={() => update((d) => toggleHidden(d, item))}
@@ -318,12 +341,13 @@ function applyItemPatch(cfg: LauncherConfig, item: LauncherItem | null, patch: P
 }
 
 function LauncherTile({
-  item, view, probe, probeKnown, editing, onEdit, onToggleHidden, onDelete, dragProps,
+  item, view, probe, probeKnown, usage, editing, onEdit, onToggleHidden, onDelete, dragProps,
 }: {
   item: LauncherItem;
   view: View;
   probe?: Probe;
   probeKnown: boolean;
+  usage?: Usage;
   editing: boolean;
   onEdit: () => void;
   onToggleHidden: () => void;
@@ -360,6 +384,12 @@ function LauncherTile({
         <div className="lt-text">
           <strong>{item.title}</strong>
           <span>{item.description}</span>
+          {usage ? (
+            <span className="lt-usage" title={`Процессы на роутере: ${usage.name}`}>
+              <span>CPU {usage.cpu >= 10 ? Math.round(usage.cpu) : usage.cpu.toFixed(1)} %</span>
+              <span>RAM {bytes(usage.rss)}</span>
+            </span>
+          ) : null}
         </div>
         <span className={`lt-state lt-${state}`} title={stateTitle} />
       </div>

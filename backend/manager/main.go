@@ -35,6 +35,7 @@ func main() {
 		activeRoutesPath: routePath,
 	}
 	a.startTelemetry()
+	a.startResources()
 
 	a.startMaintenance()
 	host, port := a.readUIBind()
