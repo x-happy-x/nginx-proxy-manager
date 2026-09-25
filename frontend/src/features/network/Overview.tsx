@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { NetAvailability, NetworkPayload } from "../../api";
 import { Legend, TimeChart } from "../../components/charts/TimeChart";
 import { Alert } from "../../components/ui/controls";
@@ -26,6 +26,12 @@ export function NetworkOverview({ data }: { data: NetworkPayload }) {
   const qualityTone: Tone = quality == null ? "neutral" : quality >= 60 ? "good" : quality >= 35 ? "warning" : "critical";
   const wan = data.keenetic.interfaces?.find((i) => i.wan);
   const lte = mt.system?.interfaces.find((i) => i.type === "lte");
+  const [allIfaces, setAllIfaces] = useState(false);
+  // Netcraze has dozens of interfaces; idle ones (no bytes) are hidden and
+  // the rest sorted by traffic, WAN first.
+  const ifaces = (data.keenetic.interfaces || [])
+    .filter((i) => i.wan || i.rx_bytes + i.tx_bytes > 0)
+    .sort((a, b) => Number(!!b.wan) - Number(!!a.wan) || b.rx_bps + b.tx_bps - (a.rx_bps + a.tx_bps) || b.rx_bytes + b.tx_bytes - (a.rx_bytes + a.tx_bytes));
 
   return (
     <div className="net-stack">
@@ -192,7 +198,7 @@ export function NetworkOverview({ data }: { data: NetworkPayload }) {
                 </tr>
               </thead>
               <tbody>
-                {(data.keenetic.interfaces || []).map((i) => (
+                {(allIfaces ? ifaces : ifaces.slice(0, 8)).map((i) => (
                   <tr key={i.name}>
                     <td className="mono">
                       {i.name}
@@ -206,6 +212,11 @@ export function NetworkOverview({ data }: { data: NetworkPayload }) {
               </tbody>
             </table>
           </div>
+          {ifaces.length > 8 ? (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAllIfaces((v) => !v)}>
+              {allIfaces ? "Свернуть" : `Показать все ${ifaces.length}`}
+            </button>
+          ) : null}
         </section>
         <section className="res-section">
           <header className="res-section-head">
