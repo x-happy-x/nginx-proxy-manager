@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"sort"
@@ -20,9 +22,12 @@ import (
 // 15 minutes in case the manager dies mid-survey.
 
 const (
-	lteIface          = "lte1"
-	lteRestoreJob     = "homenet-lte-band-restore"
-	lteLoadURL        = "https://speed.cloudflare.com/__down?bytes=1000000000"
+	lteIface      = "lte1"
+	lteRestoreJob = "homenet-lte-band-restore"
+	// A domestic mirror: a foreign speed test may itself be throttled by ТСПУ
+	// and then never loads the link. File names change with releases, so the
+	// current ISO is looked up in the listing.
+	lteLoadIndex      = "https://mirror.yandex.ru/ubuntu-releases/24.04/"
 	lteSurveyAttach   = 35 * time.Second
 	lteSurveyListen   = 6 * time.Second
 	lteRestoreTimeout = 15 * time.Minute
@@ -263,6 +268,41 @@ func hasSCC(list []lteCarrier) bool {
 
 // ---------- load ----------
 
+var (
+	isoHref     = regexp.MustCompile(`href="(/ubuntu-releases/[^"]+\.iso)"`)
+	loadURLMu   sync.Mutex
+	loadURL     string
+	loadURLTime time.Time
+)
+
+// lteLoadURL returns a large file to download on the MikroTik (LTE_LOAD_URL
+// overrides the lookup).
+func lteLoadURL() (string, error) {
+	if u := strings.TrimSpace(getenv("LTE_LOAD_URL", "")); u != "" {
+		return u, nil
+	}
+	loadURLMu.Lock()
+	defer loadURLMu.Unlock()
+	if loadURL != "" && time.Since(loadURLTime) < 6*time.Hour {
+		return loadURL, nil
+	}
+	d := &net.Dialer{Timeout: 6 * time.Second, Control: directControl(directMark)}
+	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: d.DialContext}}
+	resp, err := client.Get(lteLoadIndex)
+	if err != nil {
+		return "", fmt.Errorf("зеркало недоступно: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	links := isoHref.FindAllStringSubmatch(string(body), -1)
+	if len(links) == 0 {
+		return "", errors.New("на зеркале не найден файл для скачивания")
+	}
+	// The listing is sorted: the last link is the newest release.
+	loadURL, loadURLTime = "https://mirror.yandex.ru"+links[len(links)-1][1], time.Now()
+	return loadURL, nil
+}
+
 func (t *lteTools) startLoad(seconds int) error {
 	t.mu.Lock()
 	if t.busy {
@@ -276,10 +316,14 @@ func (t *lteTools) startLoad(seconds int) error {
 	t.loadUntil, t.loadErr = time.Now().Unix()+int64(seconds), ""
 	t.mu.Unlock()
 	go func() {
-		conn, err := lteConn()
+		url, err := lteLoadURL()
+		var conn *rosConn
+		if err == nil {
+			conn, err = lteConn()
+		}
 		if err == nil {
 			// fetch stops by itself when =duration= runs out.
-			_, err = conn.Run(time.Duration(seconds+15)*time.Second, "/tool/fetch", "=url="+lteLoadURL, "=output=none", "=check-certificate=no", "=duration="+strconv.Itoa(seconds)+"s")
+			_, err = conn.Run(time.Duration(seconds+15)*time.Second, "/tool/fetch", "=url="+url, "=output=none", "=check-certificate=no", "=duration="+strconv.Itoa(seconds)+"s")
 			conn.Close()
 		}
 		t.mu.Lock()

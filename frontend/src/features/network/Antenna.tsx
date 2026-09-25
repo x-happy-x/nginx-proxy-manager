@@ -211,8 +211,16 @@ export function Antenna() {
                   <TimeChart label="SINR" times={times} series={[{ label: "SINR, дБ", values: trail.map((x) => x.sinr) }]} format={(v) => `${v.toFixed(0)} дБ`} height={80} />
                 </div>
                 <div>
+                  {/* TimeChart scales from zero: RSRP is drawn above the −140 дБм floor. */}
                   <span className="net-reading-name">RSRP за 3 минуты</span>
-                  <TimeChart label="RSRP" times={times} series={[{ label: "RSRP, дБм", values: trail.map((x) => x.rsrp) }]} format={(v) => `${v.toFixed(0)} дБм`} height={80} area={false} />
+                  <TimeChart
+                    label="RSRP"
+                    times={times}
+                    series={[{ label: "RSRP, дБм", values: trail.map((x) => x.rsrp + 140) }]}
+                    format={(v) => `${Math.round(v - 140)} дБм`}
+                    height={80}
+                    area={false}
+                  />
                 </div>
               </div>
             ) : null}
