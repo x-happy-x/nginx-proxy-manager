@@ -21,11 +21,12 @@ import (
 // the mihomo controller and the monitors' latest state.
 
 type topoHost struct {
-	Name   string `json:"name"`
-	IP     string `json:"ip"`
-	Link   string `json:"link"` // wifi | ethernet
-	Mesh   bool   `json:"mesh,omitempty"`
-	Bypass bool   `json:"bypass,omitempty"` // MAC in xkeen_deny_mac: never proxied
+	Name    string `json:"name"`
+	IP      string `json:"ip"`
+	Link    string `json:"link"`               // wifi | ethernet
+	Mesh    bool   `json:"mesh,omitempty"`     // the host is a mesh node itself
+	ViaMesh bool   `json:"via_mesh,omitempty"` // connected through a mesh node
+	Bypass  bool   `json:"bypass,omitempty"`   // MAC in xkeen_deny_mac: never proxied
 }
 
 type topoSegment struct {
@@ -186,7 +187,7 @@ func (a *app) handleTopology(w http.ResponseWriter) {
 			segments[i].Active++
 			segments[i].Hosts = append(segments[i].Hosts, topoHost{
 				Name: firstNonEmpty(h.Name, h.Hostname, h.MAC), IP: h.IP, Link: link,
-				Mesh: h.Backhaul || meshIPs[h.IP], Bypass: denyMAC[strings.ToLower(h.MAC)],
+				Mesh: meshIPs[h.IP], ViaMesh: h.Backhaul && !meshIPs[h.IP], Bypass: denyMAC[strings.ToLower(h.MAC)],
 			})
 		}
 	}
