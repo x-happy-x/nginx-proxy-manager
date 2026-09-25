@@ -7,6 +7,7 @@ import "./styles/components.css";
 import "./styles/layout.css";
 import "./styles/pages.css";
 import "./styles/launcher.css";
+import "./styles/resources.css";
 
 // index.html sets the theme before first paint; this covers a missing or stale attribute.
 if (!document.documentElement.dataset.theme) {

@@ -4,6 +4,7 @@ import type { IconName } from "./components/ui/Icon";
 export type PageKey =
   | "overview"
   | "apps"
+  | "resources"
   | "servers"
   | "logs"
   | "dns"
@@ -34,6 +35,13 @@ export const NAV: NavItem[] = [
     title: "Приложения",
     description: "Все сервисы дома — по устройствам, в один клик.",
     icon: "apps",
+    group: "main",
+  },
+  {
+    id: "resources",
+    title: "Ресурсы",
+    description: "Нагрузка роутера, кто сколько потребляет, и LTE-роутер MikroTik выше.",
+    icon: "activity",
     group: "main",
   },
   {
