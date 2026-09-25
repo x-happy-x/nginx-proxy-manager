@@ -258,6 +258,8 @@ func (a *app) handleNetworkPost(w http.ResponseWriter, r *http.Request) {
 		scan.save()
 		scan.poke()
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "settings": clean})
+	case "/api/network/lte/load", "/api/network/lte/survey":
+		a.handleLTEPost(w, r)
 	case "/api/network/scan/run":
 		scan.mu.Lock()
 		running := scan.running

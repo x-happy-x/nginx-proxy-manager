@@ -148,7 +148,7 @@ export type MikrotikState = {
   online?: boolean;
   internet_ok?: boolean;
   whitelist_ok?: boolean;
-  signal?: { status?: string; operator?: string; band?: string; rssi?: number; rsrp?: number; rsrq?: number; sinr?: number; cqi?: number; quality?: number };
+  signal?: { status?: string; operator?: string; band?: string; rssi?: number; rsrp?: number; rsrq?: number; sinr?: number; cqi?: number; quality?: number; carriers?: LteCarrier[]; total_mhz?: number };
   system?: {
     board: string;
     version: string;
@@ -607,4 +607,57 @@ export type Topology = {
 
 export async function fetchTopology(): Promise<Topology> {
   return parseJson<Topology>(await fetch("/api/network/topology"));
+}
+
+export type LteCarrier = { role: "pcc" | "scc"; band: string; earfcn: number; width_mhz: number; pci: number; active: boolean; rsrp: number; rsrq: number; sinr: number };
+export type LteCell = { band: string; earfcn: number; pci: number; rsrp: number; rsrq: number; rssi?: number };
+export type LteLive = {
+  at: number;
+  status: string;
+  operator: string;
+  band: string;
+  earfcn: number;
+  pci: number;
+  cell_id: string;
+  enb: string;
+  sector: string;
+  rsrp: number;
+  rsrq: number;
+  sinr: number;
+  rssi: number;
+  cqi: number;
+  ri: number;
+  mcs: number;
+  modulation: string;
+  carriers: LteCarrier[];
+  total_mhz: number;
+  rx_bps: number;
+  tx_bps: number;
+  neighbours: LteCell[];
+  band_lock: string;
+};
+export type LteSurveyBand = { band: number; found: boolean; note?: string; serving?: LteLive; cells: LteCell[]; seconds: number };
+export type LteSurvey = {
+  id: number;
+  label: string;
+  started: number;
+  finished?: number;
+  bands: number[];
+  results: LteSurveyBand[];
+  current?: number;
+  error?: string;
+  restored: boolean;
+};
+export type LtePayload = { live?: LteLive; error?: string; busy: boolean; load_until: number; load_error?: string; survey?: LteSurvey; history: LteSurvey[] };
+
+export async function fetchLTE(): Promise<LtePayload> {
+  return parseJson<LtePayload>(await fetch("/api/network/lte"));
+}
+
+export async function startLTELoad(seconds: number): Promise<void> {
+  await postJson<ApiOk>("/api/network/lte/load", { seconds });
+}
+
+export async function startLTESurvey(bands: number[], label: string): Promise<void> {
+  await postJson<ApiOk>("/api/network/lte/survey", { bands, label });
 }

@@ -124,3 +124,22 @@ func TestHeaderContentLength(t *testing.T) {
 		t.Error("stub location must match")
 	}
 }
+
+func TestParseQCAINFO(t *testing.T) {
+	out := "+QCAINFO: \"pcc\",1875,50,\"LTE BAND 3\",1,357,-71,-11,-41,20\r\n+QCAINFO: \"scc\",3048,100,\"LTE BAND 7\",2,120,-85,-12,-60,12\r\n+QCAINFO: \"scc\",6300,50,\"LTE BAND 20\",1,40,-95,-14,-70,5\r\nOK"
+	list := parseQCAINFO(out)
+	if len(list) != 3 || list[0].Band != "B3" || list[0].WidthMHz != 10 || !list[0].Active {
+		t.Fatalf("pcc: %+v", list)
+	}
+	if list[1].Band != "B7" || list[1].WidthMHz != 20 || !list[1].Active || list[2].Active {
+		t.Fatalf("scc: %+v", list)
+	}
+}
+
+func TestParseNeighbours(t *testing.T) {
+	out := "+QENG: \"neighbourcell intra\",\"LTE\",1875,265,-20,-83,-52,0,-,-,-,-,-\r\n+QENG: \"neighbourcell inter\",\"LTE\",3048,12,-10,-90,-60,0,-,-,-,-,-\r\nOK"
+	cells := parseNeighbours(out)
+	if len(cells) != 2 || cells[0].Band != "B3" || cells[0].RSRP != -83 || cells[1].Band != "B7" {
+		t.Fatalf("%+v", cells)
+	}
+}

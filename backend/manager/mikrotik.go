@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,9 @@ type lteSignal struct {
 	SINR     int    `json:"sinr"`
 	CQI      int    `json:"cqi"`
 	Quality  int    `json:"quality"`
+	// Carriers in use: the primary plus any aggregated secondary ones.
+	Carriers []lteCarrier `json:"carriers,omitempty"`
+	TotalMHz float64      `json:"total_mhz,omitempty"`
 }
 
 // mikrotikView is what /api/resources exposes as "mikrotik".
@@ -130,6 +134,19 @@ func readLTE(conn *rosConn, iface string) (*lteSignal, error) {
 		s.Status = "running"
 	}
 	s.Quality = lteQuality(s)
+	s.Carriers = parseQCAINFO(atChat(conn, "AT+QCAINFO"))
+	if len(s.Carriers) == 0 {
+		width := 0.0
+		if v := regexp.MustCompile(`@(\d+(?:\.\d+)?)Mhz`).FindStringSubmatch(m["primary-band"]); v != nil {
+			width, _ = strconv.ParseFloat(v[1], 64)
+		}
+		s.Carriers = []lteCarrier{{Role: "pcc", Band: strings.Split(band, "@")[0], WidthMHz: width, Active: true, RSRP: s.RSRP, RSRQ: s.RSRQ, SINR: s.SINR}}
+	}
+	for _, c := range s.Carriers {
+		if c.Active {
+			s.TotalMHz += c.WidthMHz
+		}
+	}
 	return s, nil
 }
 
