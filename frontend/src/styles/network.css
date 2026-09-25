@@ -1595,3 +1595,61 @@
 .net-dns-answer.is-proxy {
   color: var(--accent-text);
 }
+
+.net-band-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.net-band-chip {
+  display: inline-grid;
+  justify-items: center;
+  gap: 1px;
+  min-width: 76px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.net-band-chip b {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.net-band-chip small {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.net-band-chip:hover {
+  border-color: var(--accent);
+}
+
+.net-band-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.net-band-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.net-band-chip.is-on b {
+  color: var(--accent-text);
+}
+
+.net-band-chip.is-all {
+  border-style: dashed;
+}
+
+.net-band-chip.is-all.is-on {
+  border-style: solid;
+}
