@@ -1,0 +1,865 @@
+/* ---------- Network («Сеть») ---------- */
+
+.net-stack {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.net-grid {
+  gap: 20px;
+  align-items: start;
+}
+
+.net-note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+}
+
+.net-lead {
+  margin: 0;
+  font-size: 13px;
+  max-width: 900px;
+}
+
+.net-inline-badge {
+  margin-left: 6px;
+}
+
+/* Tags: icon + words, tone from status tokens */
+
+.net-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.net-tag-good {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+  color: var(--success);
+}
+
+.net-tag-warning {
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.net-tag-critical {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.net-tag-info {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.net-good {
+  color: var(--status-good);
+}
+
+.net-warning {
+  color: var(--warning);
+}
+
+.net-critical {
+  color: var(--status-critical);
+}
+
+.net-neutral {
+  color: var(--text-3);
+}
+
+.net-step-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+/* Overview */
+
+.net-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.net-check {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  align-content: start;
+  border-left: 3px solid var(--border-strong);
+}
+
+.net-check-good {
+  border-left-color: var(--status-good);
+}
+
+.net-check-critical {
+  border-left-color: var(--status-critical);
+}
+
+.net-check-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.net-check-meta {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.net-avail {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.net-avail-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.net-avail-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+
+.net-avail-name span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-avail-bars {
+  display: flex;
+  gap: 1px;
+  height: 20px;
+  min-width: 0;
+}
+
+.net-bar {
+  flex: 1 1 0;
+  min-width: 1px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+
+.net-bar-ok {
+  background: var(--status-good);
+  opacity: 0.75;
+}
+
+.net-bar-part {
+  background: var(--status-warning);
+}
+
+.net-bar-down {
+  background: var(--status-critical);
+}
+
+.net-bar:hover {
+  opacity: 1;
+  outline: 1px solid var(--text-3);
+}
+
+.net-incidents {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.net-incidents p {
+  margin: 0;
+}
+
+.net-incident {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+
+.net-incident-name {
+  font-weight: 550;
+}
+
+.net-ping {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+/* Scheme */
+
+.net-scheme {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) 40px minmax(260px, 1.3fr) 40px minmax(210px, 1fr) 40px minmax(210px, 1fr);
+  align-items: start;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.net-col {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.net-col-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 2px 6px;
+}
+
+.net-col-head h3 {
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.net-col-head p {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.net-col-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  flex: none;
+}
+
+.net-stage {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.net-stage-info {
+  border-left-color: var(--accent);
+}
+
+.net-stage-good {
+  border-left-color: var(--status-good);
+}
+
+.net-stage-warning {
+  border-left-color: var(--status-warning);
+}
+
+.net-stage-critical {
+  border-left-color: var(--status-critical);
+}
+
+.net-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.net-groups {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.net-groups li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.net-groups li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-groups li span:first-child {
+  color: var(--text);
+}
+
+.net-direct {
+  color: var(--success);
+}
+
+.net-arrow {
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-height: 60px;
+}
+
+.net-arrow-line {
+  position: absolute;
+  top: 50px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--border-strong);
+}
+
+.net-arrow-line::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  border: 5px solid transparent;
+  border-left-color: var(--border-strong);
+  border-right: 0;
+}
+
+.net-arrow-label {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%) rotate(90deg);
+  transform-origin: center;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--text-3);
+  display: none;
+}
+
+.net-seg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.net-seg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.net-seg-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.net-seg-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.net-seg-sub {
+  color: var(--text-2);
+}
+
+.net-hosts {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 3px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.net-hosts li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.net-host-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Analyzer */
+
+.net-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.net-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.net-form-target {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+.net-form-target input {
+  width: 100%;
+}
+
+.net-form-paths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.net-check-label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.net-check-label input {
+  margin-top: 3px;
+}
+
+.net-check-label span {
+  display: grid;
+}
+
+.net-check-label small {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.net-examples {
+  align-items: center;
+}
+
+.net-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.net-recent .chip {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.net-verdict {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 18px;
+  border-left: 4px solid var(--border-strong);
+}
+
+.net-verdict-good {
+  border-left-color: var(--status-good);
+}
+
+.net-verdict-info {
+  border-left-color: var(--accent);
+}
+
+.net-verdict-warning {
+  border-left-color: var(--status-warning);
+}
+
+.net-verdict-critical {
+  border-left-color: var(--status-critical);
+}
+
+.net-verdict-main h2 {
+  margin: 8px 0 2px;
+  font-size: 20px;
+  word-break: break-all;
+}
+
+.net-verdict-main p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.net-verdict-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.net-verdict-facts dt {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.net-verdict-facts dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.net-lanes {
+  display: grid;
+  gap: 12px;
+}
+
+.net-lane {
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  border-left: 3px solid var(--border-strong);
+}
+
+.net-lane-good {
+  border-left-color: var(--status-good);
+}
+
+.net-lane-critical {
+  border-left-color: var(--status-critical);
+}
+
+.net-lane-warning {
+  border-left-color: var(--status-warning);
+}
+
+.net-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.net-lane-summary {
+  font-size: 12.5px;
+}
+
+.net-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 22px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.net-node {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 128px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.net-node + .net-node::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 21px;
+  width: 18px;
+  height: 2px;
+  background: var(--status-good);
+}
+
+.net-node.is-after::before,
+.net-node.is-fail + .net-node::before {
+  background: var(--border-strong);
+}
+
+.net-node-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.net-node.is-after .net-node-box {
+  opacity: 0.55;
+}
+
+.net-node.is-fail .net-node-box {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.net-node-icon {
+  display: inline-flex;
+  color: var(--text-3);
+}
+
+.net-node.is-pass .net-node-icon {
+  color: var(--success);
+}
+
+.net-node.is-fail .net-node-icon {
+  color: var(--danger);
+}
+
+.net-node-text {
+  display: grid;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.net-node-text b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-node-text small {
+  color: var(--text-3);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-node-fail {
+  font-size: 11.5px;
+  color: var(--danger);
+  line-height: 1.35;
+}
+
+.net-node-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.net-stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.net-matrix td {
+  vertical-align: top;
+}
+
+.net-cell {
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.net-cell .net-step-icon {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.net-cell-text {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.net-cell-ms {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.net-matrix-summary td {
+  padding-top: 0 !important;
+  font-size: 12px;
+  color: var(--text-3);
+  border-top: 0 !important;
+}
+
+.net-dns-ips {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  max-width: 360px;
+}
+
+/* Auto scan */
+
+.net-scan-settings,
+.net-scan-targets {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.net-scan-targets textarea {
+  width: 100%;
+  resize: vertical;
+  font-size: 12.5px;
+}
+
+.net-scan-row {
+  cursor: pointer;
+}
+
+.net-scan-row:hover td,
+.net-scan-row:focus-visible td {
+  background: var(--surface-2);
+}
+
+.net-history {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.net-hist {
+  width: 6px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+
+.net-hist-good {
+  background: var(--status-good);
+}
+
+.net-hist-info {
+  background: var(--accent);
+}
+
+.net-hist-warning {
+  background: var(--status-warning);
+}
+
+.net-hist-critical {
+  background: var(--status-critical);
+}
+
+/* Below a wide desktop the diagram flows top to bottom. */
+@media (max-width: 1360px) {
+  .net-scheme {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .net-scheme > .net-arrow {
+    display: grid !important;
+    min-height: 28px;
+  }
+
+  .net-scheme .net-arrow-line {
+    top: 2px;
+    bottom: 2px;
+    left: 50%;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+
+  .net-scheme .net-arrow-line::after {
+    right: -4px;
+    top: auto;
+    bottom: -2px;
+    border: 5px solid transparent;
+    border-top-color: var(--border-strong);
+    border-bottom: 0;
+  }
+
+  .net-scheme .net-arrow-label {
+    display: block;
+    top: 50%;
+    left: calc(50% + 12px);
+    transform: translateY(-50%);
+  }
+
+  .net-scheme > .net-col:not(:first-child) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  .net-scheme > .net-col > .net-col-head {
+    grid-column: 1 / -1;
+  }
+
+  .net-scheme > .net-col:first-child {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .net-verdict {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .net-avail-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .net-flow {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .net-node + .net-node::before {
+    left: 20px;
+    top: -14px;
+    width: 2px;
+    height: 12px;
+  }
+}

@@ -180,6 +180,14 @@ const paths = {
       <path d="M5 10v10h14V10" />
     </>
   ),
+  network: (
+    <>
+      <rect x="9" y="3" width="6" height="5" rx="1" />
+      <rect x="3" y="16" width="6" height="5" rx="1" />
+      <rect x="15" y="16" width="6" height="5" rx="1" />
+      <path d="M12 8v4M6 16v-2h12v2" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="9" />

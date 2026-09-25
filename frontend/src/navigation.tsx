@@ -5,6 +5,7 @@ export type PageKey =
   | "overview"
   | "apps"
   | "resources"
+  | "network"
   | "servers"
   | "logs"
   | "dns"
@@ -40,7 +41,7 @@ export const NAV: NavItem[] = [
   {
     id: "resources",
     title: "Ресурсы",
-    description: "Нагрузка роутера, кто сколько потребляет, и LTE-роутер MikroTik выше.",
+    description: "Нагрузка роутеров, mesh-узлов и Proxmox: кто сколько потребляет.",
     icon: "activity",
     group: "main",
   },
@@ -57,6 +58,13 @@ export const NAV: NavItem[] = [
     description: "Каждый запрос: источник, статус и путь до приложения.",
     icon: "logs",
     group: "main",
+  },
+  {
+    id: "network",
+    title: "Сеть",
+    description: "Интернет, LTE и задержки, схема сети, анализ блокировок напрямую и через mihomo.",
+    icon: "network",
+    group: "network",
   },
   {
     id: "dns",

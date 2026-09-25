@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,7 +18,7 @@ import (
 // Router resource monitor: the manager runs on the router itself, so it reads
 // /proc directly. Every sampleEvery it records system totals and per-app
 // usage (processes rolled up into named groups) into a one-hour ring; the
-// upstream MikroTik is read from Netping's /api/router.
+// upstream MikroTik comes from the network monitor (network.go).
 
 const (
 	sampleEvery   = 5 * time.Second
@@ -142,7 +141,6 @@ type resourceMonitor struct {
 	portsAt    time.Time
 	mikrotik   json.RawMessage
 	mikrotikAt time.Time
-	netpingURL string
 
 	rciURL      string
 	mesh        []meshNode
@@ -160,7 +158,6 @@ func (a *app) startResources() {
 	if runtime.GOOS != "linux" {
 		return
 	}
-	resources.netpingURL = strings.TrimRight(getenv("NETPING_URL", "http://127.0.0.1:18081"), "/")
 	resources.rciURL = getenv("RCI_URL", "http://127.0.0.1:79/rci")
 	if url := strings.TrimSpace(os.Getenv("PROXMOX_URL")); url != "" {
 		resources.pve = newPVEClient(url, getenv("PROXMOX_TOKEN_FILE", "/opt/etc/homenet/secrets/proxmox.token"), os.Getenv("PROXMOX_FINGERPRINT"))
@@ -173,7 +170,6 @@ func (a *app) startResources() {
 	}()
 	// Remote sources each get their own loop, so a slow one does not stall
 	// the local sampler or the others.
-	every(2*sampleEvery, resources.pollMikrotik)
 	every(2*sampleEvery, resources.pollMesh)
 	if resources.pve != nil {
 		every(2*sampleEvery, resources.pollProxmox)
@@ -733,49 +729,19 @@ func round2(v float64) float64 {
 	return float64(int64(v*100+0.5)) / 100
 }
 
-// pollMikrotik keeps Netping's MikroTik view and a history for charts.
-func (m *resourceMonitor) pollMikrotik() {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(m.netpingURL + "/api/router")
-	var body []byte
-	if err == nil {
-		body, err = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		resp.Body.Close()
-	}
-	if err != nil {
-		body, _ = json.Marshal(map[string]string{"error": "Netping недоступен: " + err.Error()})
-	}
-	var parsed struct {
-		Signal struct {
-			RSRP float64 `json:"rsrp"`
-			SINR float64 `json:"sinr"`
-		} `json:"signal"`
-		System *struct {
-			CPULoad     float64 `json:"cpu_load"`
-			MemoryTotal int64   `json:"memory_total"`
-			MemoryFree  int64   `json:"memory_free"`
-			Interfaces  []struct {
-				Type  string  `json:"type"`
-				RxBps float64 `json:"rx_bps"`
-				TxBps float64 `json:"tx_bps"`
-			} `json:"interfaces"`
-		} `json:"system"`
-	}
-	_ = json.Unmarshal(body, &parsed)
-
+// setMikrotik receives the MikroTik view from the network monitor and keeps
+// a history for the Resources charts.
+func (m *resourceMonitor) setMikrotik(view mikrotikView, net netSample) {
+	body, _ := json.Marshal(view)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.mikrotik, m.mikrotikAt = body, time.Now()
-	if parsed.System == nil {
+	if view.System == nil {
 		return
 	}
-	sample := mikrotikSample{T: time.Now().Unix(), CPU: parsed.System.CPULoad, Mem: parsed.System.MemoryTotal - parsed.System.MemoryFree, RSRP: parsed.Signal.RSRP, SINR: parsed.Signal.SINR}
-	// The LTE side is the MikroTik's uplink; fall back to all traffic.
-	for _, iface := range parsed.System.Interfaces {
-		if iface.Type == "lte" {
-			sample.RxBps += iface.RxBps
-			sample.TxBps += iface.TxBps
-		}
+	sample := mikrotikSample{T: net.T, CPU: float64(view.System.CPULoad), Mem: view.System.MemoryTotal - view.System.MemoryFree, RxBps: net.LTERx, TxBps: net.LTETx}
+	if view.Signal != nil {
+		sample.RSRP, sample.SINR = float64(view.Signal.RSRP), float64(view.Signal.SINR)
 	}
 	m.mtHistory = appendRing(m.mtHistory, sample, historyLength/2)
 }

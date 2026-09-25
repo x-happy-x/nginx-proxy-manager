@@ -465,3 +465,146 @@ export async function fetchUiBind(): Promise<{
     await fetch("/api/ui/bind"),
   );
 }
+
+// ---------- Network («Сеть») ----------
+
+export type NetTarget = { id: string; name: string; address: string; category: "internet" | "domain" };
+export type PingLite = { ok: boolean; ms?: number; loss?: number };
+export type PingResult = { sent: number; received: number; loss: number; avg_ms: number; min_ms: number; max_ms: number; ok: boolean; error?: string };
+export type NetSample = {
+  t: number;
+  api: boolean;
+  lte?: string;
+  rsrp?: number;
+  rsrq?: number;
+  sinr?: number;
+  q?: number;
+  mt: Record<string, PingLite>;
+  nc: Record<string, PingLite>;
+  proxy: PingLite;
+  lte_rx: number;
+  lte_tx: number;
+  wan_rx: number;
+  wan_tx: number;
+};
+export type NetBucket = {
+  t: number;
+  rsrp: number | null;
+  sinr: number | null;
+  lte_rx: number;
+  lte_tx: number;
+  wan_rx: number;
+  wan_tx: number;
+  proxy_ms: number | null;
+  mt: Record<string, number | null>;
+  nc: Record<string, number | null>;
+  loss: Record<string, number>;
+};
+export type NetAvailability = {
+  id: string;
+  name: string;
+  group: "summary" | "mikrotik" | "netcraze";
+  ok: boolean;
+  valid: boolean;
+  uptime: number;
+  last_change: number;
+  buckets: number[];
+};
+export type NetIncident = { check: string; name: string; start: number; end: number; duration_sec: number };
+export type MikrotikFull = MikrotikState & {
+  sample_time?: string;
+  system?: MikrotikState["system"] & { dns_servers?: string[]; interfaces: Array<{ name: string; type: string; running: boolean; rx_bps: number; tx_bps: number; rx_bytes?: number; tx_bytes?: number }> };
+};
+export type NetworkPayload = {
+  interval_sec: number;
+  bucket_sec: number;
+  targets: NetTarget[];
+  current: NetSample | null;
+  details: { mikrotik?: Record<string, PingResult>; netcraze?: Record<string, PingResult>; proxy_error?: string } | null;
+  mikrotik: MikrotikFull;
+  keenetic: { interfaces: SystemSnapshot["interfaces"] | null };
+  series: NetBucket[];
+  availability: NetAvailability[];
+  incidents: NetIncident[];
+};
+
+export async function fetchNetwork(minutes: number, points = 180): Promise<NetworkPayload> {
+  return parseJson<NetworkPayload>(await fetch(`/api/network?minutes=${minutes}&points=${points}`));
+}
+
+export type StepStatus = "ok" | "fail" | "warn" | "skip";
+export type ProbeStep = { id: string; title: string; status: StepStatus; cause?: string; ms?: number; detail?: string };
+export type ProbePath = {
+  id: "direct" | "mihomo" | "mikrotik";
+  title: string;
+  verdict: string;
+  summary: string;
+  fail_at?: string;
+  steps: ProbeStep[];
+  rule?: string;
+  chain?: string[];
+};
+export type DnsAnswer = { id: string; resolver: string; via: string; ips: string[]; rcode?: string; ms: number; error?: string; verdict: string };
+export type Analysis = {
+  target: string;
+  host: string;
+  port: number;
+  path: string;
+  at: number;
+  ms: number;
+  ip?: string;
+  dns: DnsAnswer[];
+  paths: ProbePath[];
+  clients: { via: "mihomo" | "ipset" | "unknown"; ipset?: string; rule?: string; chain?: string[]; direct: boolean };
+  verdict: "open" | "bypassed" | "blocked" | "down" | "proxy-broken" | "partial";
+  summary: string;
+  hints: string[];
+};
+
+export async function analyzeTarget(target: string, paths: string[]): Promise<Analysis> {
+  return (await postJson<{ result: Analysis }>("/api/network/analyze", { target, paths })).result;
+}
+
+export type ScanSettings = { enabled: boolean; interval_min: number; paths: string[]; targets: string[] };
+export type ScanPreset = { id: string; name: string; description: string; targets: string[] };
+export type ScanRow = {
+  target: string;
+  last: Analysis;
+  history: Array<{ at: number; verdict: string; paths: Record<string, string>; changed?: boolean }>;
+};
+export type ScanPayload = {
+  settings: ScanSettings;
+  presets: ScanPreset[];
+  results: ScanRow[];
+  running: boolean;
+  progress: string;
+  last_run: number;
+  next_run: number;
+};
+
+export async function fetchScan(): Promise<ScanPayload> {
+  return parseJson<ScanPayload>(await fetch("/api/network/scan"));
+}
+
+export async function saveScanSettings(settings: ScanSettings): Promise<ScanSettings> {
+  return (await postJson<{ settings: ScanSettings }>("/api/network/scan/settings", settings)).settings;
+}
+
+export async function runScan(): Promise<void> {
+  await postJson<ApiOk>("/api/network/scan/run", {});
+}
+
+export type TopoHost = { name: string; ip: string; link: "wifi" | "ethernet"; mesh?: boolean; bypass?: boolean };
+export type TopoSegment = { id: string; name: string; ip: string; cidr: string; active: number; hosts: TopoHost[]; dns_to_mihomo: boolean };
+export type Topology = {
+  keenetic: { model: string; firmware: string; wan: { id?: string; name?: string; ip?: string; link?: string }; segments: TopoSegment[]; routes: Array<{ dst: string; via: string }> };
+  mesh: MeshNode[];
+  xkeen: { deny_mac: number; geo_exclude: number; user_exclude: number; ext_exclude: number };
+  mihomo: { error?: string; version?: string; mode?: string; groups?: Array<{ name: string; type: string; now: string; size: number }>; nameservers?: string[] };
+  mikrotik: MikrotikFull;
+  proxmox?: { ip: string; nodes: string[]; guests_running: number; guests: number };
+};
+
+export async function fetchTopology(): Promise<Topology> {
+  return parseJson<Topology>(await fetch("/api/network/topology"));
+}
