@@ -985,3 +985,222 @@
 .res-kpi-sub .net-tag {
   justify-self: start;
 }
+
+/* Antenna */
+
+.net-aim {
+  display: grid;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.net-aim-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.net-aim-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.net-aim-head p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.net-aim-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.net-reading {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.net-reading-good {
+  border-left-color: var(--status-good);
+}
+
+.net-reading-warning {
+  border-left-color: var(--status-warning);
+}
+
+.net-reading-critical {
+  border-left-color: var(--status-critical);
+}
+
+.net-reading .net-tag {
+  justify-self: start;
+}
+
+.net-reading strong {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.net-reading strong small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.net-reading-name {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.net-ca {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.net-ca-on {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+}
+
+.net-ca p {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}
+
+.net-ca-carriers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.net-carrier {
+  display: inline-grid;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-strong);
+  font-size: 13px;
+}
+
+.net-carrier.is-active {
+  border-style: solid;
+  border-color: var(--status-good);
+  background: var(--surface);
+}
+
+.net-carrier small {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.net-ca-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  align-content: start;
+}
+
+.net-cellinfo {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.net-cellinfo dt {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.net-cellinfo dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+}
+
+.net-neigh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.net-mark-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.net-mark-row input {
+  flex: 1 1 240px;
+}
+
+.net-survey-form {
+  display: grid;
+  gap: 12px;
+}
+
+.net-survey {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.net-survey-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.net-survey-verdict {
+  margin: 0;
+  font-size: 13px;
+}
+
+.net-survey-old {
+  padding: 10px 14px;
+}
+
+.net-survey-old summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.net-survey-old .net-survey {
+  border: 0;
+  padding: 8px 0 0;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .net-aim-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.net-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

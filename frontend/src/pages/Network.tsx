@@ -3,18 +3,20 @@ import { fetchNetwork, fetchTopology, type Analysis, type NetworkPayload, type T
 import { Icon } from "../components/ui/Icon";
 import { Alert, Segmented } from "../components/ui/controls";
 import { NetworkAnalyzer } from "../features/network/Analyzer";
+import { Antenna } from "../features/network/Antenna";
 import { AutoScan } from "../features/network/AutoScan";
 import { NetworkOverview } from "../features/network/Overview";
 import { NetworkScheme } from "../features/network/Scheme";
 import { PageHeader } from "../navigation";
 import { errText } from "../lib/format";
 
-type Tab = "overview" | "scheme" | "analyzer" | "scan";
+type Tab = "overview" | "scheme" | "antenna" | "analyzer" | "scan";
 type Period = "60" | "360" | "1440";
 const TAB_KEY = "homenet.network.tab";
 const TABS: Array<[Tab, string]> = [
   ["overview", "Обзор"],
   ["scheme", "Схема"],
+  ["antenna", "Антенна"],
   ["analyzer", "Анализатор"],
   ["scan", "Автопроверка"],
 ];
@@ -123,8 +125,9 @@ export function Network() {
             </button>
           ))}
         </div>
-        {tab === "overview" ? data ? <NetworkOverview data={data} /> : <div className="launcher-loading">Собираю данные…</div> : null}
+        {tab === "overview" ? data ? <NetworkOverview data={data} onAntenna={() => setTab("antenna")} /> : <div className="launcher-loading">Собираю данные…</div> : null}
         {tab === "scheme" ? <NetworkScheme topo={topo} net={data} /> : null}
+        {tab === "antenna" ? <Antenna /> : null}
         {tab === "analyzer" ? <NetworkAnalyzer result={analysis} onResult={setAnalysis} /> : null}
         {tab === "scan" ? (
           <AutoScan

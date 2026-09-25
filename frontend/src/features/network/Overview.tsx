@@ -4,12 +4,13 @@ import { Legend, TimeChart } from "../../components/charts/TimeChart";
 import { Alert } from "../../components/ui/controls";
 import { bytes } from "../../lib/format";
 import { formatBps, formatUptime } from "../../pages/Resources";
+import { carriersText } from "./Antenna";
 import { Tag, formatAgo, formatClock, formatDuration, formatMs, type Tone } from "./shared";
 
 // «Обзор»: what Netping used to show — LTE, availability of the internet and
 // of domains from both routers, latency, traffic, interfaces, incidents.
 
-export function NetworkOverview({ data }: { data: NetworkPayload }) {
+export function NetworkOverview({ data, onAntenna }: { data: NetworkPayload; onAntenna: () => void }) {
   const times = data.series.map((b) => b.t);
   const mt = data.mikrotik;
   const sig = mt.signal;
@@ -50,6 +51,19 @@ export function NetworkOverview({ data }: { data: NetworkPayload }) {
             <Tag tone={qualityTone}>{qualityTone === "good" ? "хороший сигнал" : qualityTone === "warning" ? "средний сигнал" : qualityTone === "critical" ? "слабый сигнал" : "нет данных"}</Tag>
             {sig ? ` RSRP ${sig.rsrp} · RSRQ ${sig.rsrq} · SINR ${sig.sinr}` : ""}
           </span>
+          {sig?.carriers?.length ? (
+            <span className="res-kpi-sub">
+              {sig.carriers.filter((c) => c.active).length > 1 ? (
+                <Tag tone="good">агрегация: {carriersText(sig.carriers)}</Tag>
+              ) : (
+                <>без агрегации · {carriersText(sig.carriers)}</>
+              )}{" "}
+              ·{" "}
+              <button type="button" className="net-link" onClick={onAntenna}>
+                наведение антенны
+              </button>
+            </span>
+          ) : null}
           <TimeChart label="SINR сигнала LTE" times={times} series={[{ label: "SINR, дБ", values: data.series.map((b) => b.sinr) }]} format={(v) => `${v.toFixed(0)} дБ`} height={70} />
         </div>
         <div className="card res-kpi">
