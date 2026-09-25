@@ -661,3 +661,41 @@ export async function startLTELoad(seconds: number): Promise<void> {
 export async function startLTESurvey(bands: number[], label: string): Promise<void> {
   await postJson<ApiOk>("/api/network/lte/survey", { bands, label });
 }
+
+export type DnsProvider = { id: string; name: string; note?: string; udp?: string[]; dot?: string; doh?: string };
+export type DnsCheck = {
+  provider: string;
+  transport: "udp" | "dot" | "doh";
+  path: "direct" | "mihomo";
+  target: string;
+  ok: boolean;
+  ms?: number;
+  answered: number;
+  spoofed: string[];
+  changed: string[];
+  proxied: string[];
+  error?: string;
+  verdict: "good" | "partial" | "filtered" | "proxyish" | "down";
+  chain?: string[];
+  answers: Record<string, string>;
+};
+export type DnsFinderPayload = {
+  running: boolean;
+  started: number;
+  finished: number;
+  progress: number;
+  total: number;
+  checks: DnsCheck[] | null;
+  reference: Record<string, string[]> | null;
+  providers: DnsProvider[];
+  domains: Array<{ host: string; kind: "blocked" | "geo" | "ru" }>;
+  mihomo_servers: string[] | null;
+};
+
+export async function fetchDnsFinder(): Promise<DnsFinderPayload> {
+  return parseJson<DnsFinderPayload>(await fetch("/api/network/dns"));
+}
+
+export async function runDnsFinder(): Promise<void> {
+  await postJson<ApiOk>("/api/network/dns/run", {});
+}
