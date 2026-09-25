@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchResources, type AppGroupUsage, type MikrotikSample, type ResourceSample, type ResourcesPayload } from "../api";
+import { fetchResources, type AppGroupUsage, type MeshNode, type MeshSample, type MikrotikSample, type PveSample, type PveState, type ResourceSample, type ResourcesPayload } from "../api";
 import { Icon } from "../components/ui/Icon";
 import { Alert, Segmented } from "../components/ui/controls";
 import { Legend, TimeChart } from "../components/charts/TimeChart";
@@ -7,6 +7,17 @@ import { PageHeader } from "../navigation";
 import { bytes, errText, number } from "../lib/format";
 
 type Period = 15 | 60;
+type Tab = "keenetic" | "mesh" | "mikrotik" | "proxmox";
+const TAB_KEY = "homenet.resources.tab";
+
+function readTab(): Tab {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === "mesh" || v === "mikrotik" || v === "proxmox" ? v : "keenetic";
+  } catch {
+    return "keenetic";
+  }
+}
 type Kind = "app" | "system" | "all";
 type SortKey = "rss" | "cpu";
 
@@ -55,22 +66,33 @@ export function useResources(withHistory = true) {
   const [data, setData] = useState<ResourcesPayload | null>(null);
   const [error, setError] = useState("");
   const [updated, setUpdated] = useState(0);
-  const last = useRef(0);
-  const lastMt = useRef(0);
+  // The server returns history newer than `since`; each stream is merged
+  // separately by timestamp, so asking from the oldest stream's end is safe.
+  const lastSeen = useRef(0);
 
   const load = useCallback(async () => {
     try {
-      const since = withHistory ? Math.min(last.current, lastMt.current || last.current) : 4e9;
-      const next = await fetchResources(since);
+      const next = await fetchResources(withHistory ? lastSeen.current : 4e9);
       setError("");
       setUpdated(Date.now());
       setData((prev) => {
         const cutoff = Date.now() / 1000 - 3600;
-        const history = [...(prev?.history || []).filter((s) => s.t > cutoff && s.t <= last.current), ...next.history.filter((s) => s.t > last.current)];
-        const mtHistory = [...(prev?.mikrotik_history || []).filter((s) => s.t > cutoff && s.t <= lastMt.current), ...next.mikrotik_history.filter((s) => s.t > lastMt.current)];
-        if (history.length) last.current = history[history.length - 1].t;
-        if (mtHistory.length) lastMt.current = mtHistory[mtHistory.length - 1].t;
-        return { ...next, history, mikrotik_history: mtHistory };
+        const merge = <T extends { t: number }>(old: T[] | undefined, fresh: T[]) => {
+          const tail = (old || []).filter((s) => s.t > cutoff);
+          const end = tail.length ? tail[tail.length - 1].t : 0;
+          return [...tail, ...fresh.filter((s) => s.t > end)];
+        };
+        const history = merge(prev?.history, next.history);
+        const mtHistory = merge(prev?.mikrotik_history, next.mikrotik_history);
+        const pveHistory = merge(prev?.proxmox_history, next.proxmox_history || []);
+        const meshHistory: Record<string, MeshSample[]> = {};
+        const liveNodes = new Set((next.mesh?.nodes || []).map((n) => n.cid || n.ip));
+        for (const key of new Set([...Object.keys(prev?.mesh_history || {}), ...Object.keys(next.mesh_history || {})])) {
+          if (liveNodes.has(key)) meshHistory[key] = merge(prev?.mesh_history?.[key], next.mesh_history?.[key] || []);
+        }
+        const ends = [history, mtHistory, pveHistory, ...Object.values(meshHistory)].filter((l) => l.length).map((l) => l[l.length - 1].t);
+        lastSeen.current = ends.length ? Math.min(...ends) : 0;
+        return { ...next, history, mikrotik_history: mtHistory, proxmox_history: pveHistory, mesh_history: meshHistory };
       });
     } catch (err) {
       setError(errText(err));
@@ -94,6 +116,15 @@ export function Resources() {
   const [kind, setKind] = useState<Kind>("app");
   const [sort, setSort] = useState<SortKey>("rss");
   const [showTop, setShowTop] = useState(false);
+  const [tab, setTabState] = useState<Tab>(readTab);
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      /* per-browser preference */
+    }
+  };
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 1000);
@@ -110,6 +141,8 @@ export function Resources() {
   }, [data, period]);
 
   const ago = updated ? Math.max(0, Math.round((Date.now() - updated) / 1000)) : null;
+  const meshCount = data?.mesh?.nodes.length ?? 0;
+  const pve = data?.proxmox;
 
   return (
     <>
@@ -136,10 +169,29 @@ export function Resources() {
       {error ? <Alert tone="danger" title="Нет данных от менеджера">{error}</Alert> : null}
       {!data ? <div className="launcher-loading">Собираю данные…</div> : (
         <div className="res">
-          <KeeneticSection data={data} history={history} />
-          <AppsSection data={data} history={history} kind={kind} setKind={setKind} sort={sort} setSort={setSort} />
-          <TopProcesses data={data} open={showTop} onToggle={() => setShowTop((v) => !v)} />
-          <MikrotikSection data={data} history={mtHistory} />
+          <div className="res-tabs" role="tablist" aria-label="Устройство">
+            {([
+              ["keenetic", "Keenetic"],
+              ["mesh", `Mesh-узлы${meshCount ? ` · ${meshCount}` : ""}`],
+              ["mikrotik", "MikroTik"],
+              ["proxmox", `Proxmox${pve?.nodes.length ? ` · ${pve.nodes.map((n) => n.node).join(", ")}` : ""}`],
+            ] as Array<[Tab, string]>).map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={tab === id} className={`res-tab${tab === id ? " is-active" : ""}`} onClick={() => setTab(id)}>
+                {label}
+                <TabAlert data={data} tab={id} />
+              </button>
+            ))}
+          </div>
+          {tab === "keenetic" ? (
+            <>
+              <KeeneticSection data={data} history={history} />
+              <AppsSection data={data} history={history} kind={kind} setKind={setKind} sort={sort} setSort={setSort} />
+              <TopProcesses data={data} open={showTop} onToggle={() => setShowTop((v) => !v)} />
+            </>
+          ) : null}
+          {tab === "mesh" ? <MeshSection data={data} period={period} /> : null}
+          {tab === "mikrotik" ? <MikrotikSection data={data} history={mtHistory} /> : null}
+          {tab === "proxmox" ? <ProxmoxSection state={pve} history={(data.proxmox_history || []).filter((s) => s.t >= Date.now() / 1000 - period * 60)} /> : null}
         </div>
       )}
     </>
@@ -468,6 +520,284 @@ function MikrotikSection({ data, history }: { data: ResourcesPayload; history: M
           </div>
         </>
       ) : null}
+    </section>
+  );
+}
+
+// TabAlert marks a tab that has something worth a look (icon + hidden label).
+function TabAlert({ data, tab }: { data: ResourcesPayload; tab: Tab }) {
+  let warn = false;
+  if (tab === "mikrotik") {
+    const sys = data.mikrotik?.system;
+    warn = !!data.mikrotik?.error || data.mikrotik?.internet_ok === false || (!!sys && sys.disk_total > 0 && sys.disk_free / sys.disk_total < 0.15);
+  } else if (tab === "mesh") {
+    warn = !!data.mesh?.error || (data.mesh?.nodes || []).some((n) => !n.internet);
+  } else if (tab === "proxmox") {
+    warn = !!data.proxmox?.error || pveWarnings(data.proxmox).length > 0;
+  } else {
+    warn = data.now.temp_max >= 80 || (data.now.mem_total > 0 && data.now.mem_used / data.now.mem_total > 0.9);
+  }
+  return warn ? (
+    <span className="res-tab-alert" title="Есть предупреждения">
+      <Icon name="alert" size={13} />
+      <span className="sr-only">есть предупреждения</span>
+    </span>
+  ) : null;
+}
+
+function uplinkLabel(node: MeshNode) {
+  if (node.uplink_wifi) return `Wi-Fi${node.rssi ? ` · ${node.rssi} дБм` : ""}${node.txrate ? ` · ${node.txrate} Мбит/с` : ""}`;
+  if (node.uplink.startsWith("Gigabit")) return "кабель, 1 Гбит/с";
+  return node.uplink || "—";
+}
+
+function MeshSection({ data, period }: { data: ResourcesPayload; period: Period }) {
+  const nodes = data.mesh?.nodes || [];
+  const cutoff = Date.now() / 1000 - period * 60;
+  return (
+    <section className="res-section">
+      <header className="res-section-head">
+        <div>
+          <h2>Mesh-узлы Keenetic</h2>
+          <p>Находятся сами по данным контроллера; новый узел появится здесь без настройки</p>
+        </div>
+      </header>
+      {data.mesh?.error ? <Alert tone="warning" title="Контроллер не ответил">{data.mesh.error}</Alert> : null}
+      {!nodes.length && !data.mesh?.error ? <div className="launcher-empty">Mesh-узлов нет</div> : null}
+      <div className="res-mesh">
+        {nodes.map((node) => {
+          const hist: MeshSample[] = (data.mesh_history?.[node.cid || node.ip] || []).filter((s) => s.t >= cutoff);
+          const times = hist.map((s) => s.t);
+          const memPct = node.mem_total ? (node.mem_used / node.mem_total) * 100 : 0;
+          const weak = node.uplink_wifi && (node.rssi ?? 0) < -70;
+          return (
+            <article key={node.cid || node.ip} className="card res-node">
+              <header className="res-node-head">
+                <div>
+                  <h3>{node.name}</h3>
+                  <p>
+                    {node.model} · <span className="mono">{node.ip}</span> · {node.mode === "extender" ? "ретранслятор" : node.mode}
+                  </p>
+                </div>
+                <StatusNote tone={node.internet ? "good" : "critical"}>{node.internet ? "в сети" : "нет интернета"}</StatusNote>
+              </header>
+              <div className="res-node-grid">
+                <div>
+                  <span className="res-kpi-label">Процессор</span>
+                  <strong className="res-node-value">{pct(node.cpu)}</strong>
+                  <TimeChart label={`Процессор: ${node.name}`} times={times} series={[{ label: "CPU", values: hist.map((s) => s.cpu) }]} format={pct} max={100} height={54} />
+                </div>
+                <div>
+                  <span className="res-kpi-label">Память</span>
+                  <strong className="res-node-value">
+                    {mb(node.mem_used)} <small>из {mb(node.mem_total)}</small>
+                  </strong>
+                  <TimeChart label={`Память: ${node.name}`} times={times} series={[{ label: "Память", values: hist.map((s) => s.mem) }]} format={mb} max={node.mem_total} height={54} />
+                </div>
+              </div>
+              <dl className="res-facts">
+                <div>
+                  <dt>Клиенты Wi-Fi</dt>
+                  <dd>{node.clients}</dd>
+                </div>
+                <div>
+                  <dt>Связь с роутером</dt>
+                  <dd>{weak ? <StatusNote tone="warning">{uplinkLabel(node)}</StatusNote> : uplinkLabel(node)}</dd>
+                </div>
+                <div>
+                  <dt>Аптайм</dt>
+                  <dd>{formatUptime(node.uptime_sec)}</dd>
+                </div>
+                <div>
+                  <dt>Прошивка</dt>
+                  <dd>
+                    {node.firmware}
+                    {node.update_available && node.firmware_next ? (
+                      <>
+                        {" · "}
+                        <StatusNote tone="warning">доступна {node.firmware_next}</StatusNote>
+                      </>
+                    ) : null}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Занято памяти</dt>
+                  <dd>{pct(memPct)}</dd>
+                </div>
+                {node.ports.length ? (
+                  <div>
+                    <dt>Порты</dt>
+                    <dd className="res-ports">
+                      {node.ports.map((p) => (
+                        <span
+                          key={p.label}
+                          className={`res-port-dot${p.link ? " is-up" : ""}`}
+                          title={`Порт ${p.label}: ${p.link ? `подключён${p.speed ? `, ${p.speed} Мбит/с` : ""}` : "не подключён"}`}
+                        >
+                          {p.label}
+                        </span>
+                      ))}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// pveWarnings flags things a person should look at on the Proxmox tab.
+function pveWarnings(state: PveState | null | undefined) {
+  const out: string[] = [];
+  if (!state) return out;
+  for (const node of state.nodes) {
+    if (!node.online) out.push(`Узел ${node.node} не в сети`);
+    if (node.mem_total && node.mem_used / node.mem_total >= 0.9) out.push(`Узел ${node.node}: занято ${pct((node.mem_used / node.mem_total) * 100)} памяти`);
+    // A directory storage the size of the root filesystem usually means its
+    // disk is not mounted and data is landing on the system disk.
+    for (const st of state.storage) {
+      if (st.node === node.node && st.type === "dir" && st.name !== "local" && node.root_total && Math.abs(st.total - node.root_total) < node.root_total * 0.02) {
+        out.push(`Хранилище ${st.name} на ${node.node} совпадает по размеру с системным диском — похоже, его диск не смонтирован, и данные пишутся на системный`);
+      }
+    }
+  }
+  return out;
+}
+
+function ProxmoxSection({ state, history }: { state: PveState | null | undefined; history: PveSample[] }) {
+  if (!state) {
+    return <Alert tone="info" title="Proxmox не настроен">Задайте PROXMOX_URL, PROXMOX_FINGERPRINT и файл токена в настройках менеджера.</Alert>;
+  }
+  const times = history.map((s) => s.t);
+  const warnings = pveWarnings(state);
+  return (
+    <section className="res-section">
+      {state.error ? <Alert tone="danger" title="Proxmox не ответил">{state.error}</Alert> : null}
+      {warnings.map((w) => (
+        <Alert key={w} tone="warning">{w}</Alert>
+      ))}
+      {state.nodes.map((node) => {
+        const memPct = node.mem_total ? (node.mem_used / node.mem_total) * 100 : 0;
+        const guests = state.guests.filter((g) => g.node === node.node);
+        const running = guests.filter((g) => g.status === "running").length;
+        return (
+          <div key={node.node} className="res-section">
+            <header className="res-section-head">
+              <div>
+                <h2>Proxmox · {node.node}</h2>
+                <p>
+                  {node.pve_version?.split("/").slice(0, 2).join(" ")} · {node.cpu_model ? `${node.cpu_model}, ` : ""}
+                  {node.cores} ядра · аптайм {formatUptime(node.uptime_sec)} · нагрузка {node.load.map((l) => l.toFixed(2)).join(" / ")}
+                </p>
+              </div>
+              <StatusNote tone={node.online ? "good" : "critical"}>
+                {node.online ? `в сети · запущено ${running} из ${guests.filter((g) => !g.template).length} ВМ` : "не в сети"}
+              </StatusNote>
+            </header>
+            <div className="res-kpis">
+              <div className="card res-kpi">
+                <span className="res-kpi-label">Процессор</span>
+                <strong className="res-kpi-value">{pct(node.cpu)}</strong>
+                <span className="res-kpi-sub">всех {node.cores} ядер</span>
+                <TimeChart label={`Процессор ${node.node}`} times={times} series={[{ label: "CPU", values: history.map((s) => s.nodes[node.node]?.cpu ?? null) }]} format={pct} max={100} height={70} />
+              </div>
+              <div className="card res-kpi">
+                <span className="res-kpi-label">Память</span>
+                <strong className="res-kpi-value">
+                  {mb(node.mem_used)} <small>из {mb(node.mem_total)}</small>
+                </strong>
+                <span className="res-kpi-sub">
+                  {memPct >= 90 ? <StatusNote tone="warning">{pct(memPct)} занято</StatusNote> : pct(memPct)}
+                  {node.swap_total ? ` · swap ${mb(node.swap_used)}` : ""}
+                </span>
+                <TimeChart label={`Память ${node.node}`} times={times} series={[{ label: "Память", values: history.map((s) => s.nodes[node.node]?.mem ?? null) }]} format={mb} max={node.mem_total} height={70} />
+              </div>
+              <div className="card res-kpi">
+                <span className="res-kpi-label">Системный диск</span>
+                <strong className="res-kpi-value">
+                  {mb(node.root_used)} <small>из {mb(node.root_total)}</small>
+                </strong>
+                <Meter value={node.root_used} max={node.root_total} tone={node.root_total && node.root_used / node.root_total > 0.9 ? "warning" : undefined} />
+                <span className="res-kpi-sub">ядро {node.kernel || "—"}</span>
+              </div>
+              <div className="card res-kpi">
+                <span className="res-kpi-label">Хранилища</span>
+                {state.storage
+                  .filter((s) => s.node === node.node)
+                  .map((st) => (
+                    <div key={st.name} className="res-storage">
+                      <span>
+                        {st.name} <small className="muted">{st.type}</small>
+                      </span>
+                      <Meter value={st.used} max={st.total} tone={st.total && st.used / st.total > 0.9 ? "warning" : undefined} />
+                      <small className="muted">
+                        {mb(st.used)} из {mb(st.total)}
+                      </small>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            <section className="card card-flush">
+              <div className="card-header">
+                <div className="card-title">
+                  <h2>Виртуальные машины и контейнеры</h2>
+                  <p>CPU — доля собственных ядер машины</p>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table className="table res-table">
+                  <thead>
+                    <tr>
+                      <th>Машина</th>
+                      <th className="col-num">CPU</th>
+                      <th className="res-col-chart">CPU за период</th>
+                      <th className="col-num">Память</th>
+                      <th className="res-col-share">Из выделенной</th>
+                      <th className="col-num">Сеть ↓ / ↑</th>
+                      <th className="col-num">Аптайм</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {guests.map((g) => {
+                      const on = g.status === "running";
+                      return (
+                        <tr key={g.id} className={on ? "" : "res-row-off"}>
+                          <td>
+                            <div className="res-app">
+                              <strong>{g.name || g.id}</strong>
+                              <span className="res-app-meta">
+                                <span className={`res-kind${on ? " res-kind-app" : ""}`}>{g.template ? "шаблон" : on ? "работает" : "остановлена"}</span>
+                                <span className="res-port mono">
+                                  {g.type === "lxc" ? "CT" : "VM"} {g.vmid}
+                                </span>
+                                <span className="res-port">{g.cores} vCPU</span>
+                              </span>
+                            </div>
+                          </td>
+                          <td className="col-num mono">{on ? pct(g.cpu) : "—"}</td>
+                          <td className="res-col-chart">
+                            {on ? <TimeChart label={`CPU ${g.name}`} times={times} series={[{ label: "CPU", values: history.map((s) => s.guests[g.id] ?? null) }]} format={pct} height={28} compact /> : null}
+                          </td>
+                          <td className="col-num mono">
+                            {on ? mb(g.mem_used) : "—"}
+                            <small className="muted"> / {mb(g.mem_total)}</small>
+                          </td>
+                          <td className="res-col-share">{on ? <Meter value={g.mem_used} max={g.mem_total} /> : null}</td>
+                          <td className="col-num mono">{on ? `${formatBps(g.net_in_bps)} / ${formatBps(g.net_out_bps)}` : "—"}</td>
+                          <td className="col-num">{on ? formatUptime(g.uptime_sec) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        );
+      })}
     </section>
   );
 }

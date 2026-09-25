@@ -139,6 +139,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-2);
 }
@@ -364,5 +365,165 @@
   .res-table .res-col-chart,
   .res-table .res-col-share {
     display: none;
+  }
+}
+
+/* Tabs: one device per tab */
+
+.res-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.res-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.res-tab:hover {
+  color: var(--text);
+}
+
+.res-tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.res-tab-alert {
+  display: inline-flex;
+  color: var(--status-warning);
+}
+
+/* Mesh nodes */
+
+.res-mesh {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+.res-node {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.res-node-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.res-node-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.res-node-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.res-node-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.res-node-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.res-node-value {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-node-value small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.res-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.res-facts dt {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.res-facts dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.res-ports {
+  display: flex;
+  gap: 4px;
+}
+
+.res-port-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+}
+
+.res-port-dot.is-up {
+  color: var(--text);
+  border-color: var(--status-good);
+  background: color-mix(in srgb, var(--status-good) 14%, transparent);
+}
+
+/* Proxmox */
+
+.res-storage {
+  display: grid;
+  gap: 3px;
+  font-size: 12.5px;
+}
+
+.res-storage + .res-storage {
+  margin-top: 6px;
+}
+
+.res-row-off td {
+  color: var(--text-3);
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+@media (max-width: 760px) {
+  .res-mesh {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
