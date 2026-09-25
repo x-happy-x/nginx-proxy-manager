@@ -64,7 +64,8 @@ export function probeTarget(url: string) {
   }
 }
 
-export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig): LauncherItem[] {
+export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, links: Record<string,{ip_url?:string;domain_url?:string}> = {}, hostname = window.location.hostname): LauncherItem[] {
+  const byIP = hostname.includes(":") || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || !hostname.includes(".");
   const items: LauncherItem[] = [];
   const hosts = doc?.hosts || [];
   for (const app of doc?.apps || []) {
@@ -74,9 +75,9 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig): Lau
     const pub = own.find((h) => h.kind === "public");
     const up = app.upstream;
     const loopback = up.address === "127.0.0.1" || up.address === "localhost";
-    const direct = loopback ? undefined : `${up.scheme}://${up.address}:${up.port}/`;
+    const direct = links[app.id]?.ip_url || (loopback ? undefined : `${up.scheme}://${up.address}:${up.port}/`);
     const localURL = local ? hostURL(local) : undefined;
-    const publicURL = pub ? hostURL(pub) : undefined;
+    const publicURL = links[app.id]?.domain_url || (pub ? hostURL(pub) : undefined);
     items.push({
       key: "app:" + app.id,
       source: "routes",
@@ -85,7 +86,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig): Lau
       device: override.device || deviceFor(up.address, cfg.devices),
       art: override.art,
       hints: [app.id, app.name, ...own.map((h) => h.host)],
-      primary: localURL || direct || publicURL || "#",
+      primary: (byIP ? direct || publicURL : publicURL || direct) || "#",
       local: localURL,
       public: publicURL,
       direct,
@@ -102,7 +103,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig): Lau
       device: cfg.devices.some((d) => d.id === link.device) ? link.device : OTHER_DEVICE,
       art: link.art,
       hints: [link.id, link.title, link.url],
-      primary: link.url,
+      primary: (byIP ? links["link:"+link.id]?.ip_url : links["link:"+link.id]?.domain_url) || link.url,
       probe: probeTarget(link.url),
       hidden: false,
     });

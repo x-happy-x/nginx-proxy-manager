@@ -843,5 +843,18 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 			blocks = append(blocks, fmt.Sprintf("server {\n  %s\n  server_name %s;\n  access_log %s %s;\n  location ^~ /.well-known/acme-challenge/ { root %s; }\n  %s\n}", strings.Join(listenLines(httpPort, ips, ""), "\n  "), host.Host, quote(g.routeAccessLog), format, quote(g.acmeWebroot), body))
 		}
 	}
+	if g.gatewayEnabled && host.AccessIPPort > 0 {
+		for _, ip := range ips {
+			h := host
+			h.AccessIPPort = 0
+			h.Host = net.JoinHostPort(ip, strconv.Itoa(host.AccessIPPort))
+			h.Endpoints = []schema.Endpoint{{Name: "web", Listen: schema.EndpointListen{Protocol: "http", Port: host.AccessIPPort}, Behavior: schema.EndpointBehavior{Redirect: "off"}}}
+			rendered, e := g.buildHostConf(h, app, httpPort, []string{ip}, certs)
+			if e != nil {
+				return "", e
+			}
+			blocks = append(blocks, rendered)
+		}
+	}
 	return strings.Join(blocks, "\n\n") + "\n", nil
 }
