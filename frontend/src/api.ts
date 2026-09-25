@@ -600,7 +600,7 @@ export type Topology = {
   keenetic: { model: string; firmware: string; wan: { id?: string; name?: string; ip?: string; link?: string }; segments: TopoSegment[]; routes: Array<{ dst: string; via: string }> };
   mesh: MeshNode[];
   xkeen: { deny_mac: number; geo_exclude: number; user_exclude: number; ext_exclude: number };
-  mihomo: { error?: string; version?: string; mode?: string; groups?: Array<{ name: string; type: string; now: string; size: number }>; nameservers?: string[] };
+  mihomo: { error?: string; version?: string; mode?: string; groups?: Array<{ name: string; type: string; now: string; leaf: string; size: number }>; nameservers?: string[] };
   mikrotik: MikrotikFull;
   proxmox?: { ip: string; nodes: string[]; guests_running: number; guests: number };
 };

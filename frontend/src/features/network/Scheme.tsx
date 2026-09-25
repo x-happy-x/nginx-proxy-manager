@@ -68,7 +68,9 @@ export function NetworkScheme({ topo, net }: { topo: Topology | null; net: Netwo
                     <li key={g.name}>
                       <span>{g.name}</span>
                       <Icon name="external" size={11} />
-                      <span className={g.now === "DIRECT" ? "net-direct" : ""}>{g.now === "DIRECT" ? "напрямую" : g.now}</span>
+                      <span className={g.leaf === "DIRECT" ? "net-direct" : ""} title={g.now !== g.leaf ? `${g.now} → ${g.leaf}` : g.now}>
+                        {g.leaf === "DIRECT" ? "напрямую" : g.leaf}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -117,7 +119,10 @@ export function NetworkScheme({ topo, net }: { topo: Topology | null; net: Netwo
             Сайты напрямую — то, что пропустил ТСПУ.
           </Stage>
           <Stage icon="external" title="VPN-узлы" tone="info">
-            {main.filter((g) => g.now !== "DIRECT").slice(0, 4).map((g) => g.now).filter((v, i, a) => a.indexOf(v) === i).join(" · ") || "—"}
+            {main
+              .map((g) => g.leaf)
+              .filter((v, i, a) => v !== "DIRECT" && v !== "REJECT" && a.indexOf(v) === i)
+              .join(" · ") || "—"}
             <br />
             <span className="muted">дальше сайт открывается уже из другой страны</span>
           </Stage>

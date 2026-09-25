@@ -863,3 +863,9 @@
     height: 12px;
   }
 }
+
+.net-check .net-tag,
+.net-verdict-main .net-tag,
+.res-kpi-sub .net-tag {
+  justify-self: start;
+}

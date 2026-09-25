@@ -42,6 +42,7 @@ type topoGroup struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Now  string `json:"now"`
+	Leaf string `json:"leaf"` // the node at the end of the now -> now chain
 	Size int    `json:"size"`
 }
 
@@ -244,7 +245,15 @@ func (a *app) handleTopology(w http.ResponseWriter) {
 				if p.All == nil || name == "GLOBAL" {
 					continue
 				}
-				groups = append(groups, topoGroup{Name: name, Type: p.Type, Now: p.Now, Size: len(p.All)})
+				leaf := p.Now
+				for hops := 0; hops < 8; hops++ {
+					next, ok := proxies.Proxies[leaf]
+					if !ok || next.All == nil || next.Now == "" {
+						break
+					}
+					leaf = next.Now
+				}
+				groups = append(groups, topoGroup{Name: name, Type: p.Type, Now: p.Now, Leaf: leaf, Size: len(p.All)})
 			}
 		}
 		sort.Slice(groups, func(i, j int) bool { return groups[i].Name < groups[j].Name })
