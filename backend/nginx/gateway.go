@@ -13,6 +13,7 @@ func gatewayLocations(host string, externalHTTPS bool) string {
     proxy_set_header X-Gate-URI $request_uri;
     proxy_set_header Cookie $http_cookie;
     proxy_set_header Origin $http_origin;
+    proxy_set_header Authorization $http_authorization;
     proxy_set_header Host %s;
     proxy_connect_timeout 2s;
     proxy_read_timeout 12s;

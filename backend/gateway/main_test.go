@@ -13,6 +13,51 @@ import (
 	"time"
 )
 
+func TestMobileBasicScopeAndRole(t *testing.T) {
+	status, role, calls := 200, "admin", 0
+	a := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/api/gateway/basic" || r.Header.Get("X-Gateway-Token") != "test-secret" {
+			t.Error("wrong endpoint or credential")
+		}
+		var b map[string]string
+		json.NewDecoder(r.Body).Decode(&b)
+		if b["login"] != "mobile" || b["password"] != "correct" || b["app"] != "lms_node" {
+			t.Error("lost Basic credentials")
+		}
+		w.WriteHeader(status)
+		if status == 200 {
+			json.NewEncoder(w).Encode(map[string]string{"login": "mobile", "role": role})
+		}
+	}))
+	defer a.Close()
+	g := newGateway(configuration{Secret: "test-secret", AccountAPI: a.URL})
+	check := func(scheme string) int {
+		r := httptest.NewRequest("GET", "http://gateway/_gate/check", nil)
+		r.Header.Set("X-Gate-URI", "/api/ui/jobs?active=true")
+		r.SetBasicAuth("mobile", "correct")
+		w := httptest.NewRecorder()
+		g.check(w, r, "lms.test", scheme, hostPolicy{App: "lms_node", MinRole: "admin"})
+		return w.Code
+	}
+	if check("http") != 401 || calls != 0 {
+		t.Fatal("credentials sent over cleartext client route")
+	}
+	if check("https") != 204 {
+		t.Fatal("valid mobile credentials rejected")
+	}
+	role = "viewer"
+	if check("https") != 403 {
+		t.Fatal("non-admin accepted")
+	}
+	for _, pair := range [][2]int{{401, 401}, {403, 403}, {429, 403}, {503, 503}} {
+		status = pair[0]
+		if check("https") != pair[1] {
+			t.Fatalf("bad status mapping %d", status)
+		}
+	}
+}
+
 func TestRouterChallengeAndSessionVerification(t *testing.T) {
 	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/auth" {

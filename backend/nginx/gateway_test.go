@@ -44,3 +44,27 @@ func TestGatewayProtectsRoutesAndWebSockets(t *testing.T) {
 		}
 	}
 }
+
+func TestLMSAPIKeepsAuthWithoutBrowserRedirect(t *testing.T) {
+	r := testRoutes()
+	r.Globals.AccessGateway = true
+	r.Hosts[0].AccessApp = "lms_node"
+	files, err := testGenerator(t).render(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var site string
+	for p, b := range files {
+		if strings.HasSuffix(p, r.Hosts[0].Host+".conf") {
+			site = b
+		}
+	}
+	for _, want := range []string{"location ^~ /api/ui/ {", "error_page 401 = @lms_api_401;", "return 401 '{\"error\":", "proxy_set_header Authorization $http_authorization;", "proxy_set_header Authorization \"\";"} {
+		if !strings.Contains(site, want) {
+			t.Fatal("missing " + want)
+		}
+	}
+	if strings.Count(site, "auth_request /_gate/check;") != 4 {
+		t.Fatal("local and external API must stay protected")
+	}
+}
