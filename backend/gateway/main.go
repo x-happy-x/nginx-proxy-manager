@@ -224,6 +224,26 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		http.Error(w, "No protected application", 403)
 		return
 	}
+	uri, _ := url.ParseRequestURI(r.Header.Get("X-Gate-URI"))
+	if p.App == "lms_node" && uri != nil && strings.HasPrefix(uri.Path, "/api/ui/") && r.Header.Get("Authorization") != "" {
+		login, password, valid := r.BasicAuth()
+		if scheme != "https" || !valid || login == "" || password == "" || len(login) > 128 || len(password) > 1024 {
+			http.Error(w, "HTTPS and Account credentials required", 401)
+			return
+		}
+		var identity struct{ Login, Role string }
+		code := g.account("basic", map[string]string{"login": login, "password": password, "app": p.App, "ip": r.Header.Get("X-Gate-IP")}, &identity)
+		if code == 200 && (p.MinRole != "admin" || identity.Role == "admin") {
+			w.WriteHeader(204)
+		} else if code == 401 {
+			http.Error(w, "Invalid Account credentials", 401)
+		} else if code == 200 || code == 403 || code == 429 {
+			http.Error(w, "Access denied", 403)
+		} else {
+			http.Error(w, "Account unavailable", 503)
+		}
+		return
+	}
 	outage := g.down()
 	key := readCookie(r, "homenet_gate", scheme)
 	g.mu.Lock()

@@ -736,7 +736,12 @@ func proxyBlock(g *generator, app schema.App, host schema.Host, path string, ext
 	}
 	lines := []string{fmt.Sprintf("location %s {", path), fmt.Sprintf("  proxy_pass %s://%s;", scheme, net.JoinHostPort(app.Upstream.Address, strconv.Itoa(app.Upstream.Port))), "  include " + quote(g.proxySnippet) + ";", "  proxy_set_header Host " + hostHeader + ";", "  proxy_set_header X-Forwarded-Proto " + forwardedProto + ";"}
 	if g.gatewayEnabled && host.AccessApp != "" {
-		lines = append(lines, "  auth_request /_gate/check;", "  error_page 401 = /_gate/login;", "  proxy_set_header X-Auth-User \"\";", "  proxy_set_header X-Auth-Role \"\";")
+		lines = append(lines, "  auth_request /_gate/check;", "  proxy_set_header X-Auth-User \"\";", "  proxy_set_header X-Auth-Role \"\";")
+		if host.AccessApp == "lms_node" && path == "^~ /api/ui/" {
+			lines = append(lines, "  error_page 401 = @lms_api_401;", "  error_page 403 = @lms_api_403;", "  error_page 500 = @lms_api_503;", "  proxy_set_header Authorization \"\";")
+		} else {
+			lines = append(lines, "  error_page 401 = /_gate/login;")
+		}
 	}
 	if scheme == "https" {
 		lines = append(lines, "  proxy_ssl_server_name on;")
@@ -793,6 +798,13 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 		pb := g.unavailableDirectives(host.Host, external) + "\n  " + proxyBlock(g, app, host, "/", external, publicHTTPS)
 		if g.gatewayEnabled {
 			pb += "\n" + gatewayLocations(host.Host, external && publicHTTPS)
+			if host.AccessApp == "lms_node" {
+				pb += "\n" + proxyBlock(g, app, host, "^~ /api/ui/", external, publicHTTPS)
+				for _, code := range []int{401, 403, 503} {
+					message := map[int]string{401: "Account login and password required", 403: "Account access denied or too many login attempts", 503: "Account unavailable"}[code]
+					pb += fmt.Sprintf("\nlocation @lms_api_%d {\n  default_type application/json;\n  add_header Cache-Control no-store always;\n  return %d '{\"error\":\"%s\"}';\n}\n", code, code, message)
+				}
+			}
 			for _, path := range host.AccessPassthrough {
 				bypass := host
 				bypass.AccessApp = ""

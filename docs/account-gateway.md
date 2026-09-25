@@ -22,6 +22,15 @@ subscription links, Home Assistant API tokens and Proxmox API tickets.
 No blanket Authorization-header bypass exists. Direct LAN backend addresses and
 the management port remain available; this feature does not change firewalls.
 
+LMS Android can use its existing HTTP Basic username/password fields with
+Account credentials at `https://lms.crubs.crazedns.ru`. For `/api/ui/` only,
+the gateway validates credentials and the LMS admin role through Account on
+every request. Passwords are not cached or passed to the LMS backend. Basic
+login over HTTP is rejected. Missing/invalid credentials return JSON 401,
+denied access returns 403, and Account failure returns 503 instead of browser
+redirects. Existing browser cookies still work. Password failures are rate
+limited by Account. Emergency router login remains a browser flow.
+
 When the dedicated authenticated Account health endpoint is unreachable or
 returns 502/503/504, login redirects to the HTTPS `emergency_url`. The fixed
 router user `admin` is authenticated through the firmware's challenge-response
