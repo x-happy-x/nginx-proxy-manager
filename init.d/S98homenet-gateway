@@ -1,0 +1,17 @@
+#!/opt/bin/sh
+PID=/opt/var/run/homenet-gateway.pid
+BIN=/opt/etc/homenet/nginx/bin/linux-arm64/gateway
+case "$1" in
+ start)
+   if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; then exit 0; fi
+   umask 077
+   mkdir -p /opt/var/run /opt/var/log
+   nohup "$BIN" -config /opt/etc/homenet/gateway.json >>/opt/var/log/homenet-gateway.log 2>&1 &
+   echo $! > "$PID"
+   ;;
+ stop)
+   if [ -f "$PID" ]; then kill "$(cat "$PID")" 2>/dev/null; rm -f "$PID"; fi
+   ;;
+ restart) "$0" stop; sleep 1; "$0" start ;;
+ *) echo "Usage: $0 start|stop|restart"; exit 1 ;;
+esac

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"time"
 )
 
@@ -16,6 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 	loadRuntimeEnv(baseDir)
+	debug.SetMemoryLimit(int64(atoiDefault(getenv("MANAGER_MEMORY_MB", "64"), 64)) << 20)
 	nginxConfRoot := getenv("NGINX_CONF_ROOT", "/etc/nginx")
 	routePath := getenv("ROUTES_PATH", "/opt/etc/homenet/nginx/routes.v2.1.yml")
 	a := &app{
@@ -32,7 +34,11 @@ func main() {
 		genRoutesPath:    getenv("GEN_ROUTES_PATH", filepath.Join(baseDir, "bin", runtime.GOOS+"-"+runtime.GOARCH, "nginx")),
 		activeRoutesPath: routePath,
 	}
+	a.startTelemetry()
+	a.startResources()
+	a.startNetwork()
 
+	a.startMaintenance()
 	host, port := a.readUIBind()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", a.handle)

@@ -9,6 +9,8 @@ INIT_UI_SRC="$TARGET_DIR/init.d/S99nginx-manager-lite"
 INIT_UI_DST="/opt/etc/init.d/S99nginx-manager-lite"
 INIT_IPS_SRC="$TARGET_DIR/init.d/S20-nginx-ips"
 INIT_IPS_DST="/opt/etc/init.d/S20-nginx-ips"
+INIT_NGINX_SRC="$TARGET_DIR/init.d/S98nginx-local-conf"
+INIT_NGINX_DST="/opt/etc/init.d/S98nginx-local-conf"
 HOMENET_SRC="$TARGET_DIR/bin/linux-arm64/homenet"
 HOMENET_DST="$BIN_DIR/homenet"
 ENV_DST="$TARGET_DIR/config/runtime.env"
@@ -18,6 +20,7 @@ migrate_runtime_env_paths() {
   target="$1"
   [ -f "$target" ] || return 0
   sed -i "s#/opt/etc/homenet-nginx#/opt/etc/homenet/nginx#g" "$target"
+  sed -i 's#^NGINX_RELOAD_CMD=.*#NGINX_RELOAD_CMD="/opt/etc/init.d/S98nginx-local-conf restart"#' "$target"
 }
 
 cleanup() {
@@ -58,6 +61,14 @@ migrate_runtime_env_paths "$ENV_DST"
 if [ -x "$HOMENET_SRC" ] && [ -d "$BIN_DIR" ]; then
   cp -f "$HOMENET_SRC" "$HOMENET_DST"
   chmod 755 "$HOMENET_DST"
+fi
+
+if [ -f "$INIT_NGINX_SRC" ]; then
+  cp -f "$INIT_NGINX_SRC" "$INIT_NGINX_DST"
+  chmod 755 "$INIT_NGINX_DST"
+  if [ -x "$INIT_NGINX_DST" ]; then
+    "$INIT_NGINX_DST" restart || true
+  fi
 fi
 
 if [ -f "$INIT_IPS_SRC" ]; then

@@ -1,4 +1,4 @@
-schema_version: 2.1
+schema_version: '2.1'
 globals:
   ssl_mode: local-ca
   listen_ips:
@@ -24,47 +24,149 @@ apps:
     address: 192.168.99.12
     port: 8123
     scheme: http
-- id: dns
-  name: Nginx Manager
-  upstream:
-    address: 192.168.1.1
-    port: 63412
-    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: plane
   name: Plane
   upstream:
     address: 192.168.99.15
     port: 443
     scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: proxmox-s1-dashboard
   name: Dashboard Proxmox [s1]
   upstream:
     address: 192.168.99.10
     port: 8006
     scheme: https
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: proxmox-s2-dashboard
   name: Dashboard Proxmox [s2]
   upstream:
     address: 192.168.99.20
     port: 8006
     scheme: https
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: zashboard
   name: Dashboard Mihomo
   upstream:
     address: 192.168.1.1
     port: 9090
     scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: xkeen-ui
   name: Dashboard XKeen
   upstream:
     address: 192.168.1.1
     port: 8088
     scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
 - id: vless-proxy
   name: Vless Proxy
   upstream:
     address: 192.168.99.18
     port: 25500
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: home
+  name: Home
+  upstream:
+    address: 192.168.99.13
+    port: 8080
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: lms-client
+  name: LMS
+  upstream:
+    address: 127.0.0.1
+    port: 18080
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: netping
+  name: Netping
+  upstream:
+    address: 127.0.0.1
+    port: 18081
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: homenet
+  name: HomeNet
+  upstream:
+    address: 192.168.1.1
+    port: 63412
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: bigfam
+  name: BigFam
+  upstream:
+    address: 192.168.99.20
+    port: 4173
+    scheme: http
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+- id: sublab
+  name: Sublab
+  upstream:
+    address: 192.168.99.20
+    port: 4192
+    scheme: http
+- id: account
+  name: Account · вход в сервисы
+  upstream:
+    address: 192.168.99.20
+    port: 4161
+    scheme: http
+- id: xkeen-net
+  name: XKeen Net · профиль Mihomo
+  upstream:
+    address: 192.168.1.1
+    port: 9109
     scheme: http
 hosts:
 - host: ha.crubs.store
@@ -91,30 +193,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
-- host: dns.local
-  kind: private
-  app_id: dns
-  verify_upstream_ssl: false
-  ws_proxy:
-    enabled: false
-    path: /connections
-    rewrite_to_wss: false
-    rewrite_from: ''
-  dns:
-    publish:
-    - local
-    local_record_ip: auto
-  tls:
-    cert_policy: auto_local_ca
-    cert_ref: auto
-    san: []
-  endpoints:
-  - name: web
-    listen:
-      protocol: https
-      port: 443
-    behavior:
-      redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: plane.crub.store
   kind: public
   app_id: plane
@@ -139,6 +223,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: proxmox.dashboard.local
   kind: private
   app_id: proxmox-s1-dashboard
@@ -163,6 +253,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: s1.proxmox.dashboard.local
   kind: private
   app_id: proxmox-s1-dashboard
@@ -187,6 +283,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: s2.proxmox.dashboard.local
   kind: private
   app_id: proxmox-s2-dashboard
@@ -211,6 +313,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: zashboard.local
   kind: private
   app_id: zashboard
@@ -235,6 +343,12 @@ hosts:
       port: 80
     behavior:
       redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: xkeen.local
   kind: private
   app_id: xkeen-ui
@@ -259,6 +373,12 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
 - host: vless.sub.local
   kind: private
   app_id: vless-proxy
@@ -283,4 +403,243 @@ hosts:
       port: 443
     behavior:
       redirect: https
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: home.local
+  kind: private
+  app_id: home
+  verify_upstream_ssl: false
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: lms.local
+  kind: private
+  app_id: lms-client
+  verify_upstream_ssl: false
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: netping.local
+  kind: private
+  app_id: netping
+  verify_upstream_ssl: false
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: homenet.local
+  kind: private
+  app_id: homenet
+  verify_upstream_ssl: false
+  ws_proxy:
+    enabled: false
+    path: ''
+    rewrite_to_wss: false
+    rewrite_from: ''
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: bigfam.local
+  kind: private
+  app_id: bigfam
+  verify_upstream_ssl: false
+  ws_proxy:
+    enabled: false
+    path: /connections
+    rewrite_to_wss: false
+    rewrite_from: ''
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: none
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+      ndns_profile: ''
+      ndns_name: ''
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: auto
+- host: sub.local
+  kind: private
+  app_id: sublab
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+- host: sub.crubs.crazedns.ru
+  kind: public
+  app_id: sublab
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: keenetic
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: https
+      port: 443
+    behavior:
+      redirect: https
+  - name: ndns
+    listen:
+      protocol: http
+      port: 24192
+    behavior:
+      ndns_profile: ndns_proxy
+      ndns_name: sub
+      ndns_domain: ndns
+      ndns_security_level: public
+      ndns_ssl_redirect: true
+      ndns_target_ip: 192.168.1.2
+- host: account.local
+  kind: private
+  app_id: account
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
+- host: xkeen-net.local
+  kind: private
+  app_id: xkeen-net
+  dns:
+    publish:
+    - local
+    local_record_ip: 192.168.1.2
+  tls:
+    cert_policy: 'off'
+    cert_ref: auto
+    san: []
+  endpoints:
+  - name: web
+    listen:
+      protocol: http
+      port: 80
+    behavior:
+      redirect: 'off'
 certs: []

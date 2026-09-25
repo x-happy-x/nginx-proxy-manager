@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,16 +69,49 @@ func (a *app) backupRoutesFile() (bool, string, string) {
 }
 
 func (a *app) applyRoutes() (bool, string) {
+	routes, err := schema.LoadRoutes(a.routesPath())
+	if err != nil {
+		return false, err.Error()
+	}
+	if err := schema.ResolveAutoPorts(&routes); err != nil {
+		return false, err.Error()
+	}
+	if err := schema.SaveRoutes(a.routesPath(), routes); err != nil {
+		return false, err.Error()
+	}
 	out, err := runCommand(a.genRoutesPath, "--config", a.routesPath())
 	return err == nil, out
 }
 
-func (a *app) syncLocalDNS(routes schema.Routes) (bool, string) {
-	apps := map[string]schema.App{}
-	for _, item := range routes.Apps {
-		if item.ID != "" {
-			apps[item.ID] = item
+type localDNSRecords map[string]map[string]bool
+type localDNSChange struct{ host, address string }
+
+func (a *app) readLocalDNSRecords() (localDNSRecords, error) {
+	ok, raw := a.runNDMC("show running-config")
+	if !ok {
+		return nil, fmt.Errorf("read local DNS records: %s", raw)
+	}
+	records := localDNSRecords{}
+	for _, line := range strings.Split(raw, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 3 || parts[0] != "ip" || parts[1] != "host" {
+			continue
 		}
+		if len(parts) != 4 || !validRouterHost(parts[2]) || !validRouterIP(parts[3]) {
+			return nil, fmt.Errorf("cannot safely parse an existing local DNS record")
+		}
+		name := strings.ToLower(parts[2])
+		if records[name] == nil {
+			records[name] = map[string]bool{}
+		}
+		records[name][net.ParseIP(parts[3]).String()] = true
+	}
+	return records, nil
+}
+
+func (a *app) planLocalDNS(routes schema.Routes) ([]localDNSChange, error) {
+	if err := schema.ValidateRoutes(routes); err != nil {
+		return nil, err
 	}
 	listenIPs := routes.Globals.ListenIPs
 	if len(listenIPs) == 0 {
@@ -87,36 +121,115 @@ func (a *app) syncLocalDNS(routes schema.Routes) (bool, string) {
 	if len(listenIPs) > 0 {
 		dnsIP = listenIPs[0]
 	}
-	errorsOut := []string{}
+	existing, err := a.readLocalDNSRecords()
+	if err != nil {
+		return nil, err
+	}
+	planned := []localDNSChange{}
+	wanted := map[string]string{}
+	// Preflight the entire batch before making any change. Keenetic's `ip
+	// host` can append addresses; it is not a replace operation.
 	for _, item := range routes.Hosts {
 		publish := item.DNS.Publish
 		if !hasString(publish, "local") {
-			continue
-		}
-		appItem, ok := apps[item.AppID]
-		if !ok && dnsIP == "" {
 			continue
 		}
 		targetIP := item.DNS.LocalRecordIP
 		if targetIP == "" || targetIP == "auto" {
 			targetIP = dnsIP
 		}
-		if targetIP == "" {
-			targetIP = appItem.Upstream.Address
+		if !validRouterHost(item.Host) || !validRouterIP(targetIP) {
+			return nil, fmt.Errorf("DNS requires a valid proxy listener IP for %s", item.Host)
 		}
-		if strings.TrimSpace(item.Host) == "" || strings.TrimSpace(targetIP) == "" {
+		ip := net.ParseIP(targetIP)
+		if ip.IsUnspecified() || ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+			return nil, fmt.Errorf("DNS requires a unicast proxy listener IP for %s", item.Host)
+		}
+		targetIP = ip.String()
+		name := strings.ToLower(item.Host)
+		if prior, found := wanted[name]; found && prior != targetIP {
+			return nil, fmt.Errorf("Conflicting local DNS targets for %s; no records changed", name)
+		} else if found {
 			continue
 		}
-		_, _ = a.deleteIPHost(item.Host, targetIP)
-		okAdd, out := a.runNDMC("ip host " + item.Host + " " + targetIP)
-		if !okAdd {
-			errorsOut = append(errorsOut, item.Host+": "+strings.TrimSpace(out))
+		wanted[name] = targetIP
+		if len(existing[name]) > 0 {
+			if len(existing[name]) != 1 || !existing[name][targetIP] {
+				return nil, fmt.Errorf("Local DNS already maps %s elsewhere; no records changed", name)
+			}
+			continue
+		}
+		planned = append(planned, localDNSChange{name, targetIP})
+	}
+	return planned, nil
+}
+
+func (a *app) previewLocalDNS(routes schema.Routes) (bool, string) {
+	planned, err := a.planLocalDNS(routes)
+	if err != nil {
+		return false, err.Error()
+	}
+	return true, fmt.Sprintf("local DNS: %d missing records to add; existing records preserved", len(planned))
+}
+
+func (a *app) syncLocalDNS(routes schema.Routes) (bool, string) {
+	planned, err := a.planLocalDNS(routes)
+	if err != nil {
+		return false, err.Error()
+	}
+	changed := []localDNSChange{}
+	rollback := func() string {
+		if len(changed) == 0 {
+			return "no DNS records were changed"
+		}
+		errorsOut := []string{}
+		for i := len(changed) - 1; i >= 0; i-- {
+			c := changed[i]
+			if ok, out := a.runNDMC("no ip host " + c.host + " " + c.address); !ok {
+				errorsOut = append(errorsOut, out)
+			}
+		}
+		if ok, out := a.runNDMC("system configuration save"); !ok {
+			errorsOut = append(errorsOut, "save rollback: "+out)
+		}
+		current, err := a.readLocalDNSRecords()
+		if err != nil {
+			errorsOut = append(errorsOut, err.Error())
+		} else {
+			for _, c := range changed {
+				if current[c.host][c.address] {
+					errorsOut = append(errorsOut, "rollback verification failed for "+c.host)
+				}
+			}
+		}
+		if len(errorsOut) > 0 {
+			return "DNS ROLLBACK FAILED: " + strings.Join(errorsOut, "; ")
+		}
+		return "new DNS records removed and rollback saved"
+	}
+	for _, c := range planned {
+		// Include uncertain/failed attempts: a timeout can happen after the
+		// router accepted a command, and this exact pair was absent before.
+		changed = append(changed, c)
+		if ok, out := a.runNDMC("ip host " + c.host + " " + c.address); !ok {
+			return false, c.host + ": " + strings.TrimSpace(out) + "\n" + rollback()
 		}
 	}
-	if len(errorsOut) > 0 {
-		return false, strings.Join(errorsOut, "\n")
+	if len(changed) > 0 {
+		current, err := a.readLocalDNSRecords()
+		if err != nil {
+			return false, err.Error() + "\n" + rollback()
+		}
+		for _, c := range changed {
+			if len(current[c.host]) != 1 || !current[c.host][c.address] {
+				return false, "DNS verification failed for " + c.host + "\n" + rollback()
+			}
+		}
+		if ok, out := a.runNDMC("system configuration save"); !ok {
+			return false, out + "\n" + rollback()
+		}
 	}
-	return true, "local DNS synced"
+	return true, fmt.Sprintf("local DNS: %d records updated", len(changed))
 }
 
 func hasString(items []string, want string) bool {

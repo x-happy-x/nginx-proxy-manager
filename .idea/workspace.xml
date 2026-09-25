@@ -4,18 +4,25 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="fixs and add ndns">
+    <list default="true" id="a8be3d2b-2db5-4a92-8976-33d99cd507ba" name="Changes" comment="Add schema v2.1 examples and update nginx manager for compatibility">
+      <change beforePath="$PROJECT_DIR$/.idea/nginx-proxy-manager.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/nginx-proxy-manager.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gen_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/gen_routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/homenet" beforeDir="false" afterPath="$PROJECT_DIR$/homenet" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" beforeDir="false" afterPath="$PROJECT_DIR$/init.d/S99nginx-manager-lite" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/static/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/static/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/main.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/actions.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/core.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/core.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lite-ui/static/ui/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/lite-ui/static/ui/main.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/internal/schema/routes.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/internal/schema/routes.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/linux-arm64/homenet" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux-arm64/homenet" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/linux-arm64/manager" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux-arm64/manager" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/linux-arm64/nginx" beforeDir="false" afterPath="$PROJECT_DIR$/bin/linux-arm64/nginx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/tabs/OverviewTab/OverviewTab.scss" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/tabs/OverviewTab/OverviewTab.scss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/tabs/OverviewTab/OverviewTab.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/tabs/OverviewTab/OverviewTab.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/tabs/ServersTab/ServersTab.scss" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/tabs/ServersTab/ServersTab.scss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/tabs/ServersTab/ServersTab.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/tabs/ServersTab/ServersTab.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/entities/app/ui/AppCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/entities/app/ui/AppCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/entities/host/ui/HostCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/entities/host/ui/HostCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/i18n.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/i18n.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/static/react/assets/index-BVhQW_E5.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/static/react/assets/index-DDn_KU5x.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/static/react/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/static/react/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/tsconfig.tsbuildinfo" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/tsconfig.tsbuildinfo" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/routes.yml" beforeDir="false" afterPath="$PROJECT_DIR$/routes.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -30,7 +37,7 @@
     </option>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="56" />
+    <option name="cachedIndexableFilesCount" value="172" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="Git.Settings">
@@ -60,32 +67,37 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;//wsl.localhost/dev/home/amagomedsharipov/projects/python/nginx-proxy-manager&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "master",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "//wsl.localhost/dev/home/amagomedsharipov/projects/python/nginx-proxy-manager",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true",
+    "ts.external.directory.path": "\\\\wsl.localhost\\dev\\home\\amagomedsharipov\\projects\\python\\nginx-proxy-manager\\frontend\\node_modules\\typescript\\lib",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecapSpentCounter">
     <option name="endsOfQuotaMs" value="1771578022253" />
     <option name="spentUsd" value="0.064247" />
   </component>
   <component name="RecapUselessUpdatesCounter">
-    <option name="suspendCountdown" value="1" />
+    <option name="suspendCountdown" value="0" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -100,8 +112,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-8fceda3e36b7-JavaScript-PY-261.17801.91" />
-        <option value="bundled-python-sdk-3e3b96e59018-5839b77c6036-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.17801.91" />
+        <option value="bundled-js-predefined-d6986cc7102b-3bd3a6803838-JavaScript-PY-261.22158.340" />
+        <option value="bundled-python-sdk-b63d5a1f7c97-b61e75351b1f-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.22158.340" />
       </set>
     </attachedChunks>
   </component>
@@ -114,7 +126,11 @@
       <updated>1770493113257</updated>
       <workItem from="1770493114322" duration="2631000" />
       <workItem from="1770497777256" duration="7000" />
-      <workItem from="1771051427367" duration="19373000" />
+      <workItem from="1771051427367" duration="52399000" />
+      <workItem from="1772669457603" duration="629000" />
+      <workItem from="1773075488108" duration="2038000" />
+      <workItem from="1773176708297" duration="1034000" />
+      <workItem from="1776025787301" duration="2853000" />
     </task>
     <task id="LOCAL-00001" summary="initial commit">
       <option name="closed" value="true" />
@@ -132,11 +148,31 @@
       <option name="project" value="LOCAL" />
       <updated>1771062957266</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Add schema v2.1 examples and update nginx manager for compatibility">
+      <option name="closed" value="true" />
+      <created>1771071739457</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1771071739457</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+    <option name="exactExcludedFiles">
+      <list>
+        <option value="$PROJECT_DIR$/frontend/vite.config.d.ts" />
+        <option value="$PROJECT_DIR$/frontend/vite.config.js" />
+      </list>
+    </option>
+    <option name="additionalRoots">
+      <list>
+        <option value="$PROJECT_DIR$/../ui-kit/src/index.ts" />
+        <option value="$PROJECT_DIR$/../ui-kit/src" />
+      </list>
+    </option>
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
@@ -152,6 +188,10 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initial commit" />
     <MESSAGE value="fixs and add ndns" />
-    <option name="LAST_COMMIT_MESSAGE" value="fixs and add ndns" />
+    <MESSAGE value="Refactor `gen_routes.py` to enhance modularity and improve certificate handling. Update `S99nginx-manager-lite` to accommodate changes in YAML structure." />
+    <MESSAGE value="Add Routes Schema v2.1 and implement NDNS functionality" />
+    <MESSAGE value="New schema " />
+    <MESSAGE value="Add schema v2.1 examples and update nginx manager for compatibility" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add schema v2.1 examples and update nginx manager for compatibility" />
   </component>
 </project>

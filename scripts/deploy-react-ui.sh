@@ -24,6 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-${SCRIPT_DIR}/deploy-react-ui.env}"
+SKIP_INSTALL_OVERRIDE="${SKIP_INSTALL:-}"
 
 if [[ -f "${DEPLOY_ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -46,6 +47,9 @@ START_CMD="${START_CMD:-/opt/bin/homenet start}"
 UPLOAD_APP_ICONS="${UPLOAD_APP_ICONS:-1}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 ROUTER_PASSWORD="${ROUTER_PASSWORD:-}"
+if [[ -n "${SKIP_INSTALL_OVERRIDE}" ]]; then
+  SKIP_INSTALL="${SKIP_INSTALL_OVERRIDE}"
+fi
 
 if [[ -z "${ROUTER_HOST}" ]]; then
   echo "ERROR: ROUTER_HOST is required"
@@ -186,6 +190,7 @@ cd "${REPO_ROOT}"
 
 tar -cf - \
   bin/linux-arm64 \
+  init.d/S98nginx-local-conf \
   init.d/S20-nginx-ips \
   init.d/S99nginx-manager-lite \
   frontend/static/react \
@@ -200,11 +205,13 @@ run_ssh "if [ ! -f '${REMOTE_DIR}/routes.yml' ]; then cp '${REMOTE_DIR}/.deploy-
 run_ssh "if [ ! -f '${REMOTE_DIR}/config/runtime.env' ]; then cp '${REMOTE_DIR}/.deploy-tmp/config/runtime.env' '${REMOTE_DIR}/config/runtime.env'; fi"
 run_ssh "if [ -f '${REMOTE_DIR}/config/runtime.env' ]; then \
   sed -i 's#/opt/etc/homenet-nginx#/opt/etc/homenet/nginx#g' '${REMOTE_DIR}/config/runtime.env'; \
+  sed -i 's#^NGINX_RELOAD_CMD=.*#NGINX_RELOAD_CMD=\"/opt/etc/init.d/S98nginx-local-conf restart\"#' '${REMOTE_DIR}/config/runtime.env'; \
 fi"
 run_ssh "rm -rf '${REMOTE_DIR}/.deploy-tmp'"
 
 echo "[7/7] Verify remote runtime and restart"
 run_ssh "chmod +x \
+  '${REMOTE_DIR}/init.d/S98nginx-local-conf' \
   '${REMOTE_DIR}/init.d/S20-nginx-ips' \
   '${REMOTE_DIR}/init.d/S99nginx-manager-lite' \
   '${REMOTE_DIR}/bin/linux-arm64/manager' \
@@ -215,6 +222,8 @@ run_ssh "if [ -d '${BIN_DIR}' ]; then \
   chmod 755 '${BIN_DIR}/homenet'; \
 fi"
 run_ssh "if [ -d /opt/etc/init.d ]; then \
+  cp -f '${REMOTE_DIR}/init.d/S98nginx-local-conf' /opt/etc/init.d/S98nginx-local-conf; \
+  chmod 755 /opt/etc/init.d/S98nginx-local-conf; \
   cp -f '${REMOTE_DIR}/init.d/S20-nginx-ips' /opt/etc/init.d/S20-nginx-ips; \
   chmod 755 /opt/etc/init.d/S20-nginx-ips; \
   cp -f '${REMOTE_DIR}/init.d/S99nginx-manager-lite' /opt/etc/init.d/S99nginx-manager-lite; \
@@ -222,6 +231,7 @@ run_ssh "if [ -d /opt/etc/init.d ]; then \
 fi"
 run_ssh "ls -la \
   '${BIN_DIR}/homenet' \
+  '${REMOTE_DIR}/init.d/S98nginx-local-conf' \
   '${REMOTE_DIR}/frontend/static/react/index.html' \
   '${REMOTE_DIR}/frontend/static/icons/menu.svg' \
   '${REMOTE_DIR}/bin/linux-arm64/manager' \
@@ -230,6 +240,7 @@ run_ssh "ls -la \
 
 if [[ "${RESTART_UI}" == "1" ]]; then
   echo "Restart UI service"
+  run_ssh "if [ -x /opt/etc/init.d/S98nginx-local-conf ]; then /opt/etc/init.d/S98nginx-local-conf restart || true; fi"
   if [[ "${STOP_BEFORE_UPLOAD}" == "1" ]]; then
     run_ssh "${START_CMD}"
   else

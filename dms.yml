@@ -1,0 +1,70 @@
+version: "1"
+app: homenet
+
+target:
+  host: 192.168.1.1
+  user: root
+  port: 222
+  password_env: DMS_ROUTER_PASSWORD
+  remote_bin: /opt/bin/dms-service
+  root: /opt/dms
+
+build:
+  - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/manager ./manager
+  - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/nginx ./nginx
+  - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/homenet ./ctl
+  - npm install --prefix frontend
+  - npm run build --prefix frontend
+
+artifacts:
+  - source: bin/linux-arm64
+    destination: /opt/etc/homenet/nginx/bin/linux-arm64
+    mode: 0755
+  - source: frontend/static/react
+    destination: /opt/etc/homenet/nginx/frontend/static/react
+    mode: 0755
+  - source: init.d/S99nginx-manager-lite
+    destination: /opt/etc/homenet/nginx/init.d/S99nginx-manager-lite
+    mode: 0755
+
+service:
+  init_source: /opt/etc/homenet/nginx/init.d/S99nginx-manager-lite
+  init_name: S99nginx-manager-lite
+  action: restart
+
+healthcheck:
+  url: http://192.168.1.1:63412/api/routes
+  attempts: 15
+  interval: 1s
+
+nginx:
+  routes_path: /opt/etc/homenet/nginx/routes.yml
+  apply_command: /opt/bin/homenet apply
+  remove_apps: [dns]
+  remove_hosts: [dns.local]
+  apps:
+    - id: homenet
+      name: HomeNet
+      upstream:
+        address: 192.168.1.1
+        port: 63412
+        scheme: http
+  hosts:
+    - host: homenet.local
+      kind: private
+      app_id: homenet
+      verify_upstream_ssl: false
+      dns:
+        publish: [local]
+        local_record_ip: 192.168.1.2
+      tls:
+        cert_policy: off
+        cert_ref: none
+        san: []
+      endpoints:
+        - name: web
+          listen:
+            protocol: http
+            port: 80
+          behavior:
+            redirect: off

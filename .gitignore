@@ -1,0 +1,13 @@
+.local/
+.preview/
+.runtime/
+__pycache__/
+*.next
+node_modules/
+frontend/tsconfig.tsbuildinfo
+*.log
+bin/windows-amd64/
+backups/
+
+# Launcher settings are runtime state of the manager.
+launcher.json

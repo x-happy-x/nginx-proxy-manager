@@ -33,17 +33,19 @@ HOST="0.0.0.0"
 PORT="8080"
 PID_FILE="/opt/var/run/nginx-manager-lite.pid"
 LOG_FILE="/opt/var/log/nginx-manager-lite.log"
-NGINX_CONF_ROOT="/opt/etc/nginx"
+NGINX_CONF_ROOT="/opt/etc/homenet/proxy"
 NGINX_LISTEN_IPS=""
-NGINX_TEST_CMD="nginx -t"
-NGINX_RELOAD_CMD="nginx -s reload"
+NGINX_TEST_CMD=""
+NGINX_RELOAD_CMD=""
 LE_ROOT="/opt/etc/letsencrypt"
 LOCAL_CA_CERT="/opt/etc/nginx/local-ca/ca.crt"
 LOCAL_CA_KEY="/opt/etc/nginx/local-ca/ca.key"
 
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
+  set -a
   . "$ENV_FILE"
+  set +a
   APP_DIR="${HOME_NET_APP_DIR:-$APP_DIR}"
   HOST="${LITE_UI_HOST:-$HOST}"
   PORT="${LITE_UI_PORT:-$PORT}"
@@ -66,7 +68,7 @@ running_pid() {
       return 1
       ;;
   esac
-  if kill -0 "$PID" 2>/dev/null; then
+  if [ -r "/proc/$PID/cmdline" ] && tr '\000' ' ' < "/proc/$PID/cmdline" | grep -F "$GO_MANAGER" >/dev/null && kill -0 "$PID" 2>/dev/null; then
     printf '%s\n' "$PID"
     return 0
   fi

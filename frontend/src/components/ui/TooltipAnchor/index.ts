@@ -1,1 +1,0 @@
-export { TooltipAnchor } from "./TooltipAnchor";

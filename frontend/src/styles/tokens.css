@@ -1,0 +1,114 @@
+/* Design tokens. Theme is chosen before first paint (index.html) and stored in localStorage. */
+:root {
+  color-scheme: light;
+
+  --font-sans: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace;
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eff1f4;
+  --surface-inverse: #14171c;
+  --border: #e2e5ea;
+  --border-strong: #cdd2d9;
+  --text: #14171c;
+  --text-2: #464d59;
+  --text-3: #69717d;
+  --text-inverse: #f5f6f8;
+
+  --accent: #2459d6;
+  --accent-hover: #1d4bbb;
+  --accent-text: #1f4fc2;
+  --accent-soft: #ebf1fd;
+  --accent-border: #bfd0f6;
+  --on-accent: #ffffff;
+
+  --success: #17803d;
+  --success-soft: #e8f5ed;
+  --success-border: #b7dfc5;
+  --warning: #9a5b00;
+  --warning-soft: #fdf4e3;
+  --warning-border: #f0d49e;
+  --danger: #c4322d;
+  --danger-hover: #a92a26;
+  --danger-soft: #fdeeed;
+  --danger-border: #f2c2bf;
+
+  /* Chart roles (validated reference palette, light steps). */
+  --chart-grid: #e6e8ec;
+  --chart-axis: #cdd2d9;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-neutral: #a3a9b3;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  --overlay: rgba(15, 18, 24, 0.44);
+  --code-bg: #f6f7f9;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 6px 16px rgba(16, 24, 40, 0.08), 0 2px 4px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.18), 0 4px 12px rgba(16, 24, 40, 0.06);
+  --focus-ring: 0 0 0 3px rgba(36, 89, 214, 0.28);
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --sidebar-width: 248px;
+  --topbar-height: 56px;
+  --control-height: 36px;
+  --control-height-sm: 30px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0c0e11;
+  --surface: #13161a;
+  --surface-2: #171a1f;
+  --surface-3: #1e2228;
+  --surface-inverse: #e8eaed;
+  --border: #252a31;
+  --border-strong: #343a43;
+  --text: #e8eaed;
+  --text-2: #b4bac4;
+  --text-3: #8b929d;
+  --text-inverse: #14171c;
+
+  --accent: #3b7cf5;
+  --accent-hover: #5b92f7;
+  --accent-text: #86adfb;
+  --accent-soft: rgba(59, 124, 245, 0.14);
+  --accent-border: rgba(59, 124, 245, 0.38);
+  --on-accent: #ffffff;
+
+  --success: #43b872;
+  --success-soft: rgba(67, 184, 114, 0.13);
+  --success-border: rgba(67, 184, 114, 0.34);
+  --warning: #e3a640;
+  --warning-soft: rgba(227, 166, 64, 0.13);
+  --warning-border: rgba(227, 166, 64, 0.34);
+  --danger: #f06a64;
+  --danger-hover: #f4857f;
+  --danger-soft: rgba(240, 106, 100, 0.13);
+  --danger-border: rgba(240, 106, 100, 0.36);
+
+  --chart-grid: #22262d;
+  --chart-axis: #343a43;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-neutral: #5d646f;
+
+  --overlay: rgba(0, 0, 0, 0.6);
+  --code-bg: #0f1114;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --focus-ring: 0 0 0 3px rgba(59, 124, 245, 0.4);
+}

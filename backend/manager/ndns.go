@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
@@ -15,9 +18,22 @@ import (
 var errEmptyPath = errors.New("empty_path")
 
 func (a *app) runNDMC(args string) (bool, string) {
-	cmd := exec.Command(a.ndmcBin, "-c", args)
+	if a.ndmcRunner != nil {
+		return a.ndmcRunner(args)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, a.ndmcBin, "-c", args)
 	out, err := cmd.CombinedOutput()
-	return err == nil, string(out)
+	text := string(out)
+	if ctx.Err() != nil {
+		return false, "ndmc timeout: " + ctx.Err().Error()
+	}
+	if err != nil {
+		return false, strings.TrimSpace(text + " " + err.Error())
+	}
+	lower := strings.ToLower(text)
+	return !strings.Contains(lower, "error[") && !strings.Contains(lower, "command::base error") && !strings.Contains(lower, "unknown command"), text
 }
 
 func parseNDNSHTTPConfig(raw string) ndnsConfig {
@@ -125,6 +141,28 @@ func parseFirstPublicDomain(raw string) string {
 }
 
 func (a *app) ndnsDomainSuffixGet() string {
+	if value := strings.TrimSpace(os.Getenv("KEENDNS_SUFFIX")); validRouterHost(value) {
+		return value
+	}
+	if ok, out := a.runNDMC("show ndns"); ok {
+		name, domain := "", ""
+		for _, line := range strings.Split(out, "\n") {
+			key, value, found := strings.Cut(strings.TrimSpace(line), ":")
+			if !found {
+				continue
+			}
+			value = strings.Trim(strings.TrimSpace(value), "\"")
+			if key == "name" && name == "" {
+				name = value
+			}
+			if key == "domain" && domain == "" {
+				domain = value
+			}
+		}
+		if validRouterName(name) && validRouterHost(domain) {
+			return name + "." + domain
+		}
+	}
 	for _, cmd := range []string{"show ndns", "show cloud", "show running-config"} {
 		ok, out := a.runNDMC(cmd)
 		if !ok {
@@ -160,15 +198,58 @@ func randInt(min, max int) int {
 }
 
 func (a *app) ndnsSuggestPort(start, end int) (int, error) {
-	data, err := a.ndnsHTTPGet()
+	if start < 1 || end > 65535 || end < start {
+		return 0, errors.New("invalid port suggestion range")
+	}
+	proxies, err := a.currentProxies()
 	if err != nil {
 		return 0, err
 	}
 	used := map[int]struct{}{}
-	for _, item := range data.Proxies {
-		port := atoiDefault(item.Upstream.Port, 0)
+	reserve := func(port int) {
 		if port >= 1 && port <= 65535 {
 			used[port] = struct{}{}
+		}
+	}
+	for _, item := range proxies {
+		port := atoiDefault(item.Upstream.Port, 0)
+		reserve(port)
+	}
+	routes, err := schema.LoadRoutes(a.routesPath())
+	if err != nil {
+		return 0, fmt.Errorf("read routes before suggesting a port: %w", err)
+	}
+	if err := schema.ResolveAutoPorts(&routes); err != nil {
+		return 0, err
+	}
+	reserve(schema.NormalizePort(routes.Globals.Ports.HTTP, 80))
+	reserve(schema.NormalizePort(routes.Globals.Ports.HTTPS, 443))
+	reserve(routes.Globals.UI.Port)
+	_, uiPort := a.readUIBind()
+	reserve(uiPort)
+	for _, port := range append(append([]int{}, routes.Globals.Ports.HTTPExtra...), routes.Globals.Ports.HTTPSExtra...) {
+		reserve(port)
+	}
+	for _, host := range routes.Hosts {
+		for _, endpoint := range host.Endpoints {
+			reserve(schema.NormalizePort(endpoint.Listen.Port, 0))
+		}
+	}
+	listeners, err := runCommand("ss", "-H", "-lntu")
+	if err != nil {
+		listeners, err = runCommand("netstat", "-lntu")
+	}
+	if err != nil {
+		return 0, errors.New("cannot inspect existing TCP/UDP listeners; refusing to suggest an unchecked port")
+	}
+	for _, line := range strings.Split(listeners, "\n") {
+		for _, field := range strings.Fields(line) {
+			// Handles IPv4, [IPv6]:port and BusyBox's unbracketed :::port.
+			if colon := strings.LastIndex(field, ":"); colon >= 0 {
+				if port, err := strconv.Atoi(field[colon+1:]); err == nil {
+					reserve(port)
+				}
+			}
 		}
 	}
 	for i := 0; i < 200; i++ {
@@ -186,62 +267,17 @@ func (a *app) ndnsSuggestPort(start, end int) (int, error) {
 }
 
 func (a *app) ndnsProxyApply(item map[string]any, oldName string) (bool, string) {
-	name := mapString(item["name"])
-	if name == "" {
-		return false, "name_required"
-	}
-	upstream, _ := item["upstream"].(map[string]any)
-	proto := mapString(upstream["proto"])
-	if proto == "" {
-		proto = "http"
-	}
-	target := mapString(upstream["target"])
-	port := mapString(upstream["port"])
-	domain := mapString(item["domain"])
-	securityLevel := mapString(item["securityLevel"])
-	sslRedirect := boolFromAny(item["sslRedirect"])
-	oldName = strings.TrimSpace(oldName)
-	if oldName != "" && oldName != name {
-		_, _ = a.runNDMC("no ip http proxy " + oldName)
-	}
-	_, _ = a.runNDMC("no ip http proxy " + name)
-	ok, out := a.runNDMC("ip http proxy " + name)
-	if !ok {
-		return false, out
-	}
-	if target != "" && port != "" {
-		ok, out = a.runNDMC(fmt.Sprintf("ip http proxy %s upstream %s %s %s", name, proto, target, port))
-		if !ok {
-			return false, out
-		}
-	}
-	if domain != "" {
-		ok, out = a.runNDMC(fmt.Sprintf("ip http proxy %s domain %s", name, domain))
-		if !ok {
-			return false, out
-		}
-	}
-	if sslRedirect {
-		ok, out = a.runNDMC(fmt.Sprintf("ip http proxy %s ssl redirect", name))
-		if !ok {
-			return false, out
-		}
-	}
-	if securityLevel != "" {
-		ok, out = a.runNDMC(fmt.Sprintf("ip http proxy %s security-level %s", name, securityLevel))
-		if !ok {
-			return false, out
-		}
-	}
-	return a.runNDMC("system configuration save")
+	return a.upsertNDNS(item, oldName)
 }
 
 func (a *app) ndnsProxyDelete(name string) (bool, string) {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return false, "name_required"
+	if !validRouterName(name) {
+		return false, "invalid_proxy_name"
 	}
-	_, _ = a.runNDMC("no ip http proxy " + name)
+	if ok, out := a.runNDMC("no ip http proxy " + name); !ok {
+		return false, out
+	}
 	return a.runNDMC("system configuration save")
 }
 
@@ -345,6 +381,9 @@ func (a *app) listIPHosts() ([]response, error) {
 }
 
 func (a *app) deleteIPHost(host, address string) (bool, string) {
+	if !validRouterHost(host) || (address != "" && !validRouterIP(address)) {
+		return false, "invalid_host_or_address"
+	}
 	switch a.ipHostDeleteMode {
 	case "no-host":
 		return a.runNDMC("no ip host " + host)
