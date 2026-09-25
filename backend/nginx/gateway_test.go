@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 	"strings"
 	"testing"
 )
@@ -11,6 +12,10 @@ func TestGatewayProtectsRoutesAndWebSockets(t *testing.T) {
 	r.Hosts[0].AccessApp = "homenet"
 	r.Hosts[0].WSProxy.Enabled = true
 	r.Hosts[0].WSProxy.Path = "/socket"
+	r = schema.NormalizeRoutes(r)
+	if !r.Globals.AccessGateway {
+		t.Fatal("normalization dropped gateway policy")
+	}
 	g := testGenerator(t)
 	files, e := g.render(r)
 	if e != nil {

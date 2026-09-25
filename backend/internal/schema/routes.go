@@ -247,6 +247,7 @@ func DefaultRoutes() Routes {
 
 func NormalizeRoutes(in Routes) Routes {
 	out := DefaultRoutes()
+	out.Globals.AccessGateway = in.Globals.AccessGateway
 	out.SchemaVersion = "2.1"
 	if in.Globals.SSLMode != "" {
 		out.Globals.SSLMode = in.Globals.SSLMode
