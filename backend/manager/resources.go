@@ -143,6 +143,15 @@ type resourceMonitor struct {
 	mikrotik   json.RawMessage
 	mikrotikAt time.Time
 	netpingURL string
+
+	rciURL      string
+	mesh        []meshNode
+	meshErr     string
+	meshHistory map[string][]meshSample
+
+	pve        *pveClient
+	pveState   pveState
+	pveHistory []pveSample
 }
 
 var resources = &resourceMonitor{}
@@ -152,17 +161,80 @@ func (a *app) startResources() {
 		return
 	}
 	resources.netpingURL = strings.TrimRight(getenv("NETPING_URL", "http://127.0.0.1:18081"), "/")
+	resources.rciURL = getenv("RCI_URL", "http://127.0.0.1:79/rci")
+	if url := strings.TrimSpace(os.Getenv("PROXMOX_URL")); url != "" {
+		resources.pve = newPVEClient(url, getenv("PROXMOX_TOKEN_FILE", "/opt/etc/homenet/secrets/proxmox.token"), os.Getenv("PROXMOX_FINGERPRINT"))
+	}
 	go func() {
-		tick := 0
 		for {
 			resources.sample()
-			if tick%2 == 0 {
-				resources.pollMikrotik()
-			}
-			tick++
 			time.Sleep(sampleEvery)
 		}
 	}()
+	// Remote sources each get their own loop, so a slow one does not stall
+	// the local sampler or the others.
+	every(2*sampleEvery, resources.pollMikrotik)
+	every(2*sampleEvery, resources.pollMesh)
+	if resources.pve != nil {
+		every(2*sampleEvery, resources.pollProxmox)
+	}
+}
+
+func every(interval time.Duration, fn func()) {
+	go func() {
+		for {
+			fn()
+			time.Sleep(interval)
+		}
+	}()
+}
+
+func (m *resourceMonitor) pollMesh() {
+	nodes, err := readMesh(m.rciURL)
+	now := time.Now().Unix()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err != nil {
+		m.meshErr = err.Error()
+		return
+	}
+	m.mesh, m.meshErr = nodes, ""
+	if m.meshHistory == nil {
+		m.meshHistory = map[string][]meshSample{}
+	}
+	seen := map[string]bool{}
+	for _, n := range nodes {
+		key := n.CID
+		if key == "" {
+			key = n.IP
+		}
+		seen[key] = true
+		m.meshHistory[key] = appendRing(m.meshHistory[key], meshSample{T: now, CPU: n.CPU, Mem: n.MemUsed}, historyLength/2)
+	}
+	for key := range m.meshHistory {
+		if !seen[key] {
+			delete(m.meshHistory, key)
+		}
+	}
+}
+
+func (m *resourceMonitor) pollProxmox() {
+	state := m.pve.poll()
+	sample := pveSample{T: time.Now().Unix(), Nodes: map[string]pveUse{}, Guests: map[string]float64{}}
+	for _, n := range state.Nodes {
+		sample.Nodes[n.Node] = pveUse{CPU: n.CPU, Mem: n.MemUsed}
+	}
+	for _, g := range state.Guests {
+		if g.Status == "running" {
+			sample.Guests[g.ID] = g.CPU
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pveState = state
+	if state.Error == "" {
+		m.pveHistory = appendRing(m.pveHistory, sample, historyLength/2)
+	}
 }
 
 // ---- process groups ----
@@ -729,7 +801,29 @@ func (a *app) handleResources(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	mikrotik := resources.mikrotik
+	meshNodes, meshErr := resources.mesh, resources.meshErr
+	meshHistory := map[string][]meshSample{}
+	for key, list := range resources.meshHistory {
+		for _, s := range list {
+			if s.T > since {
+				meshHistory[key] = append(meshHistory[key], s)
+			}
+		}
+	}
+	var proxmox any
+	pveHistory := []pveSample{}
+	if resources.pve != nil {
+		proxmox = resources.pveState
+		for _, s := range resources.pveHistory {
+			if s.T > since {
+				pveHistory = append(pveHistory, s)
+			}
+		}
+	}
 	resources.mu.Unlock()
+	if meshNodes == nil {
+		meshNodes = []meshNode{}
+	}
 	if len(mikrotik) == 0 {
 		mikrotik = json.RawMessage(`{"error":"данные MikroTik ещё не получены"}`)
 	}
@@ -739,6 +833,10 @@ func (a *app) handleResources(w http.ResponseWriter, r *http.Request) {
 		"history":          history,
 		"mikrotik":         mikrotik,
 		"mikrotik_history": mtHistory,
+		"mesh":             map[string]any{"nodes": meshNodes, "error": meshErr},
+		"mesh_history":     meshHistory,
+		"proxmox":          proxmox,
+		"proxmox_history":  pveHistory,
 		"interval_sec":     int(sampleEvery / time.Second),
 	})
 }

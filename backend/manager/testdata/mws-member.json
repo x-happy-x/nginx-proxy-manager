@@ -1,0 +1,211 @@
+[
+ {
+  "cid": "00000000-0000-0000-0000-000000000000",
+  "model": "Giga (KN-1012)",
+  "mac": "02:00:00:00:00:01",
+  "known-host": "Keenetic Giga 000***000",
+  "port": [
+   {
+    "label": "0",
+    "appearance": "blue-rj45",
+    "link": "up",
+    "speed": "1000",
+    "duplex": "full"
+   },
+   {
+    "label": "1",
+    "appearance": "gray-rj45",
+    "link": "up",
+    "speed": "1000",
+    "duplex": "full"
+   },
+   {
+    "label": "2",
+    "appearance": "gray-rj45",
+    "link": "down"
+   },
+   {
+    "label": "3",
+    "appearance": "gray-rj45",
+    "link": "down"
+   },
+   {
+    "label": "4",
+    "appearance": "orange-rj45/sfp",
+    "link": "down"
+   }
+  ],
+  "wireless": {
+   "band": [
+    {
+     "index": "0"
+    },
+    {
+     "index": "1"
+    }
+   ]
+  },
+  "ip": "192.168.1.219",
+  "mode": "extender",
+  "hw_type": "router",
+  "hw_id": "KN-1012",
+  "license": "000000000000000",
+  "fqdn": "example.netcraze.io",
+  "fqdn-certificate-valid": true,
+  "cloud-agent-state": "ACTIVE",
+  "internet-available": true,
+  "fw": "5.1.5",
+  "fw-available": "5.1.6",
+  "fw-release": "5.01.C.5.0-0",
+  "fw-release-available": "5.01.C.6.0-1",
+  "fw-update-available": true,
+  "fw-update-sandbox": "preview",
+  "region": "EA",
+  "associations": 5,
+  "capabilities": {
+   "acme": true,
+   "auth-token": true,
+   "auto-ap-shutdown": true,
+   "backhaul-bss": true,
+   "cloud": true,
+   "controller": true,
+   "comp-status": true,
+   "country-code": true,
+   "dual-band": true,
+   "mac-band": true,
+   "mode-hw": false,
+   "mws-assoc": true,
+   "new-commit": true,
+   "notify": true,
+   "owe": true,
+   "seg-band-steering": true,
+   "sta-mask": true,
+   "wind": true,
+   "wpa3": true,
+   "wpa-eap": false,
+   "vht40": true,
+   "stp-encapsulation": false,
+   "new-password-api": true,
+   "embedded-modem": false,
+   "mws-wlan": true,
+   "security-level": {
+    "cloud-control2": true,
+    "interface": true
+   }
+  },
+  "system": {
+   "cpuload": 1,
+   "memory": "206112/524288",
+   "uptime": "46643"
+  },
+  "backhaul": {
+   "uplink": "GigabitEthernet1",
+   "root": "8000.02:00:00:00:00:02",
+   "bridge": "8000.02:00:00:00:00:02",
+   "cost": 4,
+   "speed": "1000",
+   "duplex": "full",
+   "port-label": "0"
+  },
+  "rci": {
+   "errors": 0
+  }
+ },
+ {
+  "cid": "00000000-0000-0000-0000-000000000000",
+  "model": "Buddy 4 (KN-3211)",
+  "mac": "02:00:00:00:00:01",
+  "known-host": "Keenetic Buddy 4 000***000",
+  "port": [
+   {
+    "label": "0",
+    "appearance": "gray-rj45",
+    "link": "down"
+   }
+  ],
+  "wireless": {
+   "band": [
+    {
+     "index": "0"
+    }
+   ]
+  },
+  "ip": "192.168.1.254",
+  "mode": "extender",
+  "hw_type": "extender",
+  "hw_id": "KN-3211",
+  "license": "000000000000000",
+  "fqdn": "example.netcraze.io",
+  "fqdn-certificate-valid": true,
+  "cloud-agent-state": "ACTIVE",
+  "internet-available": true,
+  "fw": "5.1.5",
+  "fw-available": "5.1.6",
+  "fw-release": "5.01.C.5.0-0",
+  "fw-release-available": "5.01.C.6.0-1",
+  "fw-update-available": true,
+  "fw-update-sandbox": "preview",
+  "region": "EA",
+  "associations": 2,
+  "capabilities": {
+   "acme": true,
+   "auth-token": true,
+   "auto-ap-shutdown": true,
+   "backhaul-bss": true,
+   "cloud": true,
+   "controller": true,
+   "comp-status": true,
+   "country-code": true,
+   "dual-band": false,
+   "mac-band": true,
+   "mode-hw": false,
+   "mws-assoc": true,
+   "new-commit": true,
+   "notify": true,
+   "owe": true,
+   "seg-band-steering": true,
+   "sta-mask": true,
+   "wind": true,
+   "wpa3": true,
+   "wpa-eap": false,
+   "vht40": true,
+   "stp-encapsulation": false,
+   "new-password-api": true,
+   "embedded-modem": false,
+   "mws-wlan": true,
+   "security-level": {
+    "cloud-control2": true,
+    "interface": true
+   }
+  },
+  "system": {
+   "cpuload": 4,
+   "memory": "31508/65536",
+   "uptime": "46646"
+  },
+  "backhaul": {
+   "uplink": "WifiMaster0/WifiStation0",
+   "root": "8000.02:00:00:00:00:02",
+   "bridge": "8000.02:00:00:00:00:02",
+   "cost": 124,
+   "ap": "WifiMaster0/Backhaul0",
+   "psm": false,
+   "mld": false,
+   "authenticated": true,
+   "txrate": 300,
+   "uptime": 44735,
+   "ht": 40,
+   "mode": "11n",
+   "gi": 400,
+   "rssi": -55,
+   "mcs": 15,
+   "txss": 2,
+   "ebf": false,
+   "pmf": true,
+   "security": "wpa3-psk"
+  },
+  "rci": {
+   "errors": 0
+  }
+ }
+]
