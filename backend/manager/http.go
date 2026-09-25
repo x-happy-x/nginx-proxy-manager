@@ -107,6 +107,8 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.handleTopology(w)
 	case "/api/network/lte":
 		a.handleLTELive(w)
+	case "/api/network/dns":
+		a.handleDNSFinderGet(w)
 	case "/api/routes":
 		routes, err := schema.LoadRoutes(a.routesPath())
 		if err != nil {

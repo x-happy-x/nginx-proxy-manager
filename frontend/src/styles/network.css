@@ -1204,3 +1204,394 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* Radar */
+
+.net-radar-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.net-radar-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.net-radar {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--font-sans);
+}
+
+.net-radar-axis {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.net-radar-ring circle {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+
+.net-radar-ring rect {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+}
+
+.net-radar-ring text {
+  font-size: 11px;
+  font-weight: 650;
+  fill: var(--text-2);
+}
+
+.net-radar-ring.is-found circle,
+.net-radar-ring.is-found rect {
+  stroke: var(--status-good);
+}
+
+.net-radar-ring.is-missing circle {
+  stroke-dasharray: 3 6;
+  opacity: 0.6;
+}
+
+.net-radar-ring.is-missing text {
+  fill: var(--text-3);
+}
+
+.net-radar-ring.is-current circle,
+.net-radar-ring.is-current rect {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  animation: net-radar-blink 1.2s ease-in-out infinite;
+}
+
+.net-radar-ring.is-queued circle {
+  stroke-dasharray: 1 4;
+}
+
+.net-radar-ray {
+  stroke: var(--status-good);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+
+.net-radar-sweep {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  animation: net-radar-spin 3.2s linear infinite;
+}
+
+.net-radar-blip {
+  cursor: pointer;
+  outline: none;
+}
+
+.net-radar-blip circle:not(.net-radar-hit):not(.net-radar-pulse) {
+  fill: var(--text-3);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.net-radar-blip.is-serving circle:not(.net-radar-hit):not(.net-radar-pulse) {
+  fill: var(--accent);
+}
+
+.net-radar-hit {
+  fill: transparent;
+}
+
+.net-radar-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: net-radar-ping 2.4s ease-out infinite;
+}
+
+.net-radar-blip.is-selected circle:not(.net-radar-hit):not(.net-radar-pulse),
+.net-radar-blip:focus-visible circle:not(.net-radar-hit):not(.net-radar-pulse) {
+  stroke: var(--text);
+  stroke-width: 2.5;
+}
+
+.net-radar-center {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.net-radar-antenna {
+  color: var(--accent-text);
+  overflow: visible;
+}
+
+.net-radar-wave {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0;
+}
+
+.net-radar-core.is-live .net-radar-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: net-radar-wave 2s ease-out infinite;
+}
+
+@keyframes net-radar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes net-radar-ping {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes net-radar-wave {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes net-radar-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .net-radar-sweep,
+  .net-radar-pulse,
+  .net-radar-core.is-live .net-radar-wave,
+  .net-radar-ring.is-current circle,
+  .net-radar-ring.is-current rect {
+    animation: none;
+  }
+}
+
+.net-radar-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  font-size: 13px;
+}
+
+.net-radar-side p {
+  margin: 0;
+}
+
+.net-radar-detail {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.net-radar-detail .btn {
+  justify-self: start;
+}
+
+.net-radar-station {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--success);
+}
+
+.net-radar-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.net-radar-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.net-radar-legend i {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+}
+
+.net-radar-legend i.is-found {
+  border-color: var(--status-good);
+}
+
+.net-radar-legend i.is-missing {
+  border-style: dashed;
+}
+
+.net-radar-legend i.is-current {
+  border-color: var(--accent);
+}
+
+.net-radar-note {
+  font-size: 12px;
+}
+
+.net-radar-table summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.net-radar-table .net-survey {
+  border: 0;
+  padding: 8px 0 0;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .net-radar-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* DNS finder */
+
+.net-dns-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+}
+
+.net-dns-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.net-dns-head p {
+  margin: 4px 0 0;
+  max-width: 760px;
+  font-size: 13px;
+}
+
+.net-dns-run {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  align-content: start;
+  min-width: 220px;
+}
+
+.net-progress {
+  display: block;
+  width: 220px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.net-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s;
+}
+
+.net-dns-best ol {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.net-dns-target {
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.net-dns-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+}
+
+.net-dns-group {
+  text-align: center !important;
+  border-left: 1px solid var(--border);
+}
+
+.net-dns-sub {
+  font-weight: 500 !important;
+  color: var(--text-3) !important;
+}
+
+.net-dns-row {
+  cursor: pointer;
+}
+
+.net-dns-row:hover td {
+  background: var(--surface-2);
+}
+
+.net-dns-cell {
+  white-space: nowrap;
+}
+
+.net-dns-flag {
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.net-dns-detail > td {
+  background: var(--surface-2);
+}
+
+.net-dns-answers td,
+.net-dns-answers th {
+  font-size: 12px;
+}
+
+.net-dns-answer {
+  max-width: 180px;
+  overflow-wrap: anywhere;
+}
+
+.net-dns-answer.is-bad {
+  color: var(--danger);
+}
+
+.net-dns-answer.is-proxy {
+  color: var(--accent-text);
+}

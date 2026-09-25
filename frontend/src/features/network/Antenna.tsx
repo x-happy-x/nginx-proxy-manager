@@ -5,6 +5,7 @@ import { Icon } from "../../components/ui/Icon";
 import { Alert } from "../../components/ui/controls";
 import { errText } from "../../lib/format";
 import { formatBps } from "../../pages/Resources";
+import { Radar } from "./Radar";
 import { Tag, formatClock, type Tone } from "./shared";
 
 // «Антенна»: aiming the MikroTik's LTE antenna. A live reading (every 1.5 s
@@ -360,7 +361,15 @@ export function Antenna() {
             )}
           </div>
         </div>
-        {survey ? <SurveyView survey={survey} live={surveying} /> : null}
+        <div className="card net-radar-card">
+          <Radar survey={survey || null} live={live} running={surveying || aiming} />
+          {survey ? (
+            <details className="net-radar-table">
+              <summary>Таблица результатов</summary>
+              <SurveyView survey={survey} live={surveying} />
+            </details>
+          ) : null}
+        </div>
         {(data?.history || []).filter((h) => h.id !== survey?.id).map((h) => (
           <details key={h.id} className="card net-survey-old">
             <summary>

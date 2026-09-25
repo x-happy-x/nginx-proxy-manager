@@ -57,3 +57,24 @@ func TestLTESurveyLive(t *testing.T) {
 		t.Fatalf("band setting not restored: %+v", s)
 	}
 }
+
+// DNS_LIVE=1 runs the DNS finder on the router and prints a summary.
+func TestDNSFinderLive(t *testing.T) {
+	if os.Getenv("DNS_LIVE") != "1" {
+		t.Skip("DNS_LIVE=1 to probe public resolvers from the router")
+	}
+	dnsFinder.start()
+	for {
+		dnsFinder.mu.Lock()
+		running := dnsFinder.running
+		dnsFinder.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	t.Logf("reference: %v", dnsFinder.ref)
+	for _, c := range dnsFinder.checks {
+		t.Logf("%-10s %-4s %-7s %-8s %6.0fms spoof=%v changed=%v chain=%v %s", c.Provider, c.Transport, c.Path, c.Verdict, c.MS, c.Spoofed, c.Changed, c.Chain, c.Error)
+	}
+}
