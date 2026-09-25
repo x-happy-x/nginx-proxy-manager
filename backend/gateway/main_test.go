@@ -38,6 +38,9 @@ func TestMobileBasicScopeAndRole(t *testing.T) {
 		r.SetBasicAuth("mobile", "correct")
 		w := httptest.NewRecorder()
 		g.check(w, r, "lms.test", scheme, hostPolicy{App: "lms_node", MinRole: "admin"})
+		if status == 401 && scheme == "https" && w.Header().Get("X-Gate-Error") != "Account rejected the login or password" {
+			t.Fatal("missing credential diagnostic")
+		}
 		return w.Code
 	}
 	if check("http") != 401 || calls != 0 {
