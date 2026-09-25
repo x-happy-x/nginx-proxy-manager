@@ -212,94 +212,347 @@
   font-size: 12px;
 }
 
-/* Scheme */
+/* Scheme: graph + details panel */
 
-.net-scheme {
+.net-graph-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 1.1fr) 40px minmax(260px, 1.3fr) 40px minmax(210px, 1fr) 40px minmax(210px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
-  gap: 0;
-  overflow-x: auto;
-  padding-bottom: 4px;
 }
 
-.net-col {
-  display: grid;
-  gap: 10px;
+
+.net-graph-card {
+  padding: 12px 12px 4px;
   min-width: 0;
 }
 
-.net-col-head {
+.net-graph-legend {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 0 4px 4px;
+}
+
+.net-graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.net-graph-legend .muted {
+  margin-left: auto;
+}
+
+.net-leg-direct,
+.net-leg-tunnel {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2px solid var(--text-3);
+}
+
+.net-leg-tunnel {
+  border-top: 2px dashed var(--accent);
+}
+
+.net-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 72vh;
+  overflow: visible;
+  font-family: var(--font-sans);
+}
+
+.net-edge-base {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.net-edge-direct .net-edge-base {
+  stroke: var(--text-3);
+}
+
+.net-edge-tunnel .net-edge-base {
+  stroke: var(--accent);
+  stroke-dasharray: 6 5;
+  opacity: 0.7;
+}
+
+.net-edge-link .net-edge-base {
+  stroke-dasharray: 2 4;
+}
+
+.net-edge-flow {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 2 26;
+  animation: net-flow 1.6s linear infinite;
+  opacity: 0.8;
+}
+
+.net-edge-tunnel .net-edge-flow {
+  stroke: var(--accent);
+}
+
+.net-edge-lan .net-edge-flow {
+  opacity: 0.35;
+}
+
+.net-edge.is-hot .net-edge-base {
+  stroke-width: 3;
+  opacity: 1;
+}
+
+@keyframes net-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .net-edge-flow {
+    animation: none;
+    display: none;
+  }
+}
+
+.net-edge-pill {
+  fill: var(--surface);
+  stroke: var(--border);
+}
+
+.net-edge-label {
+  font-size: 10.5px;
+  fill: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.net-gnode {
+  cursor: pointer;
+  outline: none;
+}
+
+.net-gnode-hit {
+  fill: transparent;
+}
+
+.net-gnode-halo {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2;
+}
+
+.net-gnode-disc {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 2;
+  transition: fill 0.15s;
+}
+
+.net-gnode-icon {
+  color: var(--text-2);
+  overflow: visible;
+}
+
+.net-gnode-good .net-gnode-disc {
+  stroke: var(--status-good);
+}
+
+.net-gnode-info .net-gnode-disc {
+  stroke: var(--accent);
+}
+
+.net-gnode-warning .net-gnode-disc {
+  stroke: var(--status-warning);
+}
+
+.net-gnode-critical .net-gnode-disc {
+  stroke: var(--status-critical);
+  fill: var(--danger-soft);
+}
+
+.net-gnode:hover .net-gnode-disc,
+.net-gnode:focus-visible .net-gnode-disc {
+  fill: var(--surface-3);
+}
+
+.net-gnode:focus-visible .net-gnode-halo,
+.net-gnode.is-selected .net-gnode-halo {
+  stroke: var(--accent);
+}
+
+.net-gnode.is-selected .net-gnode-disc {
+  fill: var(--accent-soft);
+}
+
+.net-gnode.is-selected .net-gnode-icon {
+  color: var(--accent-text);
+}
+
+.net-gnode-badge circle {
+  fill: var(--surface);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.net-gnode-info .net-gnode-badge {
+  color: var(--accent);
+}
+
+.net-gnode-warning .net-gnode-badge {
+  color: var(--warning);
+}
+
+.net-gnode-critical .net-gnode-badge {
+  color: var(--status-critical);
+}
+
+.net-gnode-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.net-gnode.is-small .net-gnode-label {
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.net-gnode-metric {
+  font-size: 11px;
+  fill: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.net-detail {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  scroll-margin-top: calc(var(--topbar-height) + 12px);
+}
+
+.net-detail-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 4px 2px 6px;
 }
 
-.net-col-head h3 {
+.net-detail-head h3 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 15px;
 }
 
-.net-col-head p {
+.net-detail-head p {
   margin: 1px 0 0;
   font-size: 12px;
   color: var(--text-3);
 }
 
-.net-col-icon {
+.net-detail-icon {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  flex: none;
-}
-
-.net-stage {
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 10px 12px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
   color: var(--text-2);
 }
 
-.net-stage-info {
-  border-left-color: var(--accent);
+.net-detail-icon.net-gnode-good {
+  border-color: var(--status-good);
 }
 
-.net-stage-good {
-  border-left-color: var(--status-good);
+.net-detail-icon.net-gnode-warning {
+  border-color: var(--status-warning);
 }
 
-.net-stage-warning {
-  border-left-color: var(--status-warning);
+.net-detail-icon.net-gnode-critical {
+  border-color: var(--status-critical);
 }
 
-.net-stage-critical {
-  border-left-color: var(--status-critical);
+.net-detail-icon.net-gnode-info {
+  border-color: var(--accent);
 }
 
-.net-stage-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  color: var(--text);
+.net-detail-body {
+  display: block;
   font-size: 13px;
+  columns: 2 320px;
+  column-gap: 32px;
+}
+
+.net-detail-body > * {
+  break-inside: avoid;
+  margin-bottom: 10px;
+}
+
+.net-detail-body > ul {
+  break-inside: auto;
+}
+
+.net-detail-body h4 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.net-detail-text {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.net-kvs {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.net-kv {
+  display: grid;
+  gap: 1px;
+}
+
+.net-kv dt {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.net-kv dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.net-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--text-2);
+  line-height: 1.45;
 }
 
 .net-groups {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
+  font-size: 12.5px;
 }
 
 .net-groups li {
@@ -323,101 +576,13 @@
   color: var(--success);
 }
 
-.net-arrow {
-  position: relative;
-  align-self: stretch;
-  display: grid;
-  place-items: center;
-  min-height: 60px;
-}
-
-.net-arrow-line {
-  position: absolute;
-  top: 50px;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  background: var(--border-strong);
-}
-
-.net-arrow-line::after {
-  content: "";
-  position: absolute;
-  right: -2px;
-  top: -4px;
-  border: 5px solid transparent;
-  border-left-color: var(--border-strong);
-  border-right: 0;
-}
-
-.net-arrow-label {
-  position: absolute;
-  top: 58px;
-  left: 50%;
-  transform: translateX(-50%) rotate(90deg);
-  transform-origin: center;
-  white-space: nowrap;
-  font-size: 10.5px;
-  color: var(--text-3);
-  display: none;
-}
-
-.net-seg {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 10px 12px;
-  display: grid;
-  gap: 6px;
-  font-size: 12.5px;
-}
-
-.net-seg-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.net-seg-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 26px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--surface-3);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.net-seg-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.net-seg-sub {
-  color: var(--text-2);
-}
-
 .net-hosts {
   list-style: none;
-  margin: 2px 0 0;
-  padding: 6px 0 0;
-  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 0;
   display: grid;
-  gap: 3px;
-  max-height: 260px;
-  overflow: auto;
+  gap: 4px;
+  font-size: 12.5px;
 }
 
 .net-hosts li {
@@ -790,55 +955,6 @@
 
 .net-hist-critical {
   background: var(--status-critical);
-}
-
-/* Below a wide desktop the diagram flows top to bottom. */
-@media (max-width: 1360px) {
-  .net-scheme {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .net-scheme > .net-arrow {
-    display: grid !important;
-    min-height: 28px;
-  }
-
-  .net-scheme .net-arrow-line {
-    top: 2px;
-    bottom: 2px;
-    left: 50%;
-    right: auto;
-    width: 2px;
-    height: auto;
-  }
-
-  .net-scheme .net-arrow-line::after {
-    right: -4px;
-    top: auto;
-    bottom: -2px;
-    border: 5px solid transparent;
-    border-top-color: var(--border-strong);
-    border-bottom: 0;
-  }
-
-  .net-scheme .net-arrow-label {
-    display: block;
-    top: 50%;
-    left: calc(50% + 12px);
-    transform: translateY(-50%);
-  }
-
-  .net-scheme > .net-col:not(:first-child) {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  }
-
-  .net-scheme > .net-col > .net-col-head {
-    grid-column: 1 / -1;
-  }
-
-  .net-scheme > .net-col:first-child {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  }
 }
 
 @media (max-width: 900px) {

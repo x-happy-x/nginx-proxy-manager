@@ -594,7 +594,7 @@ export async function runScan(): Promise<void> {
   await postJson<ApiOk>("/api/network/scan/run", {});
 }
 
-export type TopoHost = { name: string; ip: string; link: "wifi" | "ethernet"; mesh?: boolean; bypass?: boolean };
+export type TopoHost = { name: string; ip: string; link: "wifi" | "ethernet"; mesh?: boolean; via_mesh?: boolean; bypass?: boolean };
 export type TopoSegment = { id: string; name: string; ip: string; cidr: string; active: number; hosts: TopoHost[]; dns_to_mihomo: boolean };
 export type Topology = {
   keenetic: { model: string; firmware: string; wan: { id?: string; name?: string; ip?: string; link?: string }; segments: TopoSegment[]; routes: Array<{ dst: string; via: string }> };
