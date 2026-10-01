@@ -63,6 +63,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		w.Header().Set("Cache-Control", "no-store")
 	}
+	if strings.HasPrefix(r.URL.Path, mihomoAPIPrefix+"/") {
+		a.handleMihomoAPI(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		a.handleGet(w, r)
