@@ -425,6 +425,13 @@ function Subscriptions({ providers, groups, rules, onChange, onService }: { prov
   const setHC = (next: Obj) => edit && setEdit({ ...edit, p: { ...edit.p, "health-check": next } });
   const setAd = (patch: Obj) => setHC({ ...hc, adaptive: { ...ad, ...patch } });
   const ua = edit?.p.header?.["User-Agent"]?.[0] || "";
+  // A base for depends-on: adaptive, not itself a service check, not the one being edited.
+  const isAdaptive = (p?: Provider) => !!asObj(asObj(p?.["health-check"]).adaptive).enable;
+  const dependsOf = (p?: Provider) => String(asObj(asObj(p?.["health-check"]).adaptive)["depends-on"] || "");
+  const baseCandidates = Object.entries(providers)
+    .filter(([n, p]) => n !== edit?.original && isAdaptive(p) && !dependsOf(p))
+    .map(([n]) => n);
+  const dependents = edit?.original ? Object.entries(providers).filter(([, p]) => dependsOf(p) === edit.original).map(([n]) => n) : [];
 
   return (
     <section className="card card-flush">
@@ -467,7 +474,10 @@ function Subscriptions({ providers, groups, rules, onChange, onService }: { prov
                       {p.type === "http" ? p.url : p.path}
                     </td>
                     <td data-label="Обновление">{p.type === "http" ? (p.interval ? `каждые ${number(Number(p.interval) / 3600)} ч` : "вручную") : "файл"}</td>
-                    <td data-label="Проверка">{h.enable ? isAd ? <span className="badge badge-accent">адаптивная</span> : <span className="badge">HEAD {String(h.interval || "")} с</span> : <span className="badge">выкл.</span>}</td>
+                    <td data-label="Проверка">
+                      {h.enable ? isAd ? <span className="badge badge-accent">адаптивная</span> : <span className="badge">HEAD {String(h.interval || "")} с</span> : <span className="badge">выкл.</span>}
+                      {asObj(h.adaptive)["depends-on"] ? <span className="cell-sub">после {String(asObj(h.adaptive)["depends-on"])}</span> : null}
+                    </td>
                     <td data-label="Группы">{usedBy(name).join(", ") || "—"}</td>
                     <td className="col-shrink" data-label="">
                       <div className="row-actions">
@@ -576,6 +586,21 @@ function Subscriptions({ providers, groups, rules, onChange, onService }: { prov
                     <input value={String(ad["network-key"] || "")} onChange={(e) => setAd({ "network-key": e.target.value })} />
                   </Field>
                 </div>
+                <Field
+                  label="Сначала проверять подпиской"
+                  hint={
+                    dependents.length
+                      ? `От этой подписки зависят: ${dependents.join(", ")} — сама она базовой быть не может.`
+                      : "depends-on (MIHOMO-6): сервис проверяет только узлы, свежо прошедшие базовую проверку. Узлы должны совпадать по параметрам подключения — возьмите тот же источник."
+                  }
+                >
+                  <select value={String(ad["depends-on"] || "")} disabled={dependents.length > 0} onChange={(e) => setAd({ "depends-on": e.target.value || undefined })}>
+                    <option value="">нет — это базовая проверка</option>
+                    {baseCandidates.map((n) => (
+                      <option key={n}>{n}</option>
+                    ))}
+                  </select>
+                </Field>
                 <div className="form-grid">
                   <Field label="Ошибок подряд до отказа" hint="failure-threshold, 1–10">
                     <input type="number" min={1} max={10} value={Number(ad["failure-threshold"] || 1)} onChange={(e) => setAd({ "failure-threshold": Number(e.target.value) })} />
@@ -614,8 +639,17 @@ function Subscriptions({ providers, groups, rules, onChange, onService }: { prov
         confirmLabel="Удалить"
         onClose={() => setRemove("")}
         onConfirm={() => {
-          const next = { ...providers };
-          delete next[remove];
+          const next: Record<string, Provider> = {};
+          Object.entries(providers).forEach(([n, p]) => {
+            if (n === remove) return;
+            const hc = asObj(p["health-check"]);
+            const ad = asObj(hc.adaptive);
+            if (ad["depends-on"] === remove) {
+              const nextAd = { ...ad };
+              delete nextAd["depends-on"];
+              next[n] = { ...p, "health-check": { ...hc, adaptive: nextAd } };
+            } else next[n] = p;
+          });
           onChange(
             next,
             groups.map((g) => {
@@ -629,7 +663,11 @@ function Subscriptions({ providers, groups, rules, onChange, onService }: { prov
           setRemove("");
         }}
       >
-        Подписка будет убрана из групп: {usedBy(remove).join(", ") || "ни в одной"}. Изменение попадёт в черновик.
+        Подписка будет убрана из групп: {usedBy(remove).join(", ") || "ни в одной"}.
+        {Object.entries(providers).some(([, p]) => asObj(asObj(p["health-check"]).adaptive)["depends-on"] === remove)
+          ? ` Зависящие от неё проверки сервисов (${Object.entries(providers).filter(([, p]) => asObj(asObj(p["health-check"]).adaptive)["depends-on"] === remove).map(([n]) => n).join(", ")}) станут самостоятельными.`
+          : ""}{" "}
+        Изменение попадёт в черновик.
       </ConfirmDialog>
     </section>
   );
@@ -652,23 +690,49 @@ function ServiceCheckDialog({
   rules: string[];
   onCreate: (p: Record<string, Provider>, g: Group[], r: string[]) => void;
 }) {
+  const adaptiveOf = (p: Provider) => asObj(asObj(p["health-check"]).adaptive);
+  // Bases for the cascade: adaptive subscriptions that are not service checks themselves.
+  const bases = Object.entries(providers)
+    .filter(([, p]) => adaptiveOf(p).enable && !adaptiveOf(p)["depends-on"])
+    .map(([n]) => n);
   const [preset, setPreset] = useState("chatgpt");
-  const [source, setSource] = useState<"file" | "copy">("file");
-  const [copyFrom, setCopyFrom] = useState("");
+  const [baseName, setBaseName] = useState("");
+  const [source, setSource] = useState<"base" | "file">("base");
   const [path, setPath] = useState("./providers/ai-nodes.yaml");
+  const [filter, setFilter] = useState("");
   const base = SERVICE_PRESETS[preset];
   const name = `AI-${base.title.toUpperCase()}`;
   const group = `AI-${base.title}`;
-  const httpProviders = Object.entries(providers).filter(([, p]) => p.type === "http");
   const exists = !!providers[name] || groups.some((g) => g.name === group);
+  const chosenBase = baseName || bases[0] || "";
+  const from = providers[chosenBase];
+  const cascade = !!chosenBase;
 
   const create = () => {
-    const from = providers[copyFrom];
-    const p: Provider =
-      source === "copy" && from
-        ? { type: "http", url: from.url, interval: from.interval || 43200, path: `./providers/${name}.yaml`, ...(from.header ? { header: from.header } : {}) }
-        : { type: "file", path };
+    let p: Provider;
+    if (source === "base" && from) {
+      // Same connection parameters as the base are what lets depends-on match nodes.
+      // A file base is shared as is; an http base keeps managing downloads, the
+      // service reads the same file and never fetches the subscription itself.
+      p = from.type === "file" || from.path ? { type: "file", path: String(from.path || `./providers/${chosenBase}.yaml`), interval: 3600 } : { type: "http", url: from.url, interval: from.interval || 43200, path: `./providers/${name}.yaml`, ...(from.header ? { header: from.header } : {}) };
+    } else p = { type: "file", path };
+    if (filter.trim()) p.filter = filter.trim();
     p.override = { "additional-prefix": `${group} | ` };
+    const adaptive: Obj = {
+      ...asObj(adaptiveBlock().adaptive),
+      concurrency: 2,
+      "failure-threshold": 3,
+      "recovery-threshold": 2,
+      targets: [base.target],
+    };
+    if (cascade) {
+      adaptive["depends-on"] = chosenBase;
+      // Same network observation as the base so both agree on normal/whitelist.
+      const bAd = adaptiveOf(from);
+      ["network-key", "direct-allowed", "direct-global", "confirmations"].forEach((k) => {
+        if (bAd[k] !== undefined) adaptive[k] = clone(bAd[k]);
+      });
+    }
     p["health-check"] = {
       enable: true,
       lazy: false,
@@ -676,13 +740,7 @@ function ServiceCheckDialog({
       timeout: 5000,
       url: "https://www.gstatic.com/generate_204",
       "expected-status": "204",
-      adaptive: {
-        ...asObj(adaptiveBlock().adaptive),
-        concurrency: 2,
-        "failure-threshold": 3,
-        "recovery-threshold": 2,
-        targets: [base.target],
-      },
+      adaptive,
     };
     const g: Group = { name: group, type: "fallback", use: [name], url: "https://www.gstatic.com/generate_204", "expected-status": "204", timeout: 10000 };
     const match = rules.findIndex((r) => r.startsWith("MATCH,"));
@@ -693,19 +751,26 @@ function ServiceCheckDialog({
     onClose();
   };
 
+  const sourceText =
+    source === "base" && from
+      ? from.path
+        ? `файл ${String(from.path)} — его обновляет ${chosenBase}`
+        : `та же ссылка, что у ${chosenBase}`
+      : `файл ${path}`;
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       size="lg"
       title="Проверка сервиса"
-      description="Отдельная подписка и fallback-группа, которые проверяют узлы по странице конкретного сервиса, а не по generate_204."
+      description="Отдельная подписка и fallback-группа, которые проверяют узлы по странице сервиса. С каскадом сервис проверяет только узлы, уже прошедшие базовую подписку."
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>
             Отмена
           </button>
-          <button type="button" className="btn btn-primary" disabled={exists || (source === "copy" && !copyFrom) || (source === "file" && !path.trim())} onClick={create}>
+          <button type="button" className="btn btn-primary" disabled={exists || (source === "base" && !from) || (source === "file" && !path.trim())} onClick={create}>
             В черновик
           </button>
         </>
@@ -715,27 +780,44 @@ function ServiceCheckDialog({
         <Field label="Сервис" group>
           <Segmented<string> label="Сервис" value={preset} onChange={setPreset} options={Object.entries(SERVICE_PRESETS).map(([value, v]) => ({ value, label: v.title }))} />
         </Field>
-        <Field label="Узлы-кандидаты" group hint="Проверяйте небольшой список, чтобы не опрашивать всю подписку для каждого сервиса.">
-          <Segmented<"file" | "copy"> label="Узлы-кандидаты" value={source} onChange={setSource} options={[{ value: "file", label: "Файл на роутере" }, { value: "copy", label: "Та же ссылка, что у подписки" }]} />
+        <Field label="Сначала проверять подпиской" hint={bases.length ? "depends-on (MIHOMO-6). База продолжает проверять весь свой список; сервис ждёт её успеха и порога восстановления." : "Нет подписки с адаптивной проверкой — сервис будет проверять узлы сам, без каскада."}>
+          <select value={chosenBase} onChange={(e) => setBaseName(e.target.value)} disabled={!bases.length}>
+            {bases.map((n) => (
+              <option key={n}>{n}</option>
+            ))}
+            {!bases.length ? <option value="">нет</option> : null}
+          </select>
+        </Field>
+        <Field label="Узлы-кандидаты" group hint="Каскад сопоставляет узлы по параметрам подключения, поэтому надёжнее взять тот же источник, что у базы, и сузить его фильтром.">
+          <Segmented<"base" | "file">
+            label="Узлы-кандидаты"
+            value={source}
+            onChange={setSource}
+            options={[
+              { value: "base", label: "Тот же источник, что у базы" },
+              { value: "file", label: "Отдельный файл" },
+            ]}
+            disabled={!from && source === "base" && !bases.length}
+          />
         </Field>
         {source === "file" ? (
           <Field label="Файл провайдера" hint="YAML вида proxies: [...] в каталоге mihomo">
             <input className="mono" value={path} onChange={(e) => setPath(e.target.value)} />
           </Field>
-        ) : (
-          <Field label="Подписка">
-            <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
-              <option value="">выберите…</option>
-              {httpProviders.map(([n]) => (
-                <option key={n}>{n}</option>
-              ))}
-            </select>
-          </Field>
-        )}
+        ) : null}
+        <Field label="Взять только узлы" hint="Регулярное выражение по имени; начните с небольшого списка — нагрузка растёт с числом сервисов.">
+          <input className="mono" value={filter} placeholder="(?i)nl|de|fi" onChange={(e) => setFilter(e.target.value)} />
+        </Field>
         <dl className="kv">
           <div>
             <dt>Подписка</dt>
-            <dd className="mono">{name}</dd>
+            <dd className="mono">
+              {name} · {sourceText}
+            </dd>
+          </div>
+          <div>
+            <dt>Каскад</dt>
+            <dd className="mono">{cascade ? `depends-on: ${chosenBase} · режим сети как у базы` : "нет"}</dd>
           </div>
           <div>
             <dt>Группа</dt>
@@ -759,6 +841,7 @@ function ServiceCheckDialog({
           </div>
         </dl>
         {exists ? <Alert tone="warning">Подписка {name} или группа {group} уже есть в конфиге.</Alert> : null}
+        {cascade ? <Alert tone="info">Каскад нужен ядру с MIHOMO-6. Старое ядро не примет depends-on, и проверка mihomo -t покажет это до применения.</Alert> : null}
         <Alert tone="info">
           Это шаблон проверки страницы, а не доказательство, что чат работает: вход, отправка сообщений и лимиты аккаунта не проверяются. Сверьте ответы через заведомо рабочий и нерабочий выход и поправьте шаблоны в настройках подписки.
         </Alert>
