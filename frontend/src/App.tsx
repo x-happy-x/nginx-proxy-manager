@@ -72,6 +72,17 @@ import { System } from "./pages/System";
 import { Deployments } from "./pages/Deployments";
 import { NginxLogs } from "./pages/NginxLogs";
 import { errText } from "./lib/format";
+import { MihomoProvider } from "./features/mihomo/context";
+import { CoreGate } from "./features/mihomo/shared";
+import { TopbarCore } from "./features/mihomo/TopbarCore";
+import { Proxies } from "./features/mihomo/Proxies";
+import { Checks } from "./features/mihomo/Checks";
+import { Connections } from "./features/mihomo/Connections";
+import { Rules } from "./features/mihomo/Rules";
+import { Traffic } from "./features/mihomo/Traffic";
+import { CoreLogs } from "./features/mihomo/CoreLogs";
+import { Config as CoreConfigPage } from "./features/mihomo/Config";
+import { Core } from "./features/mihomo/Core";
 
 function sanitize(doc: RoutesDocument): RoutesDocument {
   const clone = JSON.parse(JSON.stringify(doc)) as RoutesDocument;
@@ -169,6 +180,8 @@ export default function App() {
   const [applyState, setApplyState] = useState<ApplyState>("idle");
   const [applyOutput, setApplyOutput] = useState("");
   const [discard, setDiscard] = useState<"doc" | "dns" | null>(null);
+  const [coreDirty, setCoreDirty] = useState(false);
+  const [analyzeHost, setAnalyzeHost] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -560,7 +573,10 @@ export default function App() {
   const setAcmeEmail = (value: string) =>
     setDoc({ ...doc, globals: { ...doc.globals, acme: { ...doc.globals.acme, email: value } } });
 
+  const coreLog = (title: string, message: string, level?: string) => log(title, message, level === "error" ? "error" : "info");
+
   return (
+    <MihomoProvider log={coreLog} active onDirtyChange={setCoreDirty}>
     <div className={`app${navOpen ? " nav-open" : ""}`}>
       <Sidebar
         active={page}
@@ -568,7 +584,7 @@ export default function App() {
         onClose={() => setNavOpen(false)}
         status={status}
         counts={{ servers: doc.apps.length }}
-        unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty }}
+        unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty, coreconfig: coreDirty }}
       />
       <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
       <div className="main">
@@ -583,12 +599,30 @@ export default function App() {
           onOperations={() => setOpsOpen(true)}
           onApply={openApply}
           busy={busy}
+          extra={<TopbarCore />}
         />
         <main className="page" id="main">
           {page === "overview" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
           {page === "apps" ? <Launcher doc={doc} /> : null}
           {page === "resources" ? <Resources /> : null}
-          {page === "network" ? <Network /> : null}
+          {page === "network" ? <Network key={analyzeHost || "network"} analyze={analyzeHost} /> : null}
+          {page === "proxies" ? <CoreGate><Proxies onChecks={() => navigate("checks")} /></CoreGate> : null}
+          {page === "checks" ? <CoreGate><Checks onConfig={() => navigate("coreconfig")} /></CoreGate> : null}
+          {page === "connections" ? (
+            <CoreGate>
+              <Connections
+                onAnalyze={(host) => {
+                  setAnalyzeHost(host);
+                  navigate("network");
+                }}
+              />
+            </CoreGate>
+          ) : null}
+          {page === "rules" ? <CoreGate><Rules onEdit={() => navigate("coreconfig")} /></CoreGate> : null}
+          {page === "traffic" ? <CoreGate><Traffic /></CoreGate> : null}
+          {page === "corelog" ? <CoreGate><CoreLogs /></CoreGate> : null}
+          {page === "coreconfig" ? <CoreGate><CoreConfigPage /></CoreGate> : null}
+          {page === "core" ? <CoreGate><Core onConfig={() => navigate("coreconfig")} /></CoreGate> : null}
           {page === "servers" ? (
             <Services doc={doc} busy={busy} onChange={setDoc} onAdvanced={() => navigate("advanced")} />
           ) : null}
@@ -875,5 +909,6 @@ export default function App() {
           : "Все правки после последнего сохранения routes.yml будут потеряны."}
       </ConfirmDialog>
     </div>
+    </MihomoProvider>
   );
 }

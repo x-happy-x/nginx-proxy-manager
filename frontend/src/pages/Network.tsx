@@ -32,8 +32,8 @@ function readTab(): Tab {
   }
 }
 
-export function Network() {
-  const [tab, setTabState] = useState<Tab>(readTab);
+export function Network({ analyze }: { analyze?: string } = {}) {
+  const [tab, setTabState] = useState<Tab>(() => (analyze ? "analyzer" : readTab()));
   const [period, setPeriod] = useState<Period>("60");
   const [data, setData] = useState<NetworkPayload | null>(null);
   const [topo, setTopo] = useState<Topology | null>(null);
@@ -131,7 +131,7 @@ export function Network() {
         {tab === "scheme" ? <NetworkScheme topo={topo} net={data} /> : null}
         {tab === "antenna" ? <Antenna /> : null}
         {tab === "dns" ? <DnsFinder /> : null}
-        {tab === "analyzer" ? <NetworkAnalyzer result={analysis} onResult={setAnalysis} /> : null}
+        {tab === "analyzer" ? <NetworkAnalyzer result={analysis} onResult={setAnalysis} initialTarget={analyze} /> : null}
         {tab === "scan" ? (
           <AutoScan
             onOpen={(a) => {

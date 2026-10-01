@@ -220,6 +220,8 @@ const paths = {
     </>
   ),
   play: <path d="M7 5v14l11-7Z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
+  test: <path d="M9 3h6M10 3v6L5 19a1.5 1.5 0 0 0 1.3 2h11.4A1.5 1.5 0 0 0 19 19l-5-10V3M7.5 14h9" />,
   layers: (
     <>
       <path d="m12 3 9 5-9 5-9-5Z" />
