@@ -9,6 +9,7 @@ import "./styles/pages.css";
 import "./styles/launcher.css";
 import "./styles/resources.css";
 import "./styles/network.css";
+import "./styles/mihomo.css";
 
 // index.html sets the theme before first paint; this covers a missing or stale attribute.
 if (!document.documentElement.dataset.theme) {

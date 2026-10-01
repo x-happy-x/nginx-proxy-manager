@@ -13,14 +13,22 @@ export type PageKey =
   | "advanced"
   | "system"
   | "dms"
-  | "routing";
+  | "routing"
+  | "proxies"
+  | "checks"
+  | "connections"
+  | "rules"
+  | "traffic"
+  | "corelog"
+  | "coreconfig"
+  | "core";
 
 export type NavItem = {
   id: PageKey;
   title: string;
   description: string;
   icon: IconName;
-  group: "main" | "network" | "system";
+  group: "main" | "mihomo" | "network" | "system";
 };
 
 export const NAV: NavItem[] = [
@@ -60,6 +68,55 @@ export const NAV: NavItem[] = [
     group: "main",
   },
   {
+    id: "proxies",
+    title: "Прокси и группы",
+    description: "Выбор узла в группе, проверка задержки, подписки и их трафик.",
+    icon: "layers",
+    group: "mihomo",
+  },
+  {
+    id: "checks",
+    title: "Проверка подписок",
+    description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.",
+    icon: "test",
+    group: "mihomo",
+  },
+  {
+    id: "connections",
+    title: "Соединения",
+    description: "Живые соединения через mihomo: устройство, правило, цепочка, скорость.",
+    icon: "globe",
+    group: "mihomo",
+  },
+  {
+    id: "rules",
+    title: "Правила",
+    description: "Правила ядра со счётчиками срабатываний и наборы правил.",
+    icon: "list",
+    group: "mihomo",
+  },
+  {
+    id: "traffic",
+    title: "Трафик",
+    description: "Скорость, память, выходы и устройства в реальном времени.",
+    icon: "activity",
+    group: "mihomo",
+  },
+  {
+    id: "corelog",
+    title: "Журнал ядра",
+    description: "Поток журнала mihomo с фильтром по уровню.",
+    icon: "logs",
+    group: "mihomo",
+  },
+  {
+    id: "coreconfig",
+    title: "Конфигурация",
+    description: "Подписки, правила, группы, свои узлы и устройства. Проверка mihomo -t перед применением.",
+    icon: "file",
+    group: "mihomo",
+  },
+  {
     id: "network",
     title: "Сеть",
     description: "Интернет, LTE и задержки, схема сети, анализ блокировок напрямую и через mihomo.",
@@ -95,6 +152,13 @@ export const NAV: NavItem[] = [
     group: "system",
   },
   {
+    id: "core",
+    title: "Ядро mihomo",
+    description: "Режим, TUN, DNS, кеши, гео-базы, обновление и перезапуск ядра.",
+    icon: "bolt",
+    group: "system",
+  },
+  {
     id: "dms",
     title: "Развёртывания",
     description: "Сервисы под управлением DMS: релизы, артефакты и домены.",
@@ -112,6 +176,7 @@ export const NAV: NavItem[] = [
 
 export const NAV_GROUPS: Array<[NavItem["group"], string]> = [
   ["main", "Рабочее пространство"],
+  ["mihomo", "Прокси mihomo"],
   ["network", "Сеть и безопасность"],
   ["system", "Система"],
 ];

@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { analyzeTarget, type Analysis, type ProbePath, type ProbeStep } from "../../api";
 import { Icon, type IconName } from "../../components/ui/Icon";
 import { Alert } from "../../components/ui/controls";
@@ -16,8 +16,8 @@ const PATHS: Array<{ id: string; label: string; hint: string }> = [
 
 const EXAMPLES = ["youtube.com", "rutracker.org", "chatgpt.com", "gosuslugi.ru", "hetzner.com", "speed.cloudflare.com/__down?bytes=200000"];
 
-export function NetworkAnalyzer({ result, onResult }: { result: Analysis | null; onResult: (a: Analysis) => void }) {
-  const [target, setTarget] = useState(result?.target || "");
+export function NetworkAnalyzer({ result, onResult, initialTarget }: { result: Analysis | null; onResult: (a: Analysis) => void; initialTarget?: string }) {
+  const [target, setTarget] = useState(initialTarget || result?.target || "");
   const [paths, setPaths] = useState<string[]>(["direct", "mihomo", "mikrotik"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -38,6 +38,12 @@ export function NetworkAnalyzer({ result, onResult }: { result: Analysis | null;
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (initialTarget) void run(initialTarget);
+    // Only the hand-over value starts a run; later edits are manual.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTarget]);
 
   return (
     <div className="net-stack">
