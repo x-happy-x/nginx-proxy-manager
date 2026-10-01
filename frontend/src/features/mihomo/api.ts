@@ -29,7 +29,8 @@ export type AdaptiveNode = {
   score: number;
   record: { ok: number; fail: number; avgMs: number; lastMs: number; checks: number; lastOk: string; lastCheck: string };
 };
-export type AdaptiveResult = { mode: string; at: string; ok: boolean; available?: boolean; consecutiveSuccesses?: number; consecutiveFailures?: number; probes: AdaptiveProbe[] };
+/** skipped: "dependency-not-ready" when the base provider has not admitted the same connection (MIHOMO-6). */
+export type AdaptiveResult = { mode: string; at: string; ok: boolean; available?: boolean; consecutiveSuccesses?: number; consecutiveFailures?: number; skipped?: string; probes: AdaptiveProbe[] | null };
 export type AdaptiveHealth = {
   mode: NetMode;
   observed: NetMode;
@@ -40,6 +41,8 @@ export type AdaptiveHealth = {
   rankings: Partial<Record<"normal" | "whitelist", AdaptiveNode[] | null>>;
   results: Record<string, AdaptiveResult>;
   persistenceError?: string;
+  /** Base provider whose verified nodes gate this service check (MIHOMO-6). */
+  dependsOn?: string;
 };
 
 export type MProvider = {

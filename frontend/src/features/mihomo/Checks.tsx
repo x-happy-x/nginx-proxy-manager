@@ -52,7 +52,13 @@ function Stages({ probes }: { probes: AdaptiveProbe[] }) {
  * Status with the fork's thresholds (MIHOMO-5): `ok` is the last probe,
  * `available` is admission after failure-/recovery-threshold.
  */
-function NodeStatus({ rank, r }: { rank?: AdaptiveNode; r?: AdaptiveResult }) {
+function NodeStatus({ rank, r, base }: { rank?: AdaptiveNode; r?: AdaptiveResult; base?: string }) {
+  if (r?.skipped)
+    return (
+      <span className="badge" title={`Узел ещё не прошёл базовую проверку${base ? ` подписки ${base}` : ""}: сервис его не проверял, статистика не менялась`}>
+        ждёт базу
+      </span>
+    );
   const fails = r?.consecutiveFailures || 0;
   const oks = r?.consecutiveSuccesses || 0;
   if (r && r.available === true && !r.ok)
@@ -69,9 +75,10 @@ function NodeStatus({ rank, r }: { rank?: AdaptiveNode; r?: AdaptiveResult }) {
 function lastProbe(h: AdaptiveHealth, name: string) {
   const r = h.results?.[name];
   if (!r) return null;
-  const failed = r.probes.find((p) => !p.ok);
-  const ms = Math.max(0, ...r.probes.map((p) => p.ms));
-  return { r, failed, ms, bytes: r.probes.reduce((s, p) => s + (p.bytes || 0), 0) };
+  const probes = r.probes || [];
+  const failed = probes.find((p) => !p.ok);
+  const ms = Math.max(0, ...probes.map((p) => p.ms));
+  return { r, probes, failed, ms, bytes: probes.reduce((s, p) => s + (p.bytes || 0), 0) };
 }
 
 export function Checks({ onConfig }: { onConfig: () => void }) {
@@ -111,6 +118,8 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
   }, [h, current, activeView]);
 
   const stableCount = (m: "normal" | "whitelist") => (h?.rankings[m] || []).filter((r) => r.stable).length;
+  const skipped = Object.values(h?.results || {}).filter((r) => r.skipped).length;
+  const base = h?.dependsOn ? providers[h.dependsOn] : undefined;
 
   return (
     <div className="stack">
@@ -122,7 +131,7 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
               <select aria-label="Подписка" value={current?.name || ""} onChange={(e) => setSelected(e.target.value)}>
                 {adaptive.map((p) => (
                   <option key={p.name} value={p.name}>
-                    {p.name}
+                    {p.adaptive?.dependsOn ? `${p.name} ← ${p.adaptive.dependsOn}` : p.name}
                   </option>
                 ))}
               </select>
@@ -194,10 +203,27 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
               <span className="stat-label">Последний обход</span>
               <span className="stat-value">{h.checkedAt && !h.checkedAt.startsWith("0001") ? timeOf(h.checkedAt) : "—"}</span>
               <span className="stat-meta">
-                проверено {number(Object.keys(h.results || {}).length)} из {number(current!.proxies.length)}
+                проверено {number(Object.values(h.results || {}).filter((r) => !r.skipped).length)} из {number(current!.proxies.length)}
+                {skipped ? ` · ждут базу ${number(skipped)}` : ""}
               </span>
             </div>
           </div>
+          {h.dependsOn ? (
+            <Alert
+              tone="info"
+              title={`Каскад: сначала подписка ${h.dependsOn}`}
+              action={
+                base ? (
+                  <button type="button" className="btn btn-sm" onClick={() => setSelected(h.dependsOn!)}>
+                    Открыть {h.dependsOn}
+                  </button>
+                ) : null
+              }
+            >
+              Сервисная проверка отправляет запрос только узлам, которые свежо прошли базовую проверку {h.dependsOn} в том же режиме сети. Остальные помечены «ждёт базу» и в статистику сервиса не попадают.
+              {base?.adaptive ? ` Сейчас база допускает ${number(Object.values(base.adaptive.results || {}).filter((r) => r.available).length)} из ${number(base.proxies.length)} узлов.` : ""}
+            </Alert>
+          ) : null}
           {h.persistenceError ? <Alert tone="warning" title="История проверок не сохраняется">{h.persistenceError}</Alert> : null}
           <Tabs<View>
             label="Рейтинг"
@@ -234,14 +260,16 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
                             <strong>{name}</strong>
                           </td>
                           <td className="col-shrink" data-label="Статус">
-                            <NodeStatus rank={rank} r={lp?.r} />
+                            <NodeStatus rank={rank} r={lp?.r} base={h.dependsOn} />
                           </td>
                           <td className="col-num mono" data-label="Успех">{rank ? `${Math.round(rank.successRate * 100)}%` : "—"}</td>
                           <td className="col-num mono" data-label="Проверок">{rank ? number(rank.record.checks) : "—"}</td>
                           <td className="col-num mono" data-label="GET">{rank && rank.record.avgMs ? `${Math.round(rank.record.avgMs)} мс` : "—"}</td>
                           <td className="col-num mono" data-label="Оценка">{rank ? number(rank.score) : "—"}</td>
                           <td data-label="Проба">
-                            {lp ? (
+                            {lp?.r.skipped ? (
+                              <span className="mh-muted">не проверялся: база не допустила узел</span>
+                            ) : lp ? (
                               <span className="cell-sub">
                                 {timeOf(lp.r.at)} · {lp.r.mode} · {lp.failed ? `${hostOf(lp.failed.url)} · ${STAGE_LABEL[lp.failed.stage] || lp.failed.stage}: ${lp.failed.error || lp.failed.status || "ошибка"}` : `${lp.ms} мс · ${bytes(lp.bytes)}`}
                               </span>
@@ -249,7 +277,7 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
                               <span className="mh-muted">—</span>
                             )}
                           </td>
-                          <td data-label="Этапы">{lp ? <Stages probes={lp.r.probes} /> : null}</td>
+                          <td data-label="Этапы">{lp && !lp.r.skipped && lp.probes.length ? <Stages probes={lp.probes} /> : null}</td>
                         </tr>
                       );
                     })}
