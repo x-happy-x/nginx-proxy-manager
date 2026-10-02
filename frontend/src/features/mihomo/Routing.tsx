@@ -287,7 +287,8 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
   const euOn = s.eu.every((c) => s.ai.includes(c));
   const euCount = [...countries].filter(([c]) => euSet.has(c)).reduce((a, [, n]) => a + n, 0);
   const others = [...countries].filter(([c]) => !euSet.has(c)).sort((a, b) => b[1] - a[1]);
-  const aiNodes = usable.filter((n) => s.ai.includes(countryOf(n))).length;
+  // with the service check every node but unsupported flags is a candidate; the exit country decides (NPM-39)
+  const aiNodes = s.ai_service_check ? usable.filter((n) => !s.never.includes(countryOf(n))).length : usable.filter((n) => s.ai.includes(countryOf(n))).length;
   const toggleAI = (codes: string[], on: boolean) => set("ai", on ? [...new Set([...s.ai, ...codes])] : s.ai.filter((c) => !codes.includes(c)));
   const c: Ctx = { proxies, available };
   const groupHealth = (name: string) => {
@@ -398,7 +399,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
             <div className="rt-field">
               <span className="rt-lab">
                 <span>Страны для ИИ</span>
-                <small>{number(aiNodes)} узлов</small>
+                <small>{number(aiNodes)} {s.ai_service_check ? "кандидатов" : "узлов"}</small>
               </span>
               <div className="mh-chips">
                 <button type="button" className="mh-chip" aria-pressed={euOn} onClick={() => toggleAI(s.eu, !euOn)} title={s.eu.join(" ")}>
@@ -414,7 +415,11 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
                   );
                 })}
               </div>
-              <span className="rt-hint">Зачёркнутые сервисы ИИ не поддерживают. Узлы дополнительно проверяются: страна выхода и ответ OpenAI API.</span>
+              <span className="rt-hint">
+                {s.ai_service_check
+                  ? "Страна определяется по факту выхода (Cloudflare trace) — узлы без флага, например 🇫🇲 ОБХОД, тоже проверяются. Плюс ответ OpenAI API. Зачёркнутые страны отсеиваются сразу."
+                  : "Без проверки узлы отбираются только по флагу в названии. Зачёркнутые сервисы ИИ не поддерживают."}
+              </span>
             </div>
             <div className="rt-field">
               <span className="rt-lab">
