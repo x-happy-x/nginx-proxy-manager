@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "../../navigation";
+import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { TimeChart } from "../../components/charts/TimeChart";
 import { Segmented } from "../../components/ui/controls";
@@ -7,7 +7,8 @@ import { bytes, number } from "../../lib/format";
 import { mihomo, openStream, type MConnection, type MProvider, type MProxy, type MRule } from "./api";
 import { useMihomo } from "./context";
 import { PeriodStats } from "./PeriodStats";
-import { Delay, lastDelay, speed } from "./shared";
+import { BypassTraffic } from "./BypassTraffic";
+import { Delay, Tabs, lastDelay, speed } from "./shared";
 
 type Point = { t: number; v: number };
 const KEEP = 150;
@@ -297,8 +298,11 @@ function Topology({ conns }: { conns: MConnection[] }) {
 
 /* ---------- page ---------- */
 
+type TrafficTab = "live" | "period" | "bypass" | "topology";
+
 export function Traffic() {
   const { traffic, deviceName, configs } = useMihomo();
+  const [tab, setTab] = useHashTab<TrafficTab>("traffic", "live");
   const [memory, setMemory] = useState<Point[]>([]);
   const [connCount, setConnCount] = useState<Point[]>([]);
   const [conns, setConns] = useState<MConnection[]>([]);
@@ -365,6 +369,19 @@ export function Traffic() {
   return (
     <div className="stack">
       <PageHeader page="traffic">Скорость, память и соединения ядра в реальном времени; режим: {configs?.mode || "—"}.</PageHeader>
+      <Tabs<TrafficTab>
+        label="Раздел трафика"
+        value={tab}
+        onChange={setTab}
+        items={[
+          ["live", "Сейчас"],
+          ["period", "За период"],
+          ["bypass", "Через обходы"],
+          ["topology", "Топология"],
+        ]}
+      />
+      {tab === "live" ? (
+        <>
 
       <div className="grid-3">
         <section className="card">
@@ -487,6 +504,11 @@ export function Traffic() {
         </section>
       ) : null}
 
+        </>
+      ) : null}
+
+      {tab === "topology" ? (
+        <>
       <Topology conns={conns} />
 
       <div className="grid-3">
@@ -516,7 +538,11 @@ export function Traffic() {
         </section>
       </div>
 
-      <PeriodStats />
+        </>
+      ) : null}
+
+      {tab === "period" ? <PeriodStats /> : null}
+      {tab === "bypass" ? <BypassTraffic /> : null}
     </div>
   );
 }

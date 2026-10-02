@@ -198,6 +198,15 @@ export type TrafficReport = {
   closed: Array<{ host: string; source: string; process?: string; rule: string; chains: string[]; up: number; down: number; start: string; end: number; network: string }>;
 };
 
+export type RoutePoint = { t: number; direct: number; proxy: number; bypass: number; chain: number };
+export type BypassReport = {
+  period: string;
+  since: number;
+  series: RoutePoint[];
+  total: RoutePoint;
+  limit: { gb: number; day: number; used: number; cycle_start: number; cycle_end: number };
+};
+
 export type HealthPoint = {
   t: number;
   normal: number;
@@ -320,6 +329,8 @@ export const core = {
     call<ConfigCheck>("/api/core/config/check", json("POST", body)),
   applyConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup: string; sha: string; message: string }>("/api/core/config/apply", json("POST", body)),
+  bypassTraffic: (period: "24h" | "7d" | "30d") => call<BypassReport>(`/api/core/traffic/bypass?period=${period}`),
+  setBypassLimit: (gb: number, day: number) => call<unknown>("/api/core/traffic/limit", json("POST", { gb, day })),
   configVersion: (name: string) => call<{ yaml: string }>(`/api/core/config/version?name=${enc(name)}`),
   routing: () => call<{ settings: RoutingSettings; defaults: RoutingSettings; saved: boolean; sha?: string; providers?: string[]; managed?: boolean }>("/api/core/routing"),
   checkRouting: (body: { sha: string; settings: RoutingSettings }) => call<ConfigCheck>("/api/core/routing/check", json("POST", body)),

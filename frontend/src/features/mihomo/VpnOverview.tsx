@@ -5,6 +5,7 @@ import { core, mihomo, type MProvider, type MProxy, type TrafficReport } from ".
 import { MODE_LABEL, useMihomo } from "./context";
 import { HealthHistory } from "./HealthHistory";
 import { useTailscaleIssues } from "./Extras";
+import { useBypassStatus } from "./BypassTraffic";
 import { Alert } from "../../components/ui/controls";
 import { Delay, lastDelay, speed } from "./shared";
 
@@ -12,6 +13,7 @@ import { Delay, lastDelay, speed } from "./shared";
 export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }) {
   const { status, configs, traffic } = useMihomo();
   const tsIssues = useTailscaleIssues(!!status?.controller_ok);
+  const bypass = useBypassStatus(!!status?.controller_ok);
   const [proxies, setProxies] = useState<Record<string, MProxy>>({});
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [day, setDay] = useState<TrafficReport | null>(null);
@@ -55,6 +57,16 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   return (
     <div className="stack">
       <PageHeader page="vpn" />
+      {bypass.limitPct != null && bypass.limitPct >= 75 ? (
+        <Alert tone={bypass.limitPct >= 90 ? "danger" : "warning"} title={`Обходы: использовано ${Math.round(bypass.limitPct)}% месячного лимита (${bypass.gb} ГБ)`} action={<a className="btn btn-sm" href="#/traffic/bypass">Что тратит</a>}>
+          Обходы берутся, когда прямые серверы не работают или медленнее порога. Посмотрите, какие устройства и сайты их тратят.
+        </Alert>
+      ) : null}
+      {bypass.onBypass && last?.mode !== "белые списки" ? (
+        <Alert tone="info" title="Прямые серверы не подходят — трафик идёт через обходы" action={<a className="btn btn-sm" href="#/coreconfig/routing">Маршрутизация</a>}>
+          Прямые узлы не прошли проверку или отвечают медленнее порога. Обходы тратят ограниченный трафик.
+        </Alert>
+      ) : null}
       {tsIssues.map((t) => (
         <Alert
           key={t.name}
