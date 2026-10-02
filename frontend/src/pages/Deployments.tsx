@@ -23,6 +23,7 @@ export function Deployments({
   const [message, setMessage] = useState("");
   const [jobs, setJobs] = useState<Array<{id: string; app?: string; status: string; error?: string}>>([]);
   const [connected, setConnected] = useState(false);
+  const [plan, setPlan] = useState<{metadata?: {name?: string; version?: string}; app: string; artifacts: Array<{source: string; destination: string; preserve?: boolean}>; healthcheck: {url: string}; nginx: {hosts?: Array<{host: string}>; remove_hosts?: string[]}} | null>(null);
   const refreshJobs = async () => {
     try {
       const res = await fetch("/api/dms/jobs");
@@ -36,13 +37,14 @@ export function Deployments({
     return () => window.clearInterval(timer);
   }, []);
   const submit = async (dryRun: boolean) => {
-    setWorking(true); setMessage("");
+    setWorking(true); setMessage(""); setPlan(null);
     try {
       const endpoint = file ? `/api/dms/packages${dryRun ? "?dry_run=true" : ""}` : "/api/dms/install";
       const res = await fetch(endpoint, {method: "POST", headers: {"Content-Type": file ? "application/gzip" : "application/json"}, body: file || JSON.stringify({url, sha256: checksum, dry_run: dryRun})});
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setMessage(dryRun ? `Пакет проверен: ${data.plan.Metadata?.Name || data.plan.App}. Файлов: ${data.plan.Artifacts?.length || 0}.` : `Операция ${data.id} принята. Результат появится в журнале.`);
+      if (dryRun) setPlan(data.plan);
+      setMessage(dryRun ? `Пакет проверен: ${data.plan.metadata?.name || data.plan.app}. Артефактов: ${data.plan.artifacts?.length || 0}.` : `Операция ${data.id} принята. Результат появится в журнале.`);
       await refreshJobs(); onRefresh();
     } catch (err) { setMessage(err instanceof Error ? err.message : "Ошибка установки"); }
     finally { setWorking(false); }
@@ -81,6 +83,7 @@ export function Deployments({
           <label className="field"><span className="field-label">Или архив с компьютера</span><input type="file" accept=".gz,.tgz" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
           <div className="actions"><button className="btn" disabled={!connected || working || (!file && (!url || !checksum))} onClick={() => void submit(true)}>Проверить пакет</button> <button className="btn btn-primary" disabled={!connected || working || (!file && (!url || !checksum))} onClick={() => { if (window.confirm("Установить пакет и перезапустить его сервис?")) void submit(false); }}>Установить</button></div>
           {message && <p role="status">{message}</p>}
+          {plan && <div className="stack"><h3>{plan.metadata?.name || plan.app} {plan.metadata?.version || ""}</h3><p>Проверка здоровья: <code>{plan.healthcheck.url || "не задана"}</code></p><p>Домены: {plan.nginx.hosts?.map((host) => host.host).join(", ") || "существующие маршруты сохраняются"}</p>{!!plan.nginx.remove_hosts?.length && <p>Удаляемые домены: {plan.nginx.remove_hosts.join(", ")}</p>}<ul>{plan.artifacts.map((artifact) => <li key={artifact.destination}><code>{artifact.source}</code> → <code>{artifact.destination}</code>{artifact.preserve ? " · сохранить существующий файл" : ""}</li>)}</ul></div>}
         </div>
       </section>
       {jobs.length > 0 && <section className="card"><div className="card-header"><h2>Операции</h2></div><div className="card-body stack">{jobs.slice(0, 10).map((job) => <div key={job.id}><strong>{job.app || "Пакет"}</strong> — {job.status}<div className="muted mono">{job.id}</div>{job.error && <p role="alert">{job.error}</p>}</div>)}</div></section>}

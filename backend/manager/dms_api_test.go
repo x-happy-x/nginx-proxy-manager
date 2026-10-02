@@ -56,3 +56,17 @@ func TestDMSProxyRejectsCrossOriginAndUnsafeEndpoint(t *testing.T) {
 		t.Fatal(res.Code)
 	}
 }
+
+func TestDMSWriteRequiresHomeNetAdmin(t *testing.T) {
+	t.Setenv("HOMENET_ACCESS_ENABLED", "1")
+	previous := gateClient
+	defer func() { gateClient = previous }()
+	gateClient = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 204, Header: http.Header{"X-Gate-Role": []string{"user"}}, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})}
+	res := httptest.NewRecorder()
+	(&app{}).handle(res, httptest.NewRequest("POST", "/api/dms/install", strings.NewReader(`{"url":"https://example.com/app"}`)))
+	if res.Code != 403 {
+		t.Fatalf("non-admin deployment allowed: %d", res.Code)
+	}
+}

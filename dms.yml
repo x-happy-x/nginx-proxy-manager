@@ -25,8 +25,14 @@ build:
   - npm run build --prefix frontend
 
 artifacts:
-  - source: bin/linux-arm64
-    destination: /opt/etc/homenet/nginx/bin/linux-arm64
+  - source: bin/linux-arm64/manager
+    destination: /opt/etc/homenet/nginx/bin/linux-arm64/manager
+    mode: 0755
+  - source: bin/linux-arm64/nginx
+    destination: /opt/etc/homenet/nginx/bin/linux-arm64/nginx
+    mode: 0755
+  - source: bin/linux-arm64/homenet
+    destination: /opt/etc/homenet/nginx/bin/linux-arm64/homenet
     mode: 0755
   - source: frontend/static/react
     destination: /opt/etc/homenet/nginx/frontend/static/react
