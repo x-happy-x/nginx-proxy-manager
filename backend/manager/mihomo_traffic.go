@@ -104,6 +104,7 @@ type trafficCollector struct {
 	lastUp    int64
 	lastDown  int64
 	haveTotal bool
+	started   bool
 	dirty     bool
 }
 
@@ -291,8 +292,16 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 	t.st.DimHours, hb = bucketFor(t.st.DimHours, hour, dimHourKeep)
 	t.st.DimDays, db = bucketFor(t.st.DimDays, day, dimDayKeep)
 
+	// The first poll after a start only learns the open connections: their
+	// earlier bytes belong to time this process did not observe.
+	baseline := len(t.live) == 0 && !t.started
+	t.started = true
 	seen := make(map[string]liveConn, len(conns))
 	for _, c := range conns {
+		if baseline {
+			seen[c.ID] = liveConn{up: c.Upload, down: c.Download, c: c}
+			continue
+		}
 		prev, known := t.live[c.ID]
 		du, dd := c.Upload, c.Download
 		if known {
