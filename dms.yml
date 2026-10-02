@@ -1,6 +1,14 @@
 version: "1"
 app: homenet
 
+metadata:
+  name: HomeNet
+  version: NPM-23
+  description: Р”РѕРјР°С€РЅРёР№ РїРѕСЂС‚Р°Р» Рё СѓРїСЂР°РІР»РµРЅРёРµ РїСЂРѕРєСЃРё
+  icon: frontend/static/icons/server.svg
+  os: linux
+  arch: arm64
+
 target:
   host: 192.168.1.1
   user: root
@@ -13,7 +21,7 @@ build:
   - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/manager ./manager
   - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/nginx ./nginx
   - cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../bin/linux-arm64/homenet ./ctl
-  - npm install --prefix frontend
+  - npm ci --prefix frontend
   - npm run build --prefix frontend
 
 artifacts:
@@ -33,38 +41,8 @@ service:
   action: restart
 
 healthcheck:
-  url: http://192.168.1.1:63412/api/routes
+  url: http://192.168.1.1:63412/health
   attempts: 15
   interval: 1s
-
-nginx:
-  routes_path: /opt/etc/homenet/nginx/routes.yml
-  apply_command: /opt/bin/homenet apply
-  remove_apps: [dns]
-  remove_hosts: [dns.local]
-  apps:
-    - id: homenet
-      name: HomeNet
-      upstream:
-        address: 192.168.1.1
-        port: 63412
-        scheme: http
-  hosts:
-    - host: homenet.local
-      kind: private
-      app_id: homenet
-      verify_upstream_ssl: false
-      dns:
-        publish: [local]
-        local_record_ip: 192.168.1.2
-      tls:
-        cert_policy: off
-        cert_ref: none
-        san: []
-      endpoints:
-        - name: web
-          listen:
-            protocol: http
-            port: 80
-          behavior:
-            redirect: off
+  status: 200
+  contains: ok
