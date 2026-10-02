@@ -7,6 +7,7 @@ import { mihomo, type AdaptiveHealth, type AdaptiveNode, type AdaptiveProbe, typ
 import { useMihomo } from "./context";
 import { AdaptiveModeBadge } from "./Proxies";
 import { TabCount, Tabs } from "./shared";
+import { HealthHistory } from "./HealthHistory";
 
 type View = "normal" | "whitelist" | "results";
 const STAGES = ["dial", "tls/http", "http", "body", "ok"];
@@ -293,6 +294,7 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
               Стабильный узел: от 3 проверок, успех от 70%, последняя проверка успешна и не старше 7 дней. «Держится» и «возвращается» — пороги failure-threshold и recovery-threshold подписки. Оценка = успех × 1000 / (задержка + 100). Данные обновляются каждые 10 секунд.
             </div>
           </section>
+          <HealthHistory provider={current!.name} />
           <section className="card">
             <div className="card-header">
               <div>

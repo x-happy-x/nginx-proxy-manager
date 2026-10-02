@@ -71,6 +71,8 @@ type trafficState struct {
 	DimHours []dimBucket    `json:"dim_hours"`
 	DimDays  []dimBucket    `json:"dim_days"`
 	Closed   []closedConn   `json:"closed"`
+	// Adaptive health per provider (NPM-29).
+	Health map[string]*providerHealth `json:"health,omitempty"`
 }
 
 type liveConn struct {
@@ -144,6 +146,12 @@ func (a *app) startMihomoTraffic() {
 					traffic.observe(time.Now(), body.UploadTotal, body.DownloadTotal, body.Connections)
 				}
 			case <-save.C:
+				var body struct {
+					Providers map[string]providerSnapshot `json:"providers"`
+				}
+				if err := mihomoGet("/providers/proxies", &body); err == nil {
+					traffic.observeHealth(time.Now(), body.Providers)
+				}
 				traffic.save()
 			}
 		}

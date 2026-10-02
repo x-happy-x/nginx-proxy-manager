@@ -180,6 +180,18 @@ export type TrafficReport = {
   closed: Array<{ host: string; source: string; process?: string; rule: string; chains: string[]; up: number; down: number; start: string; end: number; network: string }>;
 };
 
+export type HealthPoint = {
+  t: number;
+  normal: number;
+  whitelist: number;
+  offline: number;
+  unknown: number;
+  working: number;
+  total: number;
+  stable_normal: number;
+  stable_whitelist: number;
+};
+
 export type InstallPlan = {
   asset: string;
   release_base: string;
@@ -290,6 +302,8 @@ export const core = {
     call<{ valid: boolean; changes: ConfigChange[]; message?: string }>("/api/core/config/check", json("POST", body)),
   applyConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup: string; sha: string; message: string }>("/api/core/config/apply", json("POST", body)),
+  health: (provider: string, period: string) =>
+    call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
