@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Children, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../../components/ui/Icon";
 import { Segmented } from "../../components/ui/controls";
 import { Delay, delayTone } from "./shared";
@@ -113,13 +113,15 @@ export function dotOfDelay(key: string, name: string, d: number | null): Dot {
 
 /** Collapsed view: one square per node, the whole strip toggles the list. */
 export function HealthDots({ dots, open, onToggle, label }: { dots: Dot[]; open: boolean; onToggle: () => void; label: string }) {
-  const MAX = 400;
+  const MAX = 1200;
   return (
     <button type="button" className="mh-health" aria-expanded={open} aria-label={open ? "Свернуть" : `Показать: ${label}`} onClick={onToggle}>
-      {dots.slice(0, MAX).map((d) => (
-        <i key={d.key} className={`is-${d.tone}`} title={d.title} />
-      ))}
-      {dots.length > MAX ? <span className="mh-muted">+{dots.length - MAX}</span> : null}
+      <span className="mh-health-dots">
+        {dots.slice(0, MAX).map((d) => (
+          <i key={d.key} className={`is-${d.tone}`} title={d.title} />
+        ))}
+        {dots.length > MAX ? <span className="mh-health-more">+{dots.length - MAX}</span> : null}
+      </span>
       <span className="mh-health-toggle">
         {open ? "Свернуть" : label}
         <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
@@ -127,3 +129,45 @@ export function HealthDots({ dots, open, onToggle, label }: { dots: Dot[]; open:
     </button>
   );
 }
+
+/**
+ * Cards packed by height (NPM-32): a grid of 4px rows where every card spans
+ * as many rows as it is tall, so short cards fill the holes next to long
+ * ones and the left-to-right order stays.
+ */
+export function Masonry({ className, children }: { className: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = (item: HTMLElement) => {
+      const inner = item.firstElementChild as HTMLElement | null;
+      if (!inner) return;
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 14;
+      item.style.gridRowEnd = `span ${Math.max(1, Math.ceil((inner.getBoundingClientRect().height + gap) / MASONRY_ROW))}`;
+    };
+    const ro = new ResizeObserver((entries) => entries.forEach((e) => e.target.parentElement && fit(e.target.parentElement)));
+    const watch = () => {
+      ro.disconnect();
+      Array.from(el.children).forEach((c) => {
+        const inner = c.firstElementChild;
+        if (inner) ro.observe(inner);
+        fit(c as HTMLElement);
+      });
+    };
+    watch();
+    const mo = new MutationObserver(watch);
+    mo.observe(el, { childList: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, []);
+  return (
+    <div ref={ref} className={`${className} is-masonry`}>
+      {Children.map(children, (c) => (c ? <div className="masonry-item">{c}</div> : null))}
+    </div>
+  );
+}
+
+const MASONRY_ROW = 4;
