@@ -168,6 +168,18 @@ export type CoreConfig = {
   can_validate: boolean;
 };
 
+export type TrafficReport = {
+  period: string;
+  resolution: number;
+  since: number;
+  poll_seconds: number;
+  up: number;
+  down: number;
+  series: Array<{ t: number; up: number; down: number; conns: number }>;
+  dims: Record<string, Array<{ key: string; up: number; down: number; count: number }>>;
+  closed: Array<{ host: string; source: string; process?: string; rule: string; chains: string[]; up: number; down: number; start: string; end: number; network: string }>;
+};
+
 export type InstallPlan = {
   asset: string;
   release_base: string;
@@ -278,6 +290,8 @@ export const core = {
     call<{ valid: boolean; changes: ConfigChange[]; message?: string }>("/api/core/config/check", json("POST", body)),
   applyConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup: string; sha: string; message: string }>("/api/core/config/apply", json("POST", body)),
+  traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
+  resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>
     call<{ install: InstallState }>("/api/core/install", json("POST", req)).then((r) => r.install),

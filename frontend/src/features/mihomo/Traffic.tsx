@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { TimeChart } from "../../components/charts/TimeChart";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Segmented } from "../../components/ui/controls";
-import { bytes, dateTime, number } from "../../lib/format";
+import { bytes, number } from "../../lib/format";
 import { mihomo, openStream, type MConnection, type MProvider, type MProxy, type MRule } from "./api";
 import { useMihomo } from "./context";
-import { historyStore, useHistory, type HistoryBy } from "./stores";
+import { PeriodStats } from "./PeriodStats";
 import { Delay, lastDelay, speed } from "./shared";
 
 type Point = { t: number; v: number };
@@ -296,97 +295,6 @@ function Topology({ conns }: { conns: MConnection[] }) {
   );
 }
 
-/* ---------- connection history ---------- */
-
-const HIST_BY: Array<[HistoryBy, string]> = [
-  ["host", "Сайт"],
-  ["source", "Устройство"],
-  ["process", "Процесс"],
-  ["outbound", "Выход"],
-  ["group", "Группа"],
-];
-
-function History() {
-  const { deviceName } = useMihomo();
-  const data = useHistory();
-  const [by, setBy] = useState<HistoryBy>("host");
-  const [sort, setSort] = useState<"traffic" | "count" | "last">("traffic");
-  const [q, setQ] = useState("");
-  const [confirm, setConfirm] = useState(false);
-  const rows = Object.values(data[by])
-    .filter((r) => !q || (r.key + " " + (by === "source" ? deviceName(r.key) : "")).toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (sort === "count" ? b.count - a.count : sort === "last" ? b.last - a.last : b.down + b.up - (a.down + a.up)));
-  const totals = Object.values(data.host).reduce((s, r) => ({ count: s.count + r.count, down: s.down + r.down, up: s.up + r.up }), { count: 0, down: 0, up: 0 });
-  return (
-    <section className="card card-flush">
-      <div className="card-header">
-        <div>
-          <h2 className="card-title">История соединений</h2>
-          <p className="cell-sub">
-            закрытые соединения с {dateTime(new Date(data.since).toISOString())}, пока открыта консоль · {number(totals.count)} соединений · ↓ {bytes(totals.down)} ↑ {bytes(totals.up)}
-          </p>
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(true)}>
-          <Icon name="trash" />
-          Очистить
-        </button>
-      </div>
-      <div className="toolbar mh-pad-x">
-        <Segmented<HistoryBy> label="Группировать по" value={by} onChange={setBy} options={HIST_BY.map(([value, label]) => ({ value, label }))} />
-        <select aria-label="Сортировка" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
-          <option value="traffic">по трафику</option>
-          <option value="count">по числу соединений</option>
-          <option value="last">по времени</option>
-        </select>
-        <input className="mh-filter" placeholder="Фильтр" aria-label="Фильтр истории" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
-      {rows.length ? (
-        <div className="table-wrap mh-hist">
-          <table className="table responsive">
-            <thead>
-              <tr>
-                <th>{HIST_BY.find(([v]) => v === by)?.[1]}</th>
-                <th className="col-num">Соединений</th>
-                <th className="col-num">↓</th>
-                <th className="col-num">↑</th>
-                <th>Последнее</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 200).map((r) => (
-                <tr key={r.key}>
-                  <td className="cell-primary" data-label="">
-                    <strong className="break">{by === "source" && deviceName(r.key) ? deviceName(r.key) : r.key}</strong>
-                    {by === "source" && deviceName(r.key) ? <span className="cell-sub mono">{r.key}</span> : null}
-                  </td>
-                  <td className="col-num mono" data-label="Соединений">{number(r.count)}</td>
-                  <td className="col-num mono" data-label="↓">{bytes(r.down)}</td>
-                  <td className="col-num mono" data-label="↑">{bytes(r.up)}</td>
-                  <td className="cell-sub" data-label="Последнее">{dateTime(new Date(r.last).toISOString())}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="mh-muted mh-pad">История пополняется, когда соединения закрываются. Подождите минуту.</p>
-      )}
-      <ConfirmDialog
-        open={confirm}
-        title="Очистить историю соединений?"
-        confirmLabel="Очистить"
-        onClose={() => setConfirm(false)}
-        onConfirm={() => {
-          setConfirm(false);
-          historyStore.clear();
-        }}
-      >
-        История хранится только в этом браузере; на роутере она не сохраняется.
-      </ConfirmDialog>
-    </section>
-  );
-}
-
 /* ---------- page ---------- */
 
 export function Traffic() {
@@ -608,7 +516,7 @@ export function Traffic() {
         </section>
       </div>
 
-      <History />
+      <PeriodStats />
     </div>
   );
 }
