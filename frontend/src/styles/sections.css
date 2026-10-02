@@ -426,9 +426,33 @@
   }
 }
 
-/* NPM-37: the way back to the portal sits in the menu, under the sections */
-.nav-portal {
-  margin-top: 12px;
-  padding-top: 12px;
+/* NPM-37: the way back to the portal sits in the menu, under the sections.
+   Both blocks take their own height; on a short window the whole menu
+   scrolls, not each block in half of it. */
+.sidebar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sidebar > .nav {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.sidebar > .nav-portal {
+  margin: 0 10px;
+  padding: 12px 0;
   border-top: 1px solid var(--border);
+}
+
+.sidebar-foot {
+  margin-top: auto;
+}
+
+.sidebar > .sidebar-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
 }
