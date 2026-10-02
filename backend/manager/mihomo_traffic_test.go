@@ -29,7 +29,9 @@ func TestTrafficTotalsSurviveCoreRestart(t *testing.T) {
 func TestTrafficSplitByConnectionGrowthAndClosed(t *testing.T) {
 	tc := newTrafficCollector(filepath.Join(t.TempDir(), "traffic.json.gz"), time.Unix(1_800_000_000, 0))
 	t0 := time.Unix(1_800_000_000, 0)
-	tc.observe(t0, 0, 0, []mihomoConn{conn("a", "192.168.1.47", "rr3.googlevideo.com", 10, 100, "DE-1", "YouTube")})
+	// A connection already open at start: only its growth from now on counts.
+	tc.observe(t0.Add(-5*time.Second), 0, 0, []mihomoConn{conn("old", "192.168.1.9", "big.example.com", 5000, 900000, "DE-1", "PROXY")})
+	tc.observe(t0, 0, 0, []mihomoConn{conn("a", "192.168.1.47", "rr3.googlevideo.com", 10, 100, "DE-1", "YouTube"), conn("old", "192.168.1.9", "big.example.com", 5000, 900010, "DE-1", "PROXY")})
 	tc.observe(t0.Add(5*time.Second), 0, 0, []mihomoConn{
 		conn("a", "192.168.1.47", "rr3.googlevideo.com", 15, 400, "DE-1", "YouTube"),
 		conn("b", "192.168.1.23", "api.telegram.org", 1, 2, "FI", "Telegram"),
@@ -47,11 +49,16 @@ func TestTrafficSplitByConnectionGrowthAndClosed(t *testing.T) {
 	if yt.Down != 400 || yt.Up != 15 || yt.Count != 1 {
 		t.Fatalf("site split wrong: %+v", yt)
 	}
+	for _, r := range dims["site"] {
+		if r.Key == "example.com" && r.Down != 10 {
+			t.Fatalf("pre-existing connection counted its past: %+v", r)
+		}
+	}
 	if dims["outbound"][0].Key != "DE-1" || dims["device"][0].Key != "192.168.1.47" {
 		t.Fatalf("unexpected order %+v %+v", dims["outbound"], dims["device"])
 	}
 	closed := rep["closed"].([]closedConn)
-	if len(closed) != 1 || closed[0].Host != "rr3.googlevideo.com" || closed[0].Down != 400 {
+	if len(closed) != 2 || closed[0].Host != "rr3.googlevideo.com" || closed[0].Down != 400 {
 		t.Fatalf("closed %+v", closed)
 	}
 }
