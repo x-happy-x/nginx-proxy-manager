@@ -89,3 +89,42 @@ func TestSiteOf(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthHistoryModesAndWorking(t *testing.T) {
+	tc := newTrafficCollector(filepath.Join(t.TempDir(), "traffic.json.gz"), time.Unix(1_800_000_000, 0))
+	yes, no := true, false
+	snap := func(mode string, avail ...*bool) map[string]providerSnapshot {
+		p := providerSnapshot{Adaptive: &adaptiveSnapshot{Mode: mode, Results: map[string]struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{}}}
+		for i, a := range avail {
+			name := string(rune('a' + i))
+			p.Proxies = append(p.Proxies, struct {
+				Name  string `json:"name"`
+				Alive bool   `json:"alive"`
+			}{Name: name})
+			r := p.Adaptive.Results[name]
+			r.Available = a
+			p.Adaptive.Results[name] = r
+		}
+		return map[string]providerSnapshot{"ROUTER": p, "plain": {}}
+	}
+	t0 := time.Unix(1_800_000_000, 0).Truncate(time.Hour)
+	tc.observeHealth(t0, snap("normal", &yes, &yes, &no))
+	tc.observeHealth(t0.Add(30*time.Second), snap("whitelist", &no, &no, &no)) // same minute: ignored
+	tc.observeHealth(t0.Add(time.Minute), snap("whitelist", &yes, &no, &no))
+	rep := tc.healthReport("", "24h", t0.Add(2*time.Minute))
+	series := rep["series"].([]healthPoint)
+	if rep["provider"] != "ROUTER" || len(series) != 2 {
+		t.Fatalf("unexpected report %v", rep)
+	}
+	if series[0].Normal != 1 || series[0].Working != 2 || series[0].Total != 3 || series[1].Whitelist != 1 || series[1].Working != 1 {
+		t.Fatalf("minute points %+v", series)
+	}
+	hours := tc.st.Health["ROUTER"].Hours
+	if len(hours) != 1 || hours[0].Normal != 1 || hours[0].Whitelist != 1 || hours[0].Working != 2 {
+		t.Fatalf("hour point %+v", hours)
+	}
+}

@@ -591,6 +591,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		})
 	case "/api/core/install/plan":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "plan": installPlan(r.URL.Query().Get("xkeen") == "1")})
+	case "/api/core/health":
+		a.handleCoreHealth(w, r)
 	case "/api/core/traffic":
 		a.handleCoreTraffic(w, r)
 	case "/api/core/install/log":
