@@ -776,3 +776,62 @@ tr.mh-off td {
   flex: 0 0 auto;
   max-width: 100%;
 }
+
+/* NPM-25: provider node list, Tailscale, OLCRTC */
+button.mh-health {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  align-items: center;
+  font: inherit;
+}
+
+button.mh-health:hover {
+  background: var(--surface-2);
+}
+
+button.mh-health:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.mh-health-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.mh-groups-wide {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 640px), 1fr));
+}
+
+.mh-node-wide {
+  min-width: 0;
+}
+
+.mh-ts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 8px;
+}
+
+.mh-ts > .mh-setrow {
+  padding: 0 14px;
+}
+
+.mh-more {
+  align-self: flex-start;
+  margin: 0 8px;
+}
+
+.cb-pad {
+  padding: 12px 14px;
+  margin: 0;
+}
