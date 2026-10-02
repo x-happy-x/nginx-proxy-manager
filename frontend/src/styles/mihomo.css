@@ -2335,3 +2335,21 @@ button.yt-badge {
     gap: 1px;
   }
 }
+
+/* NPM-38: Tailscale access check */
+.mh-ts-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 12px;
+}
+
+.mh-ts-check-row .grow {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.mh-ts-check-row input {
+  width: 100%;
+}

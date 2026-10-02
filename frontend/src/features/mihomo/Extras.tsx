@@ -7,7 +7,7 @@ import { bytes, dateTime, errText, number } from "../../lib/format";
 import { core, DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy, type TailscalePeer, type TailscaleStatus } from "./api";
 import { useMihomo } from "./context";
 import { Delay, lastDelay } from "./shared";
-import { HealthDots, NodeTiles, NodeViewSwitch, type NodeView } from "./NodeTiles";
+import { HealthDots, NodeControls, NodeTiles, arrange, useStored, type NodePrefs } from "./NodeTiles";
 
 /* ---------- Tailscale ---------- */
 
@@ -78,16 +78,12 @@ export function useTailscaleIssues(enabled: boolean): TailscaleIssue[] {
   return issues;
 }
 
-export function TailscaleTab({ nodes, view, onView }: { nodes: MProxy[]; view: NodeView; onView: (v: NodeView) => void }) {
+export function TailscaleTab({ nodes, prefs }: { nodes: MProxy[]; prefs: NodePrefs }) {
   return (
     <div className="stack">
-      {nodes.length ? (
-        <div className="toolbar">
-          <NodeViewSwitch value={view} onChange={onView} />
-        </div>
-      ) : null}
+      {nodes.length ? <NodeControls prefs={prefs} delayLabel="Сначала в сети" /> : null}
       {nodes.map((n) => (
-        <TailscaleCard key={n.name} name={n.name} view={view} />
+        <TailscaleCard key={n.name} name={n.name} prefs={prefs} />
       ))}
       {!nodes.length ? (
         <EmptyState icon="network" title="Tailscale не настроен">
@@ -100,7 +96,62 @@ export function TailscaleTab({ nodes, view, onView }: { nodes: MProxy[]; view: N
 
 type PeerFilter = "online" | "all" | "exit";
 
-function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
+const isText = (v: unknown): v is string => typeof v === "string";
+
+/** «Проверка доступа»: a request through the Tailscale node to a tailnet address (NPM-38). */
+function AccessCheck({ name }: { name: string }) {
+  const [url, setUrl] = useStored("homenet.tailscale.checkUrl", "http://host01.infra.tailnt", isText);
+  const [text, setText] = useState(url);
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<{ ok: boolean; text: string; at: Date } | null>(null);
+  const run = async () => {
+    let target = text.trim();
+    if (!/^https?:\/\//i.test(target)) target = `http://${target}`;
+    setText(target);
+    setUrl(target);
+    setBusy(true);
+    try {
+      const r = await mihomo.delay(name, target, 10000);
+      setRes({ ok: true, text: `доступ есть · ${r.delay} мс`, at: new Date() });
+    } catch (err) {
+      setRes({ ok: false, text: `нет доступа: ${errText(err)}`, at: new Date() });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mh-ts-check">
+      <div className="mh-ts-head">
+        <strong>Проверка доступа</strong>
+        <span className="cell-sub">запрос к адресу внутри tailnet через {name}; любой HTTP-ответ — доступ есть</span>
+      </div>
+      <form
+        className="mh-ts-check-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run();
+        }}
+      >
+        <label className="grow">
+          <span className="sr-only">Адрес для проверки</span>
+          <input className="mono" value={text} onChange={(e) => setText(e.target.value)} placeholder="http://host01.infra.tailnt" />
+        </label>
+        <button type="submit" className="btn btn-sm" disabled={busy || !text.trim()}>
+          {busy ? <span className="spinner" /> : <Icon name="test" />}
+          Проверить
+        </button>
+        {res ? (
+          <span className={`badge ${res.ok ? "badge-success" : "badge-danger"}`} title={res.at.toLocaleTimeString("ru-RU")}>
+            {res.text}
+          </span>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
+function TailscaleCard({ name, prefs }: { name: string; prefs: NodePrefs }) {
+  const { view, sort, hideDead } = prefs;
   const { act } = useMihomo();
   const [st, setSt] = useState<TailscaleStatus | null>(null);
   const [error, setError] = useState("");
@@ -213,6 +264,7 @@ function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
       ) : null}
       {st ? (
         <>
+          <AccessCheck name={name} />
           <div className="mh-ts-head">
             <strong>Выход в интернет</strong>
             <span className="cell-sub">{busy === "exit" ? "переключаю…" : "выбор действует до перечитывания конфига; постоянный — exit-node в «Своих узлах»"}</span>
@@ -220,7 +272,7 @@ function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
           <NodeTiles
             view={view}
             disabled={!!busy}
-            items={[
+            items={arrange([
               { key: "", name: "Напрямую", meta: "без exit node", status: null, active: !exit && !st.exitNode, onSelect: () => setExit("", "") },
               ...exits.map((p) => ({
                 key: p.id,
@@ -232,7 +284,7 @@ function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
                 title: `${p.dnsName}${p.relay ? ` · relay ${p.relay}` : ""}`,
                 onSelect: () => setExit((p.ips || [])[0] || p.dnsName.replace(/\.$/, ""), peerName(p)),
               })),
-            ]}
+            ], sort, hideDead, 1)}
           />
           <div className="mh-ts-head">
             <strong>Устройства tailnet</strong>
@@ -266,7 +318,7 @@ function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
               <NodeTiles
                 view={view}
                 empty="Нет устройств под фильтр."
-                items={shown.slice(0, 600).map((p) => ({
+                items={arrange(shown.map((p) => ({
                   key: p.id,
                   name: peerName(p),
                   meta: [(p.ips || [])[0], p.os, p.rxBytes || p.txBytes ? `↓${bytes(p.rxBytes)} ↑${bytes(p.txBytes)}` : ""].filter(Boolean).join(" · "),
@@ -274,7 +326,7 @@ function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
                   active: p === exit,
                   dead: !p.online,
                   title: `${p.dnsName}${(p.ips || []).length ? ` · ${(p.ips || []).join(", ")}` : ""}${p.relay ? ` · relay ${p.relay}` : ""}${p.exitNodeOption ? " · может быть exit node" : ""}`,
-                }))}
+                })), sort, hideDead).slice(0, 600)}
               />
               {shown.length > 600 ? <p className="mh-muted cb-pad">Показаны первые 600 — уточните поиск.</p> : null}
             </>
@@ -308,7 +360,7 @@ function randomHex(n: number) {
   return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-export function OlcrtcTab({ providers, standalone, groups, onReload }: { providers: MProvider[]; standalone: MProxy[]; groups: MProxy[]; onReload: () => Promise<void> }) {
+export function OlcrtcTab({ providers, standalone, groups, onReload, prefs }: { providers: MProvider[]; standalone: MProxy[]; groups: MProxy[]; onReload: () => Promise<void>; prefs: NodePrefs }) {
   const [paths, setPaths] = useState<Record<string, string>>({});
   useEffect(() => {
     // Only the provider file paths, read from config.yaml (secrets stay masked server-side).
@@ -323,8 +375,9 @@ export function OlcrtcTab({ providers, standalone, groups, onReload }: { provide
   const pathOf = (name: string) => paths[name];
   return (
     <div className="stack">
+      {providers.length || standalone.length ? <NodeControls prefs={prefs} /> : null}
       {providers.map((p) => (
-        <OlcProvider key={p.name} p={p} path={pathOf(p.name)} groups={groups} onReload={onReload} />
+        <OlcProvider key={p.name} p={p} path={pathOf(p.name)} groups={groups} onReload={onReload} prefs={prefs} />
       ))}
       {standalone.length ? (
         <section className="card card-flush">
@@ -334,7 +387,7 @@ export function OlcrtcTab({ providers, standalone, groups, onReload }: { provide
               <p className="cell-sub">Правятся в «Конфигурация → Свои узлы».</p>
             </div>
           </div>
-          <NodeGrid nodes={standalone} groups={groups} onReload={onReload} />
+          <NodeGrid nodes={standalone} groups={groups} onReload={onReload} prefs={prefs} />
         </section>
       ) : null}
       {!providers.length && !standalone.length ? (
@@ -346,7 +399,7 @@ export function OlcrtcTab({ providers, standalone, groups, onReload }: { provide
   );
 }
 
-function NodeGrid({ nodes, groups, onReload }: { nodes: MProxy[]; groups: MProxy[]; onReload: () => Promise<void> }) {
+function NodeGrid({ nodes, groups, onReload, prefs }: { nodes: MProxy[]; groups: MProxy[]; onReload: () => Promise<void>; prefs: NodePrefs }) {
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const test = async (name: string) => {
     setTesting((t) => ({ ...t, [name]: true }));
@@ -359,28 +412,31 @@ function NodeGrid({ nodes, groups, onReload }: { nodes: MProxy[]; groups: MProxy
     await onReload();
   };
   return (
-    <div className="mh-nodes">
-      {nodes.map((n) => {
-        const inGroups = groups.filter((g) => (g.all || []).includes(n.name)).map((g) => g.name);
-        return (
-          <div key={n.name} className="mh-node mh-node-wide">
-            <span className="mh-node-main" title={n.name}>
-              <span className="mh-node-meta">
-                <span>{inGroups.length ? `в группах: ${inGroups.join(", ")}` : "не в группах"}</span>
-              </span>
-              <span className="mh-node-name">{n.name}</span>
-            </span>
-            <button type="button" className="mh-node-delay" onClick={() => void test(n.name)} title="Проверить задержку">
-              <Delay value={lastDelay(n)} testing={testing[n.name]} />
-            </button>
-          </div>
-        );
-      })}
-    </div>
+    <NodeTiles
+      view={prefs.view}
+      empty={prefs.hideDead ? "Все узлы сейчас недоступны." : "Узлов нет."}
+      items={arrange(
+        nodes.map((n) => {
+          const inGroups = groups.filter((g) => (g.all || []).includes(n.name)).map((g) => g.name);
+          const d = lastDelay(n);
+          return {
+            key: n.name,
+            name: n.name,
+            meta: inGroups.length ? `в группах: ${inGroups.join(", ")}` : "не в группах",
+            delay: d,
+            dead: d === 0,
+            testing: testing[n.name],
+            onTest: () => void test(n.name),
+          };
+        }),
+        prefs.sort,
+        prefs.hideDead,
+      )}
+    />
   );
 }
 
-function OlcProvider({ p, path, groups, onReload }: { p: MProvider; path?: string; groups: MProxy[]; onReload: () => Promise<void> }) {
+function OlcProvider({ p, path, groups, onReload, prefs }: { p: MProvider; path?: string; groups: MProxy[]; onReload: () => Promise<void>; prefs: NodePrefs }) {
   const { act } = useMihomo();
   const [entries, setEntries] = useState<OlcEntry[] | null>(null);
   const [error, setError] = useState("");
@@ -447,7 +503,7 @@ function OlcProvider({ p, path, groups, onReload }: { p: MProvider; path?: strin
           ) : null}
         </div>
       </div>
-      <NodeGrid nodes={p.proxies} groups={groups} onReload={onReload} />
+      <NodeGrid nodes={p.proxies} groups={groups} onReload={onReload} prefs={prefs} />
       {error ? (
         <div className="cb-pad">
           <Alert tone="warning" title="Файл провайдера не читается через ядро">

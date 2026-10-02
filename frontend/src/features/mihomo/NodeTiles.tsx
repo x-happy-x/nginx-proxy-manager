@@ -21,6 +21,33 @@ function readView(): NodeView {
   }
 }
 
+/** A per-browser preference kept in localStorage (NPM-38). */
+export function useStored<T>(key: string, initial: T, valid: (v: unknown) => v is T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw != null) {
+        const v = JSON.parse(raw);
+        if (valid(v)) return v;
+      }
+    } catch {
+      /* storage may be unavailable */
+    }
+    return initial;
+  });
+  const set = (v: T) => {
+    setValue(v);
+    try {
+      localStorage.setItem(key, JSON.stringify(v));
+    } catch {
+      /* per-browser preference */
+    }
+  };
+  return [value, set];
+}
+
+export const isBool = (v: unknown): v is boolean => typeof v === "boolean";
+
 export function useNodeView(): [NodeView, (v: NodeView) => void] {
   const [view, setView] = useState<NodeView>(readView);
   const set = (v: NodeView) => {
@@ -171,3 +198,85 @@ export function Masonry({ className, children }: { className: string; children: 
 }
 
 const MASONRY_ROW = 4;
+
+/* ---------- shared controls for every node tab (NPM-38) ---------- */
+
+export type NodeSort = "default" | "name" | "delay";
+export type NodePrefs = {
+  view: NodeView;
+  setView: (v: NodeView) => void;
+  sort: NodeSort;
+  setSort: (v: NodeSort) => void;
+  hideDead: boolean;
+  setHideDead: (v: boolean) => void;
+};
+
+const isSort = (v: unknown): v is NodeSort => v === "default" || v === "name" || v === "delay";
+
+/** View, sort and «hide unavailable», remembered per browser for all node tabs. */
+export function useNodePrefs(): NodePrefs {
+  const [view, setView] = useNodeView();
+  const [sort, setSort] = useStored<NodeSort>("homenet.mihomo.nodeSort", "default", isSort);
+  const [hideDead, setHideDead] = useStored("homenet.mihomo.hideDead", false, isBool);
+  return { view, setView, sort, setSort, hideDead, setHideDead };
+}
+
+export function NodeControls({ prefs, delayLabel = "По задержке", children, end }: { prefs: NodePrefs; delayLabel?: string; children?: ReactNode; end?: ReactNode }) {
+  return (
+    <div className="toolbar">
+      {children}
+      <Segmented<NodeSort>
+        label="Порядок узлов"
+        value={prefs.sort}
+        onChange={prefs.setSort}
+        options={[
+          { value: "default", label: "Как в конфиге" },
+          { value: "name", label: "По имени" },
+          { value: "delay", label: delayLabel },
+        ]}
+      />
+      <NodeViewSwitch value={prefs.view} onChange={prefs.setView} />
+      <label className="mh-check">
+        <input type="checkbox" checked={prefs.hideDead} onChange={(e) => prefs.setHideDead(e.target.checked)} />
+        Скрыть недоступные
+      </label>
+      {end}
+    </div>
+  );
+}
+
+/**
+ * Applies the sort and «hide unavailable» to tiles. By delay: fastest first,
+ * not checked after, no answer last; tiles without a delay (Tailscale) go by
+ * being online. `pinned` tiles (like «Напрямую») stay first and visible.
+ */
+export function arrange(items: Tile[], sort: NodeSort, hideDead: boolean, pinned = 0): Tile[] {
+  const head = items.slice(0, pinned);
+  let rest = items.slice(pinned);
+  if (hideDead) rest = rest.filter((t) => !t.dead);
+  if (sort === "name") rest = [...rest].sort((a, b) => a.name.localeCompare(b.name));
+  if (sort === "delay") {
+    const rank = (t: Tile) => (t.dead ? 1e7 : t.delay == null ? (t.delay === undefined ? 0 : 1e6) : t.delay <= 0 ? 1e7 : t.delay);
+    rest = [...rest].sort((a, b) => rank(a) - rank(b));
+  }
+  return [...head, ...rest];
+}
+
+/** How many nodes of a subscription answer: by the adaptive admission when the provider has it. */
+export function providerHealth(p: { proxies: Array<{ name: string; history?: Array<{ delay: number }>; extra?: Record<string, { history?: Array<{ delay: number }> }> }>; testUrl?: string; adaptive?: { results?: Record<string, { available?: boolean; skipped?: string }> } }) {
+  const total = p.proxies.length;
+  const results = p.adaptive?.results;
+  if (results) {
+    const avail = p.proxies.filter((x) => results[x.name]?.available).length;
+    const unchecked = p.proxies.filter((x) => !results[x.name] || results[x.name].skipped).length;
+    return { total, alive: avail, unchecked };
+  }
+  let alive = 0;
+  let unchecked = 0;
+  p.proxies.forEach((x) => {
+    const h = (p.testUrl && x.extra?.[p.testUrl]?.history) || x.history || [];
+    if (!h.length) unchecked++;
+    else if (h[h.length - 1].delay > 0) alive++;
+  });
+  return { total, alive, unchecked };
+}

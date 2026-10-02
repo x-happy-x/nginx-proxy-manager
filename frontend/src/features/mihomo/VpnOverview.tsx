@@ -6,6 +6,7 @@ import { MODE_LABEL, useMihomo } from "./context";
 import { HealthHistory } from "./HealthHistory";
 import { useTailscaleIssues } from "./Extras";
 import { useBypassStatus } from "./BypassTraffic";
+import { providerHealth } from "./NodeTiles";
 import { Alert } from "../../components/ui/controls";
 import { Delay, lastDelay, speed } from "./shared";
 
@@ -138,13 +139,13 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
               const i = p.subscriptionInfo;
               const used = i ? (i.Download || 0) + (i.Upload || 0) : 0;
               const total = i?.Total || 0;
-              const alive = p.proxies.filter((x) => (lastDelay(x, p.testUrl) ?? 1) > 0).length;
+              const alive = providerHealth(p).alive;
               return (
                 <div key={p.name} className="mh-sub-item">
                   <div className="mh-sub-row">
                     <strong>{p.name}</strong>
                     <span>
-                      {number(p.proxies.length)} узлов · {number(alive)} отвечают
+                      {number(p.proxies.length)} узлов · {number(alive)} {p.adaptive ? "допущено" : "отвечают"}
                       {total ? ` · ${bytes(used)} из ${bytes(total)}` : ""}
                       {i?.Expire ? ` · до ${new Date(i.Expire * 1000).toLocaleDateString("ru-RU")}` : ""}
                     </span>
