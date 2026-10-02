@@ -386,6 +386,9 @@ def main():
         "GEN_ROUTES_PATH":release+"/bin/nginx", "STATIC_ROOT":release+"/static",
         "STATS_STATE_PATH":release+"/stats.gz", "MAINTENANCE_DISABLED":"1",
         "LITE_UI_HOST":args.host, "LITE_UI_PORT":"63414",
+        # The temporary staged manager is driven by this script's API calls;
+        # the Account guard (HOMENET_ACCESS_ENABLED) protects only the live one.
+        "HOMENET_ACCESS_ENABLED":"0",
     }
     start_script="#!/bin/sh\nset -eu\ncd "+q(APP)+"\n"
     start_script += "\n".join("export "+key+"="+q(value) for key,value in variables.items())+"\n"
@@ -476,9 +479,12 @@ def main():
         router.run("sh "+q(APP+"/init.d/S99nginx-manager-lite")+" restart")
         time.sleep(2)
         live=f"http://{args.host}:63412"
-        status=local_api(live,"/api/nginx/status")
-        if not status.get("status",{}).get("running"): raise RuntimeError("Dedicated proxy health check failed")
-        local_api(live,"/api/nginx/stats?window=1h")
+        # The live manager's API sits behind the Account guard, so check it from
+        # the router: the dedicated nginx service and the manager's public page.
+        if "running" not in router.run("sh "+q("/opt/etc/init.d/S98nginx-local-conf")+" status"):
+            raise RuntimeError("Dedicated proxy health check failed")
+        page=router.run("curl --noproxy '*' --max-time 10 -sS -o /dev/null -w '%{http_code}' "+q(live+"/")).strip()
+        if page != "200": raise RuntimeError(f"Live manager did not serve its page: {page}")
         health=router.run("curl --noproxy '*' --max-time 5 -fsS http://127.0.0.1:63413/health").strip()
         if health != "homenet-proxy-ok": raise RuntimeError("Dedicated proxy health endpoint failed")
         # Validate real local and public ingress with TLS verification enabled.
