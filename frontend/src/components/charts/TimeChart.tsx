@@ -1,4 +1,5 @@
 import { useId, useMemo, useRef, useState } from "react";
+import { bucketize, smoothArea, smoothLine, timeTicks, type Pt } from "./smooth";
 
 /*
  * Small time-series chart for the resources dashboard: one y-scale, 1–2
@@ -22,12 +23,18 @@ type Props = {
   area?: boolean;
   compact?: boolean; // sparkline: no grid, no labels
   label: string; // accessible name
+  axis?: boolean; // time labels under the chart (NPM-31)
 };
 
 const COLORS = ["var(--series-1)", "var(--series-2)"];
 
-export function TimeChart({ times, series, format, height = 120, max, area = true, compact = false, label }: Props) {
+export function TimeChart({ times: rawTimes, series: rawSeries, format, height = 120, max, area = true, compact = false, label, axis = false }: Props) {
   const id = useId().replace(/:/g, "");
+  // Dense series (a day of minutes) are averaged to ~160 points so the line reads smoothly.
+  const { times, series } = useMemo(() => {
+    const b = bucketize(rawTimes, rawSeries.map((s) => s.values), compact ? 80 : 160);
+    return { times: b.times, series: rawSeries.map((s, i) => ({ ...s, values: b.values[i] })) };
+  }, [rawTimes, rawSeries, compact]);
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const width = 600;
@@ -48,11 +55,11 @@ export function TimeChart({ times, series, format, height = 120, max, area = tru
   const paths = series.map((s) => {
     let line = "";
     let fill = "";
-    let run: Array<[number, number]> = [];
+    let run: Pt[] = [];
     const flush = () => {
       if (run.length) {
-        line += run.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`).join(" ") + " ";
-        fill += `M${run[0][0].toFixed(1)} ${height - padBottom} ` + run.map(([px, py]) => `L${px.toFixed(1)} ${py.toFixed(1)}`).join(" ") + ` L${run[run.length - 1][0].toFixed(1)} ${height - padBottom} Z `;
+        line += smoothLine(run) + " ";
+        fill += smoothArea(run, height - padBottom) + " ";
       }
       run = [];
     };
@@ -73,9 +80,10 @@ export function TimeChart({ times, series, format, height = 120, max, area = tru
 
   const hoverX = hover != null ? x(hover) : 0;
   const tipLeft = hover != null ? (hoverX / width) * 100 : 0;
+  const ticks = axis && !compact ? timeTicks(times) : [];
 
   return (
-    <div className={`tchart${compact ? " is-compact" : ""}`} style={{ height }}>
+    <div className={`tchart${compact ? " is-compact" : ""}${ticks.length ? " has-axis" : ""}`} style={{ height: height + (ticks.length ? 18 : 0) }}>
       <svg
         ref={ref}
         viewBox={`0 0 ${width} ${height}`}
@@ -112,9 +120,14 @@ export function TimeChart({ times, series, format, height = 120, max, area = tru
         ) : null}
       </svg>
       {!compact ? <span className="tchart-max">{format(top)}</span> : null}
+      {ticks.length ? <TimeAxis ticks={ticks} /> : null}
       {hover != null && times[hover] ? (
         <div className="tchart-tip" style={{ left: `${tipLeft}%`, transform: `translateX(${tipLeft > 50 ? "-105%" : "5%"})` }}>
-          <time>{new Date(times[hover] * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
+          <time>
+            {n > 1 && times[n - 1] - times[0] > 20 * 3600
+              ? new Date(times[hover] * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+              : new Date(times[hover] * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </time>
           {series.map((s, i) => (
             <div key={i} className="tchart-tip-row">
               <span className="tchart-key" style={{ background: s.color || COLORS[i] }} />
@@ -124,6 +137,19 @@ export function TimeChart({ times, series, format, height = 120, max, area = tru
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Time labels under a chart or a strip; `at` is 0..1 across the width. */
+export function TimeAxis({ ticks }: { ticks: Array<{ at: number; label: string }> }) {
+  return (
+    <div className="tchart-axis" aria-hidden="true">
+      {ticks.map((t, i) => (
+        <span key={i} style={{ left: `${t.at * 100}%` }} className={i === 0 ? "is-first" : i === ticks.length - 1 ? "is-last" : ""}>
+          {t.label}
+        </span>
+      ))}
     </div>
   );
 }

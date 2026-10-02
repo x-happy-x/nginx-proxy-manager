@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { TimeChart } from "../../components/charts/TimeChart";
+import { TimeAxis, TimeChart } from "../../components/charts/TimeChart";
+import { timeTicks } from "../../components/charts/smooth";
 import { Alert, Segmented } from "../../components/ui/controls";
-import { errText, number, timeOf } from "../../lib/format";
+import { dateTime, errText, number } from "../../lib/format";
 import { core, type HealthPoint } from "./api";
 
 type Period = "1h" | "24h" | "7d" | "30d";
@@ -66,12 +67,15 @@ export function HealthHistory({ provider }: { provider: string }) {
       <div className="card-body stack">
         {series.length ? (
           <>
+            <div>
             <div className="mh-mode-strip" role="img" aria-label="Режим сети по времени">
               {series.map((p) => {
                 const [, label, cls] = dominant(p);
                 const mixed = MODES.filter((m) => p[m[0]] > 0).length > 1;
-                return <span key={p.t} className={`${cls}${mixed ? " is-mixed" : ""}`} title={`${timeOf(new Date(p.t * 1000).toISOString())}${resolution > 60 ? " (час)" : ""}: ${label}${mixed ? ` · ${MODES.filter((m) => p[m[0]] > 0).map((m) => `${m[1]} ${p[m[0]]} мин`).join(", ")}` : ""} · работают ${p.working} из ${p.total}`} />;
+                return <span key={p.t} className={`${cls}${mixed ? " is-mixed" : ""}`} title={`${dateTime(new Date(p.t * 1000).toISOString())}${resolution > 60 ? " (час)" : ""}: ${label}${mixed ? ` · ${MODES.filter((m) => p[m[0]] > 0).map((m) => `${m[1]} ${p[m[0]]} мин`).join(", ")}` : ""} · работают ${p.working} из ${p.total}`} />;
               })}
+            </div>
+            <TimeAxis ticks={timeTicks(times)} />
             </div>
             <div className="mh-mode-legend">
               {MODES.filter((m) => minutes(m[0]) > 0).map(([k, label, cls]) => (
@@ -88,6 +92,7 @@ export function HealthHistory({ provider }: { provider: string }) {
                 format={(v) => number(Math.round(v))}
                 height={150}
                 area={false}
+                axis
                 series={[
                   { label: "Допущено", values: series.map((p) => p.working), color: "var(--status-good)" },
                   { label: "Стабильных (без ограничений)", values: series.map((p) => p.stable_normal), color: "var(--series-1)" },

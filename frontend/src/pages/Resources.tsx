@@ -3,7 +3,7 @@ import { fetchResources, type AppGroupUsage, type MeshNode, type MeshSample, typ
 import { Icon } from "../components/ui/Icon";
 import { Alert, Segmented } from "../components/ui/controls";
 import { Legend, TimeChart } from "../components/charts/TimeChart";
-import { PageHeader } from "../navigation";
+import { PageHeader, useHashTab } from "../navigation";
 import { bytes, errText, number } from "../lib/format";
 
 type Period = 15 | 60;
@@ -116,9 +116,10 @@ export function Resources() {
   const [kind, setKind] = useState<Kind>("app");
   const [sort, setSort] = useState<SortKey>("rss");
   const [showTop, setShowTop] = useState(false);
-  const [tab, setTabState] = useState<Tab>(readTab);
+  const [hashTab, setHashTab] = useHashTab<Tab | "">("resources", "");
+  const tab: Tab = hashTab === "keenetic" || hashTab === "mesh" || hashTab === "mikrotik" || hashTab === "proxmox" ? hashTab : readTab();
   const setTab = (next: Tab) => {
-    setTabState(next);
+    setHashTab(next);
     try {
       localStorage.setItem(TAB_KEY, next);
     } catch {

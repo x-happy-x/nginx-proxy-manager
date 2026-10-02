@@ -4,11 +4,14 @@ import { bytes, number } from "../../lib/format";
 import { core, mihomo, type MProvider, type MProxy, type TrafficReport } from "./api";
 import { MODE_LABEL, useMihomo } from "./context";
 import { HealthHistory } from "./HealthHistory";
+import { useTailscaleIssues } from "./Extras";
+import { Alert } from "../../components/ui/controls";
 import { Delay, lastDelay, speed } from "./shared";
 
 /** «VPN → Обзор»: the state of mihomo at a glance (NPM-30). */
 export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }) {
   const { status, configs, traffic } = useMihomo();
+  const tsIssues = useTailscaleIssues(!!status?.controller_ok);
   const [proxies, setProxies] = useState<Record<string, MProxy>>({});
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [day, setDay] = useState<TrafficReport | null>(null);
@@ -52,6 +55,26 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   return (
     <div className="stack">
       <PageHeader page="vpn" />
+      {tsIssues.map((t) => (
+        <Alert
+          key={t.name}
+          tone="danger"
+          title={`${t.title} (${t.name})`}
+          action={
+            t.authURL ? (
+              <a className="btn btn-sm btn-primary" href={t.authURL} target="_blank" rel="noopener noreferrer">
+                Войти в tailnet
+              </a>
+            ) : (
+              <a className="btn btn-sm" href="#/proxies/tailscale">
+                Открыть Tailscale
+              </a>
+            )
+          }
+        >
+          {t.text}
+        </Alert>
+      ))}
       <div className="stats">
         <div className="stat">
           <span className="stat-label">Режим сети</span>

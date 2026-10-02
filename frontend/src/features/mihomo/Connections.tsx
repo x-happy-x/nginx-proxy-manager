@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PageHeader } from "../../navigation";
+import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -33,7 +33,7 @@ function ruleText(c: MConnection) {
 
 export function Connections({ onAnalyze }: { onAnalyze: (host: string) => void }) {
   const { act, deviceName, devices } = useMihomo();
-  const [tab, setTab] = useState<Tab>("active");
+  const [tab, setTab] = useHashTab<Tab>("connections", "active");
   const [rows, setRows] = useState<Row[]>([]);
   const [closed, setClosed] = useState<Row[]>([]);
   const [totals, setTotals] = useState({ down: 0, up: 0 });

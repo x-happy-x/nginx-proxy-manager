@@ -245,6 +245,33 @@
   overflow: visible;
 }
 
+.tchart.has-axis svg {
+  height: calc(100% - 18px);
+}
+
+.tchart-axis {
+  position: relative;
+  height: 18px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tchart-axis span {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.tchart-axis span.is-first {
+  transform: none;
+}
+
+.tchart-axis span.is-last {
+  transform: translateX(-100%);
+}
+
 .tchart-grid {
   stroke: var(--chart-grid);
   stroke-width: 1;

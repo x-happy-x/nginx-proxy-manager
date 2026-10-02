@@ -7,19 +7,21 @@ import type { NginxStatus, RoutesDocument } from "../types";
 import { core, type HealthPoint, type TrafficReport } from "../features/mihomo/api";
 import { MODE_LABEL, useMihomo } from "../features/mihomo/context";
 import { speed } from "../features/mihomo/shared";
+import { useTailscaleIssues } from "../features/mihomo/Extras";
+import { bucketize, smoothArea, smoothLine, type Pt } from "../components/charts/smooth";
 
-type Alert = { tone: "warn" | "bad" | "info"; title: string; where: string; page: PageKey };
+type Alert = { tone: "warn" | "bad" | "info"; title: string; where: string; page: PageKey; href?: string };
 type Stat = { label: string; value: string; note?: string; warn?: boolean };
 
 function Spark({ values, tone = "accent" }: { values: number[]; tone?: "accent" | "good" | "muted" }) {
   if (values.length < 2) return <div className="ov-spark ov-spark-empty" />;
-  const max = Math.max(1, ...values);
-  const pts = values.map((v, i) => [(i / (values.length - 1)) * 300, 46 - (v / max) * 42]);
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const vals = bucketize(values.map((_, i) => i), [values], 60).values[0].map((v) => v || 0);
+  const max = Math.max(1, ...vals);
+  const pts: Pt[] = vals.map((v, i) => [(i / (vals.length - 1)) * 300, 46 - (v / max) * 42]);
   return (
     <svg className={`ov-spark is-${tone}`} viewBox="0 0 300 48" preserveAspectRatio="none" aria-hidden="true">
-      <path d={`${line} L300 48 L0 48 Z`} className="ov-spark-area" />
-      <path d={line} className="ov-spark-line" />
+      <path d={smoothArea(pts, 48)} className="ov-spark-area" />
+      <path d={smoothLine(pts)} className="ov-spark-line" />
     </svg>
   );
 }
@@ -139,6 +141,7 @@ export function useOverviewData(doc: RoutesDocument) {
 export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; status: NginxStatus | null; onNavigate: (p: PageKey) => void }) {
   const d = useOverviewData(doc);
   const now = d.traffic[d.traffic.length - 1];
+  const tsIssues = useTailscaleIssues(!!d.core?.controller_ok);
 
   const alerts = useMemo(() => {
     const out: Alert[] = [];
@@ -152,8 +155,9 @@ export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; sta
     if (d.lastHealth && d.lastHealth.whitelist > 0) out.push({ tone: "warn", title: "Сеть в режиме белых списков", where: "VPN · Подписки", page: "checks" });
     if (d.lastHealth && d.lastHealth.total && d.lastHealth.working / d.lastHealth.total < 0.3)
       out.push({ tone: "warn", title: `Работает только ${d.lastHealth.working} из ${d.lastHealth.total} узлов`, where: "VPN · Подписки", page: "checks" });
+    tsIssues.forEach((t) => out.unshift({ tone: "bad", title: t.title, where: `VPN · Узлы · Tailscale ${t.name} — ${t.authURL ? "открыть и войти" : "запросить вход"}`, page: "proxies", href: "#/proxies/tailscale" }));
     return out;
-  }, [d.appsDown, status, d.netDown, d.stats, d.core, d.lastHealth]);
+  }, [d.appsDown, status, d.netDown, d.stats, d.core, d.lastHealth, tsIssues]);
 
   const sv = d.stats;
   const errRate = sv && sv.total_requests ? (100 * (sv.errors_5xx || 0)) / sv.total_requests : 0;
@@ -172,7 +176,16 @@ export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; sta
         {alerts.length ? (
           <div className="ov-alert-grid">
             {alerts.slice(0, 6).map((a, i) => (
-              <a key={i} href={`#/${a.page}`} className={`ov-alert is-${a.tone}`} onClick={(e) => { e.preventDefault(); onNavigate(a.page); }}>
+              <a
+                key={i}
+                href={a.href || `#/${a.page}`}
+                className={`ov-alert is-${a.tone}`}
+                onClick={(e) => {
+                  if (a.href) return;
+                  e.preventDefault();
+                  onNavigate(a.page);
+                }}
+              >
                 <i />
                 <span>
                   <strong>{a.title}</strong>

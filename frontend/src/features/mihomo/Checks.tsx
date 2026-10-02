@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageHeader } from "../../navigation";
+import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
-import { Alert, EmptyState } from "../../components/ui/controls";
+import { Alert, EmptyState, SearchInput } from "../../components/ui/controls";
 import { bytes, errText, number, timeOf } from "../../lib/format";
 import { mihomo, type AdaptiveHealth, type AdaptiveNode, type AdaptiveProbe, type AdaptiveResult, type MProvider } from "./api";
 import { useMihomo } from "./context";
@@ -73,6 +73,60 @@ function NodeStatus({ rank, r, base }: { rank?: AdaptiveNode; r?: AdaptiveResult
   return rank ? <span className="badge">наблюдается</span> : <span className="badge">нет истории</span>;
 }
 
+/* Filter chips (NPM-31): the same verdicts as NodeStatus, as keys. */
+type StatusKey = "stable" | "available" | "holding" | "returning" | "excluded" | "failing" | "skipped" | "observed" | "none";
+const STATUS_CHIPS: Array<[StatusKey, string, "good" | "warn" | "bad" | "none"]> = [
+  ["stable", "Стабильные", "good"],
+  ["available", "Доступны", "good"],
+  ["holding", "Держатся", "warn"],
+  ["returning", "Возвращаются", "warn"],
+  ["excluded", "Исключены", "bad"],
+  ["failing", "Не проходят", "bad"],
+  ["skipped", "Ждут базу", "none"],
+  ["observed", "Наблюдаются", "none"],
+  ["none", "Без истории", "none"],
+];
+
+function statusKey(rank?: AdaptiveNode, r?: AdaptiveResult): StatusKey {
+  if (r?.skipped) return "skipped";
+  if (r && r.available === true && !r.ok) return "holding";
+  if (r && r.available === false && r.ok) return "returning";
+  if (r && r.available === false) return "excluded";
+  if (rank?.stable) return "stable";
+  if (r && !r.ok) return "failing";
+  if (r?.available) return "available";
+  return rank ? "observed" : "none";
+}
+
+function Chips<K extends string>({ label, items, value, onChange }: { label: string; items: Array<{ key: K; label: string; count: number; tone?: string }>; value: Set<K>; onChange: (next: Set<K>) => void }) {
+  return (
+    <div className="mh-chips" role="group" aria-label={label}>
+      <button type="button" className="mh-chip" aria-pressed={value.size === 0} onClick={() => onChange(new Set())}>
+        Все
+      </button>
+      {items.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          className="mh-chip"
+          aria-pressed={value.has(c.key)}
+          disabled={!c.count && !value.has(c.key)}
+          onClick={() => {
+            const next = new Set(value);
+            if (next.has(c.key)) next.delete(c.key);
+            else next.add(c.key);
+            onChange(next);
+          }}
+        >
+          {c.tone ? <i className={`is-${c.tone}`} /> : null}
+          {c.label}
+          <span className="count">{c.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function lastProbe(h: AdaptiveHealth, name: string) {
   const r = h.results?.[name];
   if (!r) return null;
@@ -87,8 +141,11 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
-  const [view, setView] = useState<View | "">("");
+  const [view, setView] = useHashTab<View | "">("checks", "");
   const [busy, setBusy] = useState(false);
+  const [statusF, setStatusF] = useState<Set<StatusKey>>(new Set());
+  const [stageF, setStageF] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -117,6 +174,22 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
     if (activeView === "results") return current.proxies.map((p) => ({ name: p.name, rank: [...(h.rankings.normal || []), ...(h.rankings.whitelist || [])].find((r) => r.name === p.name) }));
     return (h.rankings[activeView] || []).map((rank) => ({ name: rank.name, rank }));
   }, [h, current, activeView]);
+
+  const enriched = useMemo(
+    () =>
+      rows.map((row) => {
+        const lp = h ? lastProbe(h, row.name) : null;
+        const key = statusKey(row.rank, lp?.r);
+        const stage = lp && !lp.r.skipped && lp.failed ? lp.failed.stage : lp && !lp.r.skipped && lp.probes.length ? "ok" : "";
+        return { ...row, lp, key, stage };
+      }),
+    [rows, h],
+  );
+  const q = query.trim().toLowerCase();
+  const filtered = enriched.filter((x) => (!statusF.size || statusF.has(x.key)) && (!stageF.size || stageF.has(x.stage)) && (!q || x.name.toLowerCase().includes(q)));
+  const countBy = <K extends string>(get: (x: (typeof enriched)[number]) => K) => enriched.reduce((m, x) => m.set(get(x), (m.get(get(x)) || 0) + 1), new Map<K, number>());
+  const statusCounts = countBy((x) => x.key);
+  const stageCounts = countBy((x) => x.stage);
 
   const stableCount = (m: "normal" | "whitelist") => (h?.rankings[m] || []).filter((r) => r.stable).length;
   const skipped = Object.values(h?.results || {}).filter((r) => r.skipped).length;
@@ -236,8 +309,34 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
               ["results", <>Все узлы <TabCount n={current!.proxies.length} /></>],
             ]}
           />
+          {enriched.length ? (
+            <div className="mh-filters">
+              <div className="toolbar">
+                <SearchInput label="Поиск узла" placeholder="Узел" value={query} onChange={setQuery} />
+                <span className="cell-sub">
+                  {filtered.length === enriched.length ? `${number(enriched.length)} узлов` : `${number(filtered.length)} из ${number(enriched.length)}`}
+                </span>
+              </div>
+              <Chips<StatusKey>
+                label="Статус"
+                value={statusF}
+                onChange={setStatusF}
+                items={STATUS_CHIPS.filter(([k]) => statusCounts.get(k) || statusF.has(k)).map(([key, label, tone]) => ({ key, label, tone, count: statusCounts.get(key) || 0 }))}
+              />
+              {[...stageCounts.keys()].some((k) => k && k !== "ok") ? (
+                <Chips<string>
+                  label="Где падает последняя проба"
+                  value={stageF}
+                  onChange={setStageF}
+                  items={["ok", ...STAGES.filter((x) => x !== "ok")]
+                    .filter((k) => stageCounts.get(k) || stageF.has(k))
+                    .map((key) => ({ key, label: key === "ok" ? "Проба прошла" : `Падает: ${STAGE_LABEL[key] || key}`, tone: key === "ok" ? "good" : "bad", count: stageCounts.get(key) || 0 }))}
+                />
+              ) : null}
+            </div>
+          ) : null}
           <section className="card card-flush">
-            {rows.length ? (
+            {filtered.length ? (
               <div className="table-wrap">
                 <table className="table responsive">
                   <thead>
@@ -253,8 +352,7 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ name, rank }) => {
-                      const lp = lastProbe(h, name);
+                    {filtered.map(({ name, rank, lp }) => {
                       return (
                         <tr key={name}>
                           <td className="cell-primary" data-label="">
@@ -285,6 +383,24 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
                   </tbody>
                 </table>
               </div>
+            ) : enriched.length ? (
+              <EmptyState
+                icon="search"
+                title="Нет узлов под фильтр"
+                action={
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setStatusF(new Set());
+                      setStageF(new Set());
+                      setQuery("");
+                    }}
+                  >
+                    Сбросить фильтры
+                  </button>
+                }
+              />
             ) : (
               <EmptyState icon="activity" title="Рейтинг пока пуст">
                 Рейтинг для этого режима появится после подтверждённых обходов в нём. Пока режим не подтверждён, результаты в историю не пишутся.
