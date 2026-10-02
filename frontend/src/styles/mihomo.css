@@ -835,3 +835,134 @@ button.mh-health:focus-visible {
   padding: 12px 14px;
   margin: 0;
 }
+
+/* NPM-26: log levels, topology, history */
+.mh-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.mh-level {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 15px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mh-level span {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.mh-level.is-debug { border-color: var(--border-strong); }
+.mh-level.is-info { border-color: var(--accent-border); color: var(--accent-text); }
+.mh-level.is-warning { border-color: var(--warning-border); color: var(--warning); }
+.mh-level.is-error { border-color: var(--danger-border); color: var(--danger); }
+.mh-level.is-off { opacity: 0.45; text-decoration: line-through; }
+
+.mh-log-kind {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.mh-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mh-log-card {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0 6px;
+}
+
+.mh-warn-text {
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.mh-topo svg {
+  width: 100%;
+  height: auto;
+  max-height: 440px;
+  display: block;
+}
+
+.mh-topo-head {
+  fill: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mh-topo-node {
+  fill: var(--text-2);
+}
+
+.mh-topo-link {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-opacity: 0.16;
+}
+
+.mh-topo-link:hover {
+  stroke-opacity: 0.45;
+}
+
+.mh-topo-label {
+  fill: var(--text);
+  font-size: 12px;
+}
+
+.mh-topo-value {
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mh-subs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 14px 24px;
+}
+
+.mh-sub-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mh-ip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+
+.mh-pad-x {
+  padding: 0 14px;
+}
+
+.mh-pad {
+  padding: 14px;
+  margin: 0;
+}
+
+.mh-hist {
+  max-height: 520px;
+  overflow: auto;
+}

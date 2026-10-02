@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { core, mihomo, openStream, type CoreConfig, type CoreDevice, type CoreStatus, type MConfigs } from "./api";
 import { errText } from "../../lib/format";
+import { historyStore, logStore } from "./stores";
 
 export type TrafficPoint = { t: number; up: number; down: number };
 export type LogFn = (title: string, message: string, level?: "info" | "success" | "warning" | "error") => void;
@@ -97,6 +98,17 @@ export function MihomoProvider({ children, log, active, onDirtyChange }: { child
     }, 60000);
     return () => clearInterval(timer);
   }, [running, refreshConfigs, refreshDevices]);
+
+  // Like zashboard: the core log and the connection history fill while the console is open.
+  useEffect(() => {
+    if (!running || !active) return;
+    logStore.start();
+    historyStore.start();
+    return () => {
+      logStore.stop();
+      historyStore.stop();
+    };
+  }, [running, active]);
 
   // One /traffic stream for the whole app: the top bar and the Traffic page share it.
   useEffect(() => {
