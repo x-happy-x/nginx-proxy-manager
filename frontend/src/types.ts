@@ -173,6 +173,12 @@ export type ConsoleItem = {
 };
 
 export type DmsApp = {
+	name?: string;
+	version?: string;
+	description?: string;
+	icon?: string;
+	icon_data?: string;
+	releases?: string[];
   app: string;
   manifest_version?: string;
   release_id?: string;

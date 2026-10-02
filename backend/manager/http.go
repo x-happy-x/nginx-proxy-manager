@@ -55,6 +55,10 @@ func (a *app) setRoutesPath(path string) (string, error) {
 }
 
 func (a *app) handle(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" && r.Method == http.MethodGet {
+		a.writeJSON(w, 200, response{"status": "ok"})
+		return
+	}
 	if a.accessGuard(w, r) {
 		return
 	}
@@ -69,6 +73,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
+		if strings.HasPrefix(r.URL.Path, "/api/dms/") {
+			a.handleDMSProxy(w, r)
+			return
+		}
 		a.handleGet(w, r)
 	case http.MethodPost:
 		if origin := r.Header.Get("Origin"); origin != "" {
@@ -80,6 +88,15 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 			a.writeJSON(w, http.StatusForbidden, response{"ok": false, "error": "cross_site_write_denied"})
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/dms/") {
+			limit := int64(8192)
+			if r.URL.Path == "/api/dms/packages" {
+				limit = 128 << 20
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+			a.handleDMSProxy(w, r)
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)

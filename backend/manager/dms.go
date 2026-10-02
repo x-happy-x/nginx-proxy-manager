@@ -11,6 +11,10 @@ import (
 )
 
 type dmsApp struct {
+	Name            string    `json:"name,omitempty"`
+	Version         string    `json:"version,omitempty"`
+	Description     string    `json:"description,omitempty"`
+	Icon            string    `json:"icon,omitempty"`
 	App             string    `json:"app"`
 	ManifestVersion string    `json:"manifest_version,omitempty"`
 	ReleaseID       string    `json:"release_id,omitempty"`
