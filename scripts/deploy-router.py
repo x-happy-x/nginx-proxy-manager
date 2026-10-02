@@ -32,6 +32,8 @@ HOSTS_BEGIN = b"# BEGIN HOMENET MANAGED HOSTS"
 HOSTS_END = b"# END HOMENET MANAGED HOSTS"
 MANAGED_HEADERS = (b"managed by homenet-nginx-yaml", b"managed by crubs-nginx-yaml")
 
+GATEWAY_INIT="/opt/etc/init.d/S98homenet-gateway"
+
 def q(value: str) -> str:
     return shlex.quote(value)
 
@@ -327,7 +329,10 @@ def main():
         pass
     root=Path(__file__).resolve().parents[1]
     local=root/".local";local.mkdir(exist_ok=True)
-    required=[root/"bin/linux-arm64"/x for x in ["manager","nginx","homenet"]]
+    # The Account gateway ships with the manager: an old gateway drops the
+    # identity the manager needs (NPM-24).
+    BINARIES=["manager","nginx","homenet","gateway"]
+    required=[root/"bin/linux-arm64"/x for x in BINARIES]
     required += [root/"frontend/static/react/index.html",root/args.routes]
     for file in required:
         if not file.is_file(): raise RuntimeError(f"Build artifact missing: {file}")
@@ -366,7 +371,7 @@ def main():
     if router.exists(PROXY): router.run("cp -a "+q(PROXY)+" "+q(release+"/before/proxy"))
     router.upload(release+"/rollback-files.py",remote_rollback_source().encode(),0o600)
     router.upload(release+"/managed-candidates.json",json.dumps(managed_nginx_candidates(doc)).encode(),0o600)
-    for file in required[:3]:
+    for file in required[:len(BINARIES)]:
         router.upload(release+"/bin/"+file.name,file.read_bytes(),0o755)
     router.upload(release+"/routes.yml",(root/args.routes).read_bytes())
     router.upload(release+"/runtime.env",(root/"config/runtime.env").read_bytes())
@@ -416,7 +421,7 @@ def main():
         return
     restore_lines=["run_ndmc "+q(command) for command in restores]
     restore_binary=[]
-    for name in ["manager","nginx","homenet"]:
+    for name in BINARIES:
         source=release+"/before/app/bin/linux-arm64/"+name
         target=APP+"/bin/linux-arm64/"+name
         restore_binary.append("cp -p "+q(source)+" "+q(target+".restore")+" && mv "+q(target+".restore")+" "+q(target))
@@ -447,6 +452,7 @@ def main():
         ("cp -p "+q(release+"/before/tls-hook.sh")+" "+q(TLS_HOOK+".restore")+" && mv "+q(TLS_HOOK+".restore")+" "+q(TLS_HOOK)+"\n"
          if tls_hook_existed else
          "if [ -f "+q(TLS_HOOK)+" ]; then type=iptables table=mangle sh "+q(TLS_HOOK)+" remove || failed=1; rm -f "+q(TLS_HOOK)+"; fi\n")+
+        "if [ -x "+q(GATEWAY_INIT)+" ]; then sh "+q(GATEWAY_INIT)+" restart || failed=1; fi\n"+
         "sh "+q(APP+"/init.d/S99nginx-manager-lite")+" start\n"+
         "[ \"$failed\" -eq 0 ]\n"
     )
@@ -464,7 +470,7 @@ def main():
         if not applied.get("ok"): raise RuntimeError(str(applied.get("output")))
         print(applied.get("output",""),flush=True)
         # Move replacement executables atomically; never overwrite a running inode.
-        for name in ["manager","nginx","homenet"]:
+        for name in BINARIES:
             router.run("cp -p "+q(release+"/bin/"+name)+" "+q(APP+"/bin/linux-arm64/"+name+".new")+" && mv "+q(APP+"/bin/linux-arm64/"+name+".new")+" "+q(APP+"/bin/linux-arm64/"+name))
         router.run("cp -p "+q(release+"/routes.yml")+" "+q(APP+"/routes.yml")+
                    " && cp -p "+q(release+"/runtime.env")+" "+q(APP+"/config/runtime.env")+
@@ -476,6 +482,7 @@ def main():
         router.run("mkdir -p "+q(str(Path(TLS_HOOK).parent).replace("\\","/"))+" && cp -p "+q(release+"/tls-hook.sh")+" "+q(TLS_HOOK+".new")+" && mv "+q(TLS_HOOK+".new")+" "+q(TLS_HOOK)+" && type=iptables table=mangle sh "+q(TLS_HOOK))
         if "homenet_tls_sni" not in router.run("iptables -t mangle -S INPUT"):
             raise RuntimeError("TLS SNI exemption for the proxy aliases was not installed")
+        router.run("if [ -x "+q(GATEWAY_INIT)+" ]; then sh "+q(GATEWAY_INIT)+" restart; fi")
         router.run("sh "+q(APP+"/init.d/S99nginx-manager-lite")+" restart")
         time.sleep(2)
         live=f"http://{args.host}:63412"
