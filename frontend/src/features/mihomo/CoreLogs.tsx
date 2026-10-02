@@ -1,47 +1,65 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { EmptyState, SearchInput, Segmented } from "../../components/ui/controls";
 import { number } from "../../lib/format";
-import { openStream } from "./api";
+import { logStore, useLogs, type LogLevel } from "./stores";
 
-type Level = "debug" | "info" | "warning" | "error";
-type Line = { seq: number; time: string; type: string; payload: string };
-const LIMIT = 1000;
+const LEVELS: Array<[LogLevel, string, string]> = [
+  ["debug", "debug", "всё, включая проверки узлов и служебные строки"],
+  ["info", "info", "соединения и события"],
+  ["warning", "warning", "предупреждения и ошибки"],
+  ["error", "error", "только ошибки"],
+];
+const LEVEL_ORDER = ["debug", "info", "warning", "error"];
+const LIMITS = [500, 2000, 5000, 10000];
 
 export function CoreLogs() {
-  const [level, setLevel] = useState<Level>("info");
-  const [lines, setLines] = useState<Line[]>([]);
-  const [paused, setPaused] = useState(false);
+  const { lines, level, limit, paused, live } = useLogs();
   const [query, setQuery] = useState("");
-  const [live, setLive] = useState(false);
-  const seq = useRef(0);
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  const [regex, setRegex] = useState(false);
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+  const [kind, setKind] = useState("");
+  const [style, setStyle] = useState<"table" | "list">("table");
 
-  useEffect(
-    () =>
-      openStream<{ type: string; payload: string }>(
-        `/logs?level=${level}`,
-        (d) => {
-          if (pausedRef.current) return;
-          const line: Line = { seq: ++seq.current, time: new Date().toLocaleTimeString("ru-RU"), type: d.type, payload: d.payload };
-          setLines((prev) => [line, ...prev].slice(0, LIMIT));
-        },
-        setLive,
-      ),
-    [level],
-  );
+  useEffect(() => logStore.start(), []);
 
-  const q = query.trim().toLowerCase();
-  const visible = q ? lines.filter((l) => l.payload.toLowerCase().includes(q)) : lines;
+  const counts = useMemo(() => {
+    const byLevel: Record<string, number> = {};
+    const byKind: Record<string, number> = {};
+    lines.forEach((l) => {
+      byLevel[l.type] = (byLevel[l.type] || 0) + 1;
+      byKind[l.kind] = (byKind[l.kind] || 0) + 1;
+    });
+    return { byLevel, byKind };
+  }, [lines]);
+
+  let matcher: (s: string) => boolean = () => true;
+  let regexError = "";
+  const q = query.trim();
+  if (q) {
+    if (regex) {
+      try {
+        const re = new RegExp(q, "i");
+        matcher = (s) => re.test(s);
+      } catch {
+        regexError = "регулярное выражение не разбирается";
+      }
+    } else {
+      const lq = q.toLowerCase();
+      matcher = (s) => s.toLowerCase().includes(lq);
+    }
+  }
+  const visible = lines.filter((l) => shown[l.type] !== false && (!kind || l.kind === kind) && matcher(l.payload));
+  const levels = Object.keys(counts.byLevel).sort((a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b));
+  const kinds = Object.entries(counts.byKind).sort((a, b) => b[1] - a[1]);
 
   const download = () => {
-    const blob = new Blob([visible.map((l) => JSON.stringify(l)).join("\n")], { type: "application/x-ndjson" });
-    const url = URL.createObjectURL(blob);
+    const text = visible.map((l) => [String(l.seq).padEnd(6), l.time, l.type.padEnd(8), l.payload].join("\t")).join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mihomo-log-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    a.download = `mihomo-${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}.log`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -53,58 +71,110 @@ export function CoreLogs() {
         actions={
           <>
             <span className="res-live">
-              <span className={`res-live-dot${live ? "" : " is-off"}`} />
-              {live ? (paused ? "на паузе" : "в реальном времени") : "нет связи"}
+              <span className={`res-live-dot${live && !paused ? "" : " is-off"}`} />
+              {!live ? "нет связи" : paused ? "на паузе" : "в реальном времени"}
             </span>
-            <button type="button" className="btn" onClick={() => setPaused((p) => !p)}>
+            <button type="button" className="btn" onClick={() => logStore.setPaused(!paused)}>
               <Icon name={paused ? "play" : "pause"} />
               {paused ? "Продолжить" : "Пауза"}
             </button>
             <button type="button" className="btn" onClick={download} disabled={!visible.length}>
               <Icon name="download" />
-              JSONL
+              .log
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setLines([])} disabled={!lines.length}>
+            <button type="button" className="btn btn-ghost" onClick={() => logStore.clear()} disabled={!lines.length}>
               Очистить
             </button>
           </>
         }
-      />
+      >
+        Журнал собирается, пока открыта консоль. Уровень потока задаёт, что ядро присылает; ниже можно скрыть лишнее среди полученного.
+      </PageHeader>
+
       <div className="toolbar">
-        <SearchInput label="Фильтр строк" placeholder="Хост, узел, правило" value={query} onChange={setQuery} />
-        <Segmented<Level>
-          label="Уровень"
+        <Segmented<LogLevel>
+          label="Уровень потока"
           value={level}
-          onChange={(v) => {
-            setLevel(v);
-            setLines([]);
-          }}
+          onChange={(v) => logStore.setLevel(v)}
+          options={LEVELS.map(([value, label]) => ({ value, label }))}
+        />
+        <span className="cell-sub">{LEVELS.find(([v]) => v === level)?.[2]}</span>
+      </div>
+      <div className="toolbar">
+        <SearchInput label="Поиск по журналу" placeholder={regex ? "Регулярное выражение, например TCP.*youtube" : "Хост, узел, правило"} value={query} onChange={setQuery} />
+        <label className="mh-check">
+          <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />
+          Regex
+        </label>
+        <select aria-label="Тип строк" value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="">Все типы</option>
+          {kinds.map(([k, n]) => (
+            <option key={k} value={k}>
+              {k} · {number(n)}
+            </option>
+          ))}
+        </select>
+        <select aria-label="Хранить строк" value={limit} onChange={(e) => logStore.setLimit(Number(e.target.value))}>
+          {LIMITS.map((n) => (
+            <option key={n} value={n}>
+              хранить {number(n)}
+            </option>
+          ))}
+        </select>
+        <Segmented<"table" | "list">
+          label="Вид"
+          value={style}
+          onChange={setStyle}
           options={[
-            { value: "debug", label: "debug" },
-            { value: "info", label: "info" },
-            { value: "warning", label: "warning" },
-            { value: "error", label: "error" },
+            { value: "table", label: "Таблица" },
+            { value: "list", label: "Строки" },
           ]}
         />
       </div>
+      {levels.length ? (
+        <div className="mh-levels" role="group" aria-label="Показывать уровни">
+          {levels.map((l) => (
+            <button key={l} type="button" aria-pressed={shown[l] !== false} className={`mh-level is-${l}${shown[l] === false ? " is-off" : ""}`} onClick={() => setShown({ ...shown, [l]: shown[l] === false })}>
+              {l} <span>{number(counts.byLevel[l])}</span>
+            </button>
+          ))}
+          {regexError ? <span className="mh-warn-text">{regexError}</span> : null}
+        </div>
+      ) : null}
+
       <section className="card card-flush">
         {visible.length ? (
-          <div className="mh-log" role="log" aria-live="off">
-            {visible.map((l) => (
-              <div key={l.seq} className={`mh-log-line is-${l.type}`}>
-                <span className="mh-log-time">{l.time}</span>
-                <span className="mh-log-level">{l.type}</span>
-                <span className="mh-log-text">{l.payload}</span>
-              </div>
-            ))}
-          </div>
+          style === "table" ? (
+            <div className="mh-log" role="log" aria-live="off">
+              {visible.slice(0, 1500).map((l) => (
+                <div key={l.seq} className={`mh-log-line is-${l.type}`}>
+                  <span className="mh-log-time">{l.time}</span>
+                  <span className="mh-log-level">{l.type}</span>
+                  <span className="mh-log-text">
+                    <span className="mh-log-kind">{l.kind}</span> {l.payload}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mh-log mh-log-list" role="log" aria-live="off">
+              {visible.slice(0, 1500).map((l) => (
+                <div key={l.seq} className={`mh-log-card is-${l.type}`}>
+                  <div>
+                    <span className="mh-log-level">{l.type}</span> <span className="mh-log-time">{l.time} · #{l.seq}</span>
+                  </div>
+                  <div className="mh-log-text">{l.payload}</div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
-          <EmptyState icon="terminal" title="Пока пусто">
-            Новые строки журнала ядра появятся здесь сразу. Уровень debug показывает каждое соединение.
+          <EmptyState icon="terminal" title={lines.length ? "Под фильтр ничего не попало" : "Пока пусто"}>
+            {lines.length ? "Измените поиск, тип или включите скрытые уровни." : "Новые строки появятся сразу. Уровень debug показывает каждую проверку узла и служебные события."}
           </EmptyState>
         )}
         <div className="card-footer">
-          Показано {number(visible.length)} из {number(lines.length)} строк, новые сверху; хранится последние {number(LIMIT)} в этой вкладке.
+          Показано {number(Math.min(visible.length, 1500))} из {number(visible.length)} подходящих · всего {number(lines.length)} строк, хранится не больше {number(limit)}. Новые сверху.
         </div>
       </section>
     </div>
