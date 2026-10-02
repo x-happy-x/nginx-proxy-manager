@@ -11,3 +11,4 @@ backups/
 
 # Launcher settings are runtime state of the manager.
 launcher.json
+dist/

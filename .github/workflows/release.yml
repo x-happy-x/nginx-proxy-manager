@@ -1,0 +1,63 @@
+# Release archives for install.sh (NPM-40): one per router architecture plus
+# SHA256SUMS, attached to a GitHub release. Push a tag v* or run by hand.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Test
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build the console
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check install.sh
+        run: |
+          sudo apt-get install -y -qq dash shellcheck
+          dash -n install.sh
+          shellcheck -S warning -e SC2086,SC3043 install.sh
+
+      - name: Package
+        run: bash scripts/package.sh "${{ github.event.inputs.tag || github.ref_name }}"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "HomeNet $TAG" --notes "Установка на роутер: \`curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | sh\`" --target "${{ github.sha }}"
+          fi
+          gh release upload "$TAG" dist/homenet-linux-*.tar.gz dist/SHA256SUMS dist/install.sh --clobber
