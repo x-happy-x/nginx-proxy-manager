@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { IconName } from "./components/ui/Icon";
 
 /*
@@ -125,12 +125,51 @@ export function sectionPages(section: SectionKey): NavItem[] {
 }
 
 export function pageFromHash(hash: string): PageKey {
-  const raw = hash.replace(/^#\/?/, "").trim().toLowerCase();
+  const raw = hash.replace(/^#\/?/, "").split("/")[0].trim().toLowerCase();
   const page = NAV.find((item) => item.id === raw);
   if (page) return page.id;
   const section = SECTIONS.find((s) => s.id === raw);
   if (section) return sectionPages(section.id)[0].id;
   return "overview";
+}
+
+/** Second segment of the address: #/proxies/providers → "providers". */
+function subFromHash(): string {
+  const parts = window.location.hash.replace(/^#\/?/, "").split("/");
+  try {
+    return decodeURIComponent(parts[1] || "");
+  } catch {
+    return "";
+  }
+}
+
+const SUB_EVENT = "homenet:subtab";
+
+/**
+ * A page's inner tab kept in the address (NPM-31), so a reload or a shared
+ * link opens the same tab. Switching tabs adds a history entry: «Назад»
+ * returns to the previous tab.
+ */
+export function useHashTab<T extends string>(page: PageKey, fallback: T): [T, (next: T) => void] {
+  const [sub, setSub] = useState(subFromHash);
+  useEffect(() => {
+    const sync = () => setSub(subFromHash());
+    window.addEventListener("hashchange", sync);
+    window.addEventListener(SUB_EVENT, sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener(SUB_EVENT, sync);
+    };
+  }, []);
+  const set = useCallback(
+    (next: T) => {
+      const hash = next && next !== fallback ? `#/${page}/${encodeURIComponent(next)}` : `#/${page}`;
+      if (window.location.hash !== hash) window.history.pushState(null, "", hash);
+      window.dispatchEvent(new Event(SUB_EVENT));
+    },
+    [page, fallback],
+  );
+  return [((sub || fallback) as T), set];
 }
 
 export function PageHeader({

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageHeader } from "../../navigation";
+import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Alert, EmptyState, SearchInput } from "../../components/ui/controls";
 import { dateTime, errText, number } from "../../lib/format";
@@ -11,7 +11,7 @@ type Tab = "rules" | "providers";
 
 export function Rules({ onEdit }: { onEdit: () => void }) {
   const { act } = useMihomo();
-  const [tab, setTab] = useState<Tab>("rules");
+  const [tab, setTab] = useHashTab<Tab>("rules", "rules");
   const [rules, setRules] = useState<MRule[]>([]);
   const [providers, setProviders] = useState<Record<string, MRuleProvider>>({});
   const [error, setError] = useState("");

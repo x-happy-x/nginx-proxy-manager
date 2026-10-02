@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { PageHeader } from "../../navigation";
+import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -162,7 +162,7 @@ function randomHex(n: number) {
 
 export function Config() {
   const { cfg, setCfg, draft, setDraft, configDirty, log, refreshStatus } = useMihomo();
-  const [tab, setTab] = useState<Tab>("subs");
+  const [tab, setTab] = useHashTab<Tab>("coreconfig", "subs");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [yamlText, setYamlText] = useState<string | null>(null);

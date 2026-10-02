@@ -4,6 +4,7 @@ import type { MProxy } from "./api";
 import { useMihomo } from "./context";
 import { Alert, EmptyState } from "../../components/ui/controls";
 import { Install } from "./Install";
+import { smoothArea, smoothLine, type Pt } from "../../components/charts/smooth";
 
 export function speed(v: number | undefined): string {
   return `${bytes(v || 0)}/с`;
@@ -25,12 +26,12 @@ export function delayTone(d: number | null): "good" | "warn" | "bad" | "none" {
   return "bad";
 }
 
-export function Delay({ value, testing }: { value: number | null; testing?: boolean }) {
+export function Delay({ value, testing, short }: { value: number | null; testing?: boolean; short?: boolean }) {
   if (testing) return <span className="mh-delay is-testing"><span className="spinner" /></span>;
   const tone = delayTone(value);
   return (
     <span className={`mh-delay is-${tone}`} title={value == null ? "не проверялся" : value <= 0 ? "нет ответа" : `${value} мс`}>
-      {value == null ? "—" : value <= 0 ? "нет ответа" : `${value} мс`}
+      {value == null ? "—" : value <= 0 ? (short ? "нет" : "нет ответа") : short ? value : `${value} мс`}
     </span>
   );
 }
@@ -91,13 +92,12 @@ export function CoreGate({ children }: { children: ReactNode }) {
 export function Spark({ values, tone = "series-1", height = 36 }: { values: number[]; tone?: "series-1" | "series-2"; height?: number }) {
   const w = 120;
   const max = Math.max(1, ...values);
-  const pts = values.map((v, i) => [values.length < 2 ? w : (i / (values.length - 1)) * w, height - (v / max) * (height - 2) - 1]);
+  const pts: Pt[] = values.map((v, i) => [values.length < 2 ? w : (i / (values.length - 1)) * w, height - (v / max) * (height - 2) - 1]);
   if (!pts.length) return <svg className="mh-spark" viewBox={`0 0 ${w} ${height}`} aria-hidden="true" />;
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   return (
     <svg className={`mh-spark mh-${tone}`} viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-      <path d={`${line} L${w} ${height} L0 ${height}Z`} className="mh-spark-area" />
-      <path d={line} className="mh-spark-line" />
+      <path d={smoothArea(pts, height)} className="mh-spark-area" />
+      <path d={smoothLine(pts)} className="mh-spark-line" />
     </svg>
   );
 }

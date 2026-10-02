@@ -2,19 +2,92 @@ import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import { Alert, EmptyState, Field } from "../../components/ui/controls";
+import { Alert, EmptyState, Field, SearchInput, Segmented } from "../../components/ui/controls";
 import { bytes, dateTime, errText, number } from "../../lib/format";
-import { core, DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy, type TailscaleStatus } from "./api";
+import { core, DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy, type TailscalePeer, type TailscaleStatus } from "./api";
 import { useMihomo } from "./context";
 import { Delay, lastDelay } from "./shared";
+import { HealthDots, NodeTiles, NodeViewSwitch, type NodeView } from "./NodeTiles";
 
 /* ---------- Tailscale ---------- */
 
-export function TailscaleTab({ nodes }: { nodes: MProxy[] }) {
+const peerName = (p: TailscalePeer) => p.hostName || p.dnsName.replace(/\.$/, "").split(".")[0] || p.id;
+
+/** The peer the core uses as exit node: by flag, else by the configured IP or name. */
+export function currentExit(st: TailscaleStatus): TailscalePeer | undefined {
+  const peers = st.peers || [];
+  const flagged = peers.find((p) => p.exitNode);
+  if (flagged || !st.exitNode) return flagged;
+  const want = st.exitNode.replace(/\.$/, "").toLowerCase();
+  return peers.find((p) => (p.ips || []).includes(st.exitNode) || p.dnsName.replace(/\.$/, "").toLowerCase() === want || p.hostName.toLowerCase() === want || peerName(p).toLowerCase() === want);
+}
+
+/** What is wrong with the tailnet login, or null when it is fine (NPM-31). */
+export function tailscaleProblem(st: TailscaleStatus): { title: string; text: string } | null {
+  switch (st.backendState) {
+    case "NeedsLogin":
+      return { title: "Tailscale: нужен вход в tailnet", text: st.authURL ? "Вход потерян или истёк. Откройте ссылку и подтвердите устройство — трафик Tailscale до этого не идёт." : "Вход потерян или истёк. Запросите новую ссылку для входа." };
+    case "NeedsMachineAuth":
+      return { title: "Tailscale: устройство ждёт подтверждения", text: "Администратор tailnet (headscale) должен одобрить это устройство." };
+    case "Stopped":
+      return st.wantRunning ? { title: "Tailscale остановлен", text: "Узел не подключён к tailnet." } : null;
+    default:
+      return null;
+  }
+}
+
+export type TailscaleIssue = { name: string; title: string; text: string; authURL?: string };
+
+/** Tailscale nodes whose tailnet login is lost or pending; polled once a minute. */
+export function useTailscaleIssues(enabled: boolean): TailscaleIssue[] {
+  const [issues, setIssues] = useState<TailscaleIssue[]>([]);
+  useEffect(() => {
+    if (!enabled) {
+      setIssues([]);
+      return;
+    }
+    let alive = true;
+    const pull = async () => {
+      try {
+        const { proxies } = await mihomo.proxies();
+        const names = Object.values(proxies)
+          .filter((p) => p.type.toLowerCase() === "tailscale")
+          .map((p) => p.name);
+        const out: TailscaleIssue[] = [];
+        for (const name of names) {
+          try {
+            const st = await mihomo.tailscale(name);
+            const pr = tailscaleProblem(st);
+            if (pr) out.push({ name, ...pr, authURL: st.authURL });
+          } catch {
+            /* the card shows the error */
+          }
+        }
+        if (alive) setIssues(out);
+      } catch {
+        if (alive) setIssues([]);
+      }
+    };
+    void pull();
+    const t = setInterval(() => document.visibilityState === "visible" && void pull(), 60000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [enabled]);
+  return issues;
+}
+
+export function TailscaleTab({ nodes, view, onView }: { nodes: MProxy[]; view: NodeView; onView: (v: NodeView) => void }) {
   return (
-    <div className="mh-groups mh-groups-wide">
+    <div className="stack">
+      {nodes.length ? (
+        <div className="toolbar">
+          <NodeViewSwitch value={view} onChange={onView} />
+        </div>
+      ) : null}
       {nodes.map((n) => (
-        <TailscaleCard key={n.name} name={n.name} />
+        <TailscaleCard key={n.name} name={n.name} view={view} />
       ))}
       {!nodes.length ? (
         <EmptyState icon="network" title="Tailscale не настроен">
@@ -25,12 +98,16 @@ export function TailscaleTab({ nodes }: { nodes: MProxy[] }) {
   );
 }
 
-function TailscaleCard({ name }: { name: string }) {
+type PeerFilter = "online" | "all" | "exit";
+
+function TailscaleCard({ name, view }: { name: string; view: NodeView }) {
   const { act } = useMihomo();
   const [st, setSt] = useState<TailscaleStatus | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [devOpen, setDevOpen] = useState(false);
+  const [filter, setFilter] = useState<PeerFilter>("online");
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -46,37 +123,43 @@ function TailscaleCard({ name }: { name: string }) {
     return () => clearInterval(t);
   }, [load]);
 
-  const run = async (title: string, fn: () => Promise<unknown>, done: string) => {
-    setBusy(true);
+  const run = async (what: string, title: string, fn: () => Promise<unknown>, done: string) => {
+    setBusy(what);
     await act(title, fn, done);
-    setBusy(false);
+    setBusy("");
     await load();
   };
 
   const peers = (st?.peers || []).filter((p) => !p.self);
-  const exits = peers.filter((p) => p.exitNodeOption);
-  const shown = showAll ? peers : peers.filter((p) => p.online || p.exitNode);
+  const exit = st ? currentExit(st) : undefined;
+  const exits = peers.filter((p) => p.exitNodeOption || p === exit).sort((a, b) => Number(b.online) - Number(a.online) || peerName(a).localeCompare(peerName(b)));
   const running = st?.backendState === "Running";
+  const problem = st ? tailscaleProblem(st) : null;
+  const online = peers.filter((p) => p.online).length;
+  const q = query.trim().toLowerCase();
+  const shown = peers
+    .filter((p) => (filter === "online" ? p.online : filter === "exit" ? p.exitNodeOption : true))
+    .filter((p) => !q || peerName(p).toLowerCase().includes(q) || p.dnsName.toLowerCase().includes(q) || (p.ips || []).some((ip) => ip.includes(q)) || (p.os || "").toLowerCase().includes(q))
+    .sort((a, b) => Number(b.online) - Number(a.online) || peerName(a).localeCompare(peerName(b)));
+  const setExit = (value: string, label: string) => void run("exit", `Tailscale ${name}`, () => mihomo.tailscaleExitNode(name, value), value ? `Выход через ${label}` : "Выход напрямую");
 
   return (
     <section className="card card-flush mh-group">
-      <header className="mh-group-head">
-        <span className="mh-group-toggle">
-          <strong>{name}</strong>
-          <span className="badge">tailscale</span>
-          {st ? <span className={`badge ${running ? "badge-success" : "badge-warning"}`}>{running ? "в сети" : st.backendState}</span> : null}
+      <header className="mh-ghead">
+        <span className="mh-ghead-main">
+          <span className="mh-ghead-title">
+            <strong>{name}</strong>
+            <span className="mh-ghead-type">tailscale</span>
+            {st ? <span className={`badge ${running ? "badge-success" : "badge-warning"}`}>{running ? "в сети" : st.backendState}</span> : null}
+          </span>
+          <span className="mh-ghead-now">
+            {st?.self ? `${st.self.hostName || peerName(st.self)} · ${(st.self.ips || []).join(", ")}` : ""}
+            {exit ? ` · выход через ${peerName(exit)}${st?.exitNodeActive ? "" : " (не активен)"}` : st ? " · выход напрямую" : ""}
+          </span>
         </span>
-        <span className="mh-group-now cell-sub">
-          {st?.self ? `${st.self.hostName} · ${(st.self.ips || []).join(", ")}` : ""}
-        </span>
-        <span className="mh-group-actions">
-          {st?.authURL ? (
-            <a className="btn btn-sm btn-primary" href={st.authURL} target="_blank" rel="noopener noreferrer">
-              Подключить к tailnet
-            </a>
-          ) : null}
+        <span className="mh-ghead-side">
           {st ? (
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void run(`Tailscale ${name}`, () => mihomo.tailscaleRunning(name, !st.wantRunning), st.wantRunning ? "Остановлен" : "Запущен")}>
+            <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => void run("run", `Tailscale ${name}`, () => mihomo.tailscaleRunning(name, !st.wantRunning), st.wantRunning ? "Остановлен" : "Запущен")}>
               {st.wantRunning ? "Остановить" : "Запустить"}
             </button>
           ) : null}
@@ -92,69 +175,111 @@ function TailscaleCard({ name }: { name: string }) {
           </Alert>
         </div>
       ) : null}
-      {st ? (
-        <div className="mh-ts">
-          <div className="mh-setrow">
-            <div>
-              <strong>Выход в интернет через</strong>
-              <span className="cell-sub">
-                {st.exitNode ? (st.exitNodeActive ? "трафик идёт через выбранный узел" : "узел выбран, но пока не активен") : "напрямую с роутера"} · действует до перечитывания конфига
-              </span>
-            </div>
-            <div className="mh-setrow-control">
-              <select
-                aria-label="Exit node"
-                value={st.exitNode || ""}
-                disabled={busy}
-                onChange={(e) => void run(`Tailscale ${name}`, () => mihomo.tailscaleExitNode(name, e.target.value), e.target.value ? `Exit node: ${e.target.value}` : "Exit node снят")}
-              >
-                <option value="">без exit node</option>
-                {exits.map((p) => (
-                  <option key={p.id} value={p.dnsName || p.hostName}>
-                    {p.hostName}
-                    {p.online ? "" : " (не в сети)"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="table-wrap">
-            <table className="table responsive">
-              <thead>
-                <tr>
-                  <th>Устройство</th>
-                  <th>Адреса</th>
-                  <th>Состояние</th>
-                  <th className="col-num">↓ / ↑</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((p) => (
-                  <tr key={p.id}>
-                    <td className="cell-primary" data-label="">
-                      <strong>{p.hostName}</strong>
-                      <span className="cell-sub">
-                        {[p.os, p.exitNode ? "exit node" : p.exitNodeOption ? "может быть exit node" : "", p.relay ? `relay ${p.relay}` : ""].filter(Boolean).join(" · ")}
-                      </span>
-                    </td>
-                    <td className="mono cell-sub" data-label="Адреса">{(p.ips || []).join(", ") || "—"}</td>
-                    <td data-label="Состояние">
-                      {p.online ? <span className="badge badge-success">в сети</span> : <span className="badge">{p.lastSeen ? `был ${dateTime(p.lastSeen)}` : "не в сети"}</span>}
-                    </td>
-                    <td className="col-num mono" data-label="↓ / ↑">
-                      {bytes(p.rxBytes)} / {bytes(p.txBytes)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {peers.length > shown.length || showAll ? (
-            <button type="button" className="btn btn-ghost btn-sm mh-more" onClick={() => setShowAll(!showAll)}>
-              {showAll ? "Только в сети" : `Показать все устройства (${number(peers.length)})`}
-            </button>
-          ) : null}
+      {problem ? (
+        <div className="cb-pad">
+          <Alert
+            tone="danger"
+            title={problem.title}
+            action={
+              st?.authURL ? (
+                <a className="btn btn-sm btn-primary" href={st.authURL} target="_blank" rel="noopener noreferrer">
+                  Войти в tailnet
+                </a>
+              ) : st?.backendState === "NeedsLogin" ? (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void run(
+                      "login",
+                      `Tailscale ${name}`,
+                      async () => {
+                        await mihomo.tailscaleRunning(name, false);
+                        await mihomo.tailscaleRunning(name, true);
+                      },
+                      "Вход запрошен — ссылка появится здесь",
+                    )
+                  }
+                >
+                  Получить ссылку для входа
+                </button>
+              ) : null
+            }
+          >
+            {problem.text}
+          </Alert>
         </div>
+      ) : null}
+      {st ? (
+        <>
+          <div className="mh-ts-head">
+            <strong>Выход в интернет</strong>
+            <span className="cell-sub">{busy === "exit" ? "переключаю…" : "выбор действует до перечитывания конфига; постоянный — exit-node в «Своих узлах»"}</span>
+          </div>
+          <NodeTiles
+            view={view}
+            disabled={!!busy}
+            items={[
+              { key: "", name: "Напрямую", meta: "без exit node", status: null, active: !exit && !st.exitNode, onSelect: () => setExit("", "") },
+              ...exits.map((p) => ({
+                key: p.id,
+                name: peerName(p),
+                meta: [(p.ips || [])[0], p.os].filter(Boolean).join(" · "),
+                status: <span className={`mh-delay is-${p.online ? "good" : "none"}`}>{p.online ? "в сети" : "не в сети"}</span>,
+                active: p === exit,
+                dead: !p.online,
+                title: `${p.dnsName}${p.relay ? ` · relay ${p.relay}` : ""}`,
+                onSelect: () => setExit((p.ips || [])[0] || p.dnsName.replace(/\.$/, ""), peerName(p)),
+              })),
+            ]}
+          />
+          <div className="mh-ts-head">
+            <strong>Устройства tailnet</strong>
+            <span className="cell-sub">
+              {number(online)} в сети из {number(peers.length)}
+            </span>
+          </div>
+          <HealthDots
+            dots={[...peers]
+              .sort((a, b) => Number(b.online) - Number(a.online))
+              .map((p) => ({ key: p.id, tone: p.online ? "good" : "none", title: `${peerName(p)}: ${p.online ? "в сети" : p.lastSeen ? `был ${dateTime(p.lastSeen)}` : "не в сети"}` }))}
+            open={devOpen}
+            onToggle={() => setDevOpen(!devOpen)}
+            label={`Устройства (${number(peers.length)})`}
+          />
+          {devOpen ? (
+            <>
+              <div className="toolbar cb-pad mh-ts-tools">
+                <SearchInput label="Поиск устройства" placeholder="Имя, адрес или ОС" value={query} onChange={setQuery} />
+                <Segmented<PeerFilter>
+                  label="Какие устройства"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: "online", label: "В сети", count: online },
+                    { value: "exit", label: "Выходы", count: peers.filter((p) => p.exitNodeOption).length },
+                    { value: "all", label: "Все", count: peers.length },
+                  ]}
+                />
+              </div>
+              <NodeTiles
+                view={view}
+                empty="Нет устройств под фильтр."
+                items={shown.slice(0, 600).map((p) => ({
+                  key: p.id,
+                  name: peerName(p),
+                  meta: [(p.ips || [])[0], p.os, p.rxBytes || p.txBytes ? `↓${bytes(p.rxBytes)} ↑${bytes(p.txBytes)}` : ""].filter(Boolean).join(" · "),
+                  status: p.online ? <span className="mh-delay is-good">в сети</span> : <span className="mh-delay">{p.lastSeen ? dateTime(p.lastSeen).split(",")[0] : "нет"}</span>,
+                  active: p === exit,
+                  dead: !p.online,
+                  title: `${p.dnsName}${(p.ips || []).length ? ` · ${(p.ips || []).join(", ")}` : ""}${p.relay ? ` · relay ${p.relay}` : ""}${p.exitNodeOption ? " · может быть exit node" : ""}`,
+                }))}
+              />
+              {shown.length > 600 ? <p className="mh-muted cb-pad">Показаны первые 600 — уточните поиск.</p> : null}
+            </>
+          ) : null}
+        </>
       ) : !error ? (
         <p className="mh-muted cb-pad">Загружаю состояние…</p>
       ) : null}

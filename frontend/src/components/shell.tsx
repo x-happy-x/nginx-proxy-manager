@@ -105,6 +105,7 @@ export function SectionTabs({
   const extras = SECTION_EXTRAS[section.id] || [];
   if (pages.length + extras.length < 2) return null;
   return (
+    <>
     <nav className="section-tabs" aria-label={`Вкладки раздела «${section.title}»`}>
       {pages.map((p) => (
         <a
@@ -133,6 +134,35 @@ export function SectionTabs({
         ),
       )}
     </nav>
+    <label className="section-select">
+      <span className="sr-only">Вкладка раздела «{section.title}»</span>
+      <select
+        value={page}
+        onChange={(event) => {
+          const v = event.target.value;
+          if (v.startsWith("x:")) {
+            const x = extras[Number(v.slice(2))];
+            if (x.href) window.location.hash = x.href;
+            else onOperations();
+            return;
+          }
+          onNavigate(v as PageKey);
+        }}
+      >
+        {pages.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.tab}
+            {unsaved[p.id] ? " •" : ""}
+          </option>
+        ))}
+        {extras.map((x, i) => (
+          <option key={x.label} value={`x:${i}`}>
+            {x.label} ↗
+          </option>
+        ))}
+      </select>
+    </label>
+    </>
   );
 }
 
