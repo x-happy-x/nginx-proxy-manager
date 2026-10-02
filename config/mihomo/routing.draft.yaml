@@ -46,14 +46,20 @@ proxy-providers:
         failure-threshold: 3
         recovery-threshold: 2
         targets:
-          # chatgpt.com answers 403 "unsupported_country" from RU: a node that
-          # gets the page is in a supported country. Not a check of the chat.
-          - url: https://chatgpt.com/
-            timeout: 8000
+          # Exit country as Cloudflare sees it: the node name may not match.
+          # The chatgpt.com page itself is not used: Cloudflare answers 403
+          # to a burst of checks from shared exit addresses.
+          - url: https://chatgpt.com/cdn-cgi/trace
             expected-status: '200'
-            content-type: text/html
-            min-bytes: 1024
-            body-not-regex: '(?i)(unsupported_country|cf-chl-|just a moment|access denied)'
+            content-type: text/plain
+            body-regex: '(?m)^loc=[A-Z]{2}$'
+            body-not-regex: '(?m)^loc=(RU|BY|HK|CN|MO|IR|KP|SY|CU|VE|AF)$'
+          # The API answers 401 without a key where the service works and
+          # 403 unsupported_country where it does not.
+          - url: https://api.openai.com/v1/models
+            expected-status: '401'
+            content-type: application/json
+            body-not-regex: '(?i)unsupported_country'
 
 # Replaces the whole proxy-groups section:
 proxy-groups:
