@@ -11,7 +11,11 @@ import { NetworkScheme } from "../features/network/Scheme";
 import { PageHeader } from "../navigation";
 import { errText } from "../lib/format";
 
-type Tab = "overview" | "scheme" | "antenna" | "dns" | "analyzer" | "scan";
+export type NetTab = "overview" | "scheme" | "antenna" | "dns" | "analyzer" | "scan";
+type Tab = NetTab;
+
+// Tabs are section tabs of «Сеть» now (NPM-30): the console passes the page.
+const PAGE_OF: Record<Tab, "network" | "scheme" | "antenna" | "netdns" | "analyzer" | "scan"> = { overview: "network", scheme: "scheme", antenna: "antenna", dns: "netdns", analyzer: "analyzer", scan: "scan" };
 type Period = "60" | "360" | "1440";
 const TAB_KEY = "homenet.network.tab";
 const TABS: Array<[Tab, string]> = [
@@ -32,8 +36,9 @@ function readTab(): Tab {
   }
 }
 
-export function Network({ analyze }: { analyze?: string } = {}) {
-  const [tab, setTabState] = useState<Tab>(() => (analyze ? "analyzer" : readTab()));
+export function Network({ analyze, tab: forced, onTab }: { analyze?: string; tab?: Tab; onTab?: (t: Tab) => void } = {}) {
+  const [tabState, setTabState] = useState<Tab>(() => (analyze ? "analyzer" : readTab()));
+  const tab = forced ?? tabState;
   const [period, setPeriod] = useState<Period>("60");
   const [data, setData] = useState<NetworkPayload | null>(null);
   const [topo, setTopo] = useState<Topology | null>(null);
@@ -42,6 +47,10 @@ export function Network({ analyze }: { analyze?: string } = {}) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
   const setTab = (next: Tab) => {
+    if (onTab) {
+      onTab(next);
+      return;
+    }
     setTabState(next);
     try {
       localStorage.setItem(TAB_KEY, next);
@@ -89,7 +98,7 @@ export function Network({ analyze }: { analyze?: string } = {}) {
   return (
     <>
       <PageHeader
-        page="network"
+        page={PAGE_OF[tab]}
         actions={
           <>
             <span className="res-live" title="Данные обновляются каждые 10 секунд">
@@ -113,6 +122,7 @@ export function Network({ analyze }: { analyze?: string } = {}) {
       />
       {error ? <Alert tone="danger" title="Нет данных от менеджера">{error}</Alert> : null}
       <div className="res">
+        {forced ? null : (
         <div className="res-tabs" role="tablist" aria-label="Раздел сети">
           {TABS.map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} className={`res-tab${tab === id ? " is-active" : ""}`} onClick={() => setTab(id)}>
@@ -127,6 +137,7 @@ export function Network({ analyze }: { analyze?: string } = {}) {
             </button>
           ))}
         </div>
+        )}
         {tab === "overview" ? data ? <NetworkOverview data={data} onAntenna={() => setTab("antenna")} /> : <div className="launcher-loading">Собираю данные…</div> : null}
         {tab === "scheme" ? <NetworkScheme topo={topo} net={data} /> : null}
         {tab === "antenna" ? <Antenna /> : null}

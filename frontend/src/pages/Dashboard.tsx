@@ -65,7 +65,7 @@ export function Dashboard({
 
   return (
     <div className="stack">
-      <PageHeader page="overview" />
+      <PageHeader page="stats" />
       <div className="toolbar dashboard-filters">
         <Segmented
           label="Период"

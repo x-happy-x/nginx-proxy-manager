@@ -43,7 +43,7 @@ import type {
   RoutesDocument,
   SslMode,
 } from "./types";
-import { pageFromHash, type PageKey } from "./navigation";
+import { pageFromHash, type PageKey, type SectionKey } from "./navigation";
 import { Icon } from "./components/ui/Icon";
 import { Alert } from "./components/ui/controls";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
@@ -51,6 +51,7 @@ import {
   ApplyDialog,
   ChangesBar,
   OperationsDrawer,
+  SectionTabs,
   Sidebar,
   Toasts,
   Topbar,
@@ -83,6 +84,34 @@ import { Traffic } from "./features/mihomo/Traffic";
 import { CoreLogs } from "./features/mihomo/CoreLogs";
 import { Config as CoreConfigPage } from "./features/mihomo/Config";
 import { Core } from "./features/mihomo/Core";
+import { VpnOverview } from "./features/mihomo/VpnOverview";
+import { MODE_LABEL, useMihomo } from "./features/mihomo/context";
+import { Overview } from "./pages/Overview";
+import { Releases } from "./pages/Releases";
+import type { NetTab } from "./pages/Network";
+
+const NET_PAGES: Partial<Record<PageKey, NetTab>> = { network: "overview", scheme: "scheme", antenna: "antenna", netdns: "dns", analyzer: "analyzer", scan: "scan" };
+const NET_PAGE_OF: Record<NetTab, PageKey> = { overview: "network", scheme: "scheme", antenna: "antenna", dns: "netdns", analyzer: "analyzer", scan: "scan" };
+
+// The sidebar's VPN line needs the Mihomo context, which wraps the console.
+function ConsoleSidebar(props: Omit<Parameters<typeof Sidebar>[0], "summaries" | "warnings"> & { appsCount: number }) {
+  const { status: core, configs } = useMihomo();
+  const vpn = !core ? "" : !core.installed ? "mihomo не установлен" : !core.controller_ok ? "ядро не отвечает" : `${configs ? MODE_LABEL[configs.mode] || configs.mode : "работает"} · ${core.version || ""}`;
+  const summaries: Partial<Record<SectionKey, string>> = {
+    overview: "сводка и предупреждения",
+    services: `${props.appsCount} сервисов за прокси`,
+    network: "интернет · LTE · DNS · устройства",
+    vpn,
+    system: props.status ? (props.status.running ? "прокси работает" : "прокси остановлен") : "прокси · выкладки",
+  };
+  const warnings: Partial<Record<SectionKey, boolean>> = {
+    vpn: !!core && (!core.installed || !core.controller_ok),
+    system: !!props.status && !props.status.running,
+  };
+  const { appsCount: _apps, ...rest } = props;
+  void _apps;
+  return <Sidebar {...rest} summaries={summaries} warnings={warnings} />;
+}
 
 function sanitize(doc: RoutesDocument): RoutesDocument {
   const clone = JSON.parse(JSON.stringify(doc)) as RoutesDocument;
@@ -578,12 +607,12 @@ export default function App() {
   return (
     <MihomoProvider log={coreLog} active onDirtyChange={setCoreDirty}>
     <div className={`app${navOpen ? " nav-open" : ""}`}>
-      <Sidebar
+      <ConsoleSidebar
         active={page}
         onNavigate={navigate}
         onClose={() => setNavOpen(false)}
         status={status}
-        counts={{ servers: doc.apps.length }}
+        appsCount={doc.apps.length}
         unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty, coreconfig: coreDirty }}
       />
       <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
@@ -602,10 +631,14 @@ export default function App() {
           extra={<TopbarCore page={page} />}
         />
         <main className="page" id="main">
-          {page === "overview" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
+          <SectionTabs page={page} onNavigate={navigate} onOperations={() => setOpsOpen(true)} unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty, coreconfig: coreDirty }} />
+          {page === "overview" ? <Overview doc={doc} status={status} onNavigate={navigate} /> : null}
+          {page === "stats" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
+          {page === "vpn" ? <CoreGate><VpnOverview onNavigate={navigate} /></CoreGate> : null}
+          {page === "releases" ? <Releases /> : null}
           {page === "apps" ? <Launcher doc={doc} /> : null}
           {page === "resources" ? <Resources /> : null}
-          {page === "network" ? <Network key={analyzeHost || "network"} analyze={analyzeHost} /> : null}
+          {NET_PAGES[page] ? <Network key={analyzeHost || "network"} analyze={analyzeHost} tab={NET_PAGES[page]} onTab={(t) => navigate(NET_PAGE_OF[t])} /> : null}
           {page === "proxies" ? <CoreGate><Proxies onChecks={() => navigate("checks")} /></CoreGate> : null}
           {page === "checks" ? <CoreGate><Checks onConfig={() => navigate("coreconfig")} /></CoreGate> : null}
           {page === "connections" ? (
@@ -613,7 +646,7 @@ export default function App() {
               <Connections
                 onAnalyze={(host) => {
                   setAnalyzeHost(host);
-                  navigate("network");
+                  navigate("analyzer");
                 }}
               />
             </CoreGate>

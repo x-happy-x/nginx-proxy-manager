@@ -18,7 +18,7 @@ export function NetworkOverview({ data, onAntenna }: { data: NetworkPayload; onA
   const avgMT = useMemo(
     () =>
       data.series.map((b) => {
-        const vals = data.targets.filter((t) => t.category === "internet").map((t) => b.mt[t.id]).filter((v): v is number => v != null);
+        const vals = (data.targets || []).filter((t) => t.category === "internet").map((t) => b.mt[t.id]).filter((v): v is number => v != null);
         return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
       }),
     [data],
@@ -145,7 +145,7 @@ export function NetworkOverview({ data, onAntenna }: { data: NetworkPayload; onA
                 </tr>
               </thead>
               <tbody>
-                {data.targets.map((t) => {
+                {(data.targets || []).map((t) => {
                   const m = data.details?.mikrotik?.[t.id];
                   const n = data.details?.netcraze?.[t.id];
                   return (
