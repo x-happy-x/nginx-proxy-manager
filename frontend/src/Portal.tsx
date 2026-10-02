@@ -94,11 +94,35 @@ function Brand() {
   );
 }
 
+type View = "apps" | "access" | "manage";
+
+function viewFromHash(): View {
+  const h = location.hash;
+  if (h === "#access") return "access";
+  if (h.startsWith("#/")) return "manage";
+  return "apps";
+}
+
 export default function Portal() {
   const [data, setData] = useState<Data | null>(null);
   const [guest, setGuest] = useState(false);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"apps" | "access" | "manage">("apps");
+  // The address keeps the screen across reloads: #/<page> is the router console, #access the access table.
+  const [view, setViewState] = useState<View>(viewFromHash);
+  const setView = (next: View) => {
+    setViewState(next);
+    const want = next === "access" ? "#access" : next === "manage" ? (location.hash.startsWith("#/") ? location.hash : "#/overview") : "";
+    if (location.hash !== want) history.pushState(null, "", want || location.pathname + location.search);
+  };
+  useEffect(() => {
+    const sync = () => setViewState(viewFromHash());
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, []);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [status, setStatus] = useState<Record<string, Probe>>({});
 
