@@ -966,3 +966,8 @@ button.mh-health:focus-visible {
   max-height: 520px;
   overflow: auto;
 }
+
+.mh-col-bar {
+  width: 22%;
+  min-width: 90px;
+}

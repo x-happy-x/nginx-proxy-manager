@@ -591,6 +591,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		})
 	case "/api/core/install/plan":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "plan": installPlan(r.URL.Query().Get("xkeen") == "1")})
+	case "/api/core/traffic":
+		a.handleCoreTraffic(w, r)
 	case "/api/core/install/log":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "install": installer.snapshot()})
 	default:
@@ -612,6 +614,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.writeJSON(w, http.StatusOK, response{"ok": true})
+	case "/api/core/traffic/reset":
+		a.handleCoreTrafficReset(w)
 	case "/api/core/config/check", "/api/core/config/apply":
 		a.handleCoreConfigWrite(w, r, r.URL.Path == "/api/core/config/apply")
 	case "/api/core/install":

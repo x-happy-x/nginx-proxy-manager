@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { core, mihomo, openStream, type CoreConfig, type CoreDevice, type CoreStatus, type MConfigs } from "./api";
 import { errText } from "../../lib/format";
-import { historyStore, logStore } from "./stores";
+import { logStore } from "./stores";
 
 export type TrafficPoint = { t: number; up: number; down: number };
 export type LogFn = (title: string, message: string, level?: "info" | "success" | "warning" | "error") => void;
@@ -99,15 +99,11 @@ export function MihomoProvider({ children, log, active, onDirtyChange }: { child
     return () => clearInterval(timer);
   }, [running, refreshConfigs, refreshDevices]);
 
-  // Like zashboard: the core log and the connection history fill while the console is open.
+  // Like zashboard: the core log fills while the console is open (traffic is recorded on the router).
   useEffect(() => {
     if (!running || !active) return;
     logStore.start();
-    historyStore.start();
-    return () => {
-      logStore.stop();
-      historyStore.stop();
-    };
+    return () => logStore.stop();
   }, [running, active]);
 
   // One /traffic stream for the whole app: the top bar and the Traffic page share it.

@@ -37,6 +37,7 @@ func main() {
 	a.startTelemetry()
 	a.startResources()
 	a.startNetwork()
+	a.startMihomoTraffic()
 
 	a.startMaintenance()
 	host, port := a.readUIBind()
