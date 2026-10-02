@@ -1429,13 +1429,14 @@ button.mh-tile-delay:hover {
 
 /* NPM-32: dots in their own block, the label does not stretch the last row */
 .mh-health {
+  flex-direction: column;
   flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 12px;
+  align-items: stretch;
+  gap: 8px;
 }
 
 button.mh-health {
-  align-items: flex-end;
+  align-items: stretch;
 }
 
 .mh-health-dots {
@@ -1455,5 +1456,6 @@ button.mh-health {
 
 .mh-health-toggle {
   flex: none;
+  align-self: flex-end;
   line-height: 1;
 }
