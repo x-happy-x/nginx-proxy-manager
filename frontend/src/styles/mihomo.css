@@ -1,0 +1,778 @@
+/* Mihomo console (NPM-19). Built only from tokens.css; works from 320 px. */
+
+.mh-muted {
+  color: var(--text-3);
+  font-size: 13px;
+  margin: 0;
+}
+
+.mh-tab-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.mh-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ---------- top bar ---------- */
+
+.mh-mode-menu {
+  position: relative;
+}
+
+.mh-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mh-mode-chip .label {
+  font-weight: 450;
+}
+
+.mh-mode-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mh-mode-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+}
+
+.mh-mode-pop button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mh-mode-pop button:hover,
+.mh-mode-pop button:focus-visible {
+  background: var(--surface-3);
+  outline: none;
+}
+
+.mh-mode-pad {
+  width: 14px;
+}
+
+.mh-topspeed {
+  display: inline-flex;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mh-topspeed .up {
+  color: var(--series-2);
+}
+
+.mh-topspeed .down {
+  color: var(--series-1);
+}
+
+.mh-topspeed.is-off {
+  opacity: 0.5;
+}
+
+@media (max-width: 1100px) {
+  .mh-topspeed .up,
+  .mh-mode-chip .label {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .mh-topspeed {
+    display: none;
+  }
+  .mh-topspeed + .topbar-divider {
+    display: none;
+  }
+}
+
+/* ---------- delays, chains, devices ---------- */
+
+.mh-delay {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-3);
+}
+
+.mh-delay.is-good {
+  color: var(--success);
+}
+
+.mh-delay.is-warn {
+  color: var(--warning);
+}
+
+.mh-delay.is-bad {
+  color: var(--danger);
+}
+
+.mh-delay .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.mh-chain {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+.mh-chain-arrow {
+  color: var(--text-3);
+  margin-right: 4px;
+}
+
+.mh-device {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mh-device strong {
+  font-weight: 550;
+}
+
+.mh-speed {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--series-1);
+  white-space: nowrap;
+}
+
+/* ---------- groups and nodes ---------- */
+
+.mh-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.mh-group {
+  min-width: 0;
+}
+
+.mh-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mh-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.mh-group-toggle strong {
+  font-size: 14px;
+}
+
+.mh-group-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  flex: 1 1 120px;
+}
+
+.mh-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.mh-nodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.mh-node {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.mh-node.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mh-node.is-dead .mh-node-name {
+  color: var(--text-3);
+}
+
+.mh-node-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mh-node-main:disabled {
+  cursor: default;
+}
+
+.mh-node-main:focus-visible,
+.mh-node-delay:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.mh-node-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mh-node-name {
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mh-node-delay {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+
+.mh-sub {
+  padding: 10px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mh-sub-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.mh-health {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 12px 14px;
+}
+
+.mh-health i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+
+.mh-health i.is-good {
+  background: var(--status-good);
+}
+
+.mh-health i.is-warn {
+  background: var(--status-warning);
+}
+
+.mh-health i.is-bad {
+  background: var(--status-critical);
+}
+
+/* ---------- checks ---------- */
+
+.mh-stats .stat-meta {
+  white-space: normal;
+}
+
+.mh-probes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mh-stages {
+  display: inline-flex;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.mh-stages span {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.mh-stages .is-ok {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.mh-stages .is-fail {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.mh-stages .is-skip {
+  opacity: 0.5;
+}
+
+.mh-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* ---------- connections ---------- */
+
+.mh-conn-table .badge {
+  max-width: 220px;
+}
+
+.mh-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.mh-flow > span {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.mh-flow > span.is-accent {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+tr.mh-off td {
+  color: var(--text-3);
+}
+
+/* ---------- traffic ---------- */
+
+.mh-grid-wide {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.mh-grid-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .mh-grid-wide,
+  .mh-grid-even {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mh-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mh-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.mh-bar-value {
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.mh-latency {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mh-latency-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.mh-spark {
+  width: 100%;
+  height: 36px;
+  display: block;
+}
+
+.mh-spark-area {
+  fill: var(--series-1);
+  opacity: 0.14;
+}
+
+.mh-spark-line {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-width: 1.5;
+}
+
+.mh-series-2 .mh-spark-area {
+  fill: var(--series-2);
+}
+
+.mh-series-2 .mh-spark-line {
+  stroke: var(--series-2);
+}
+
+/* ---------- logs ---------- */
+
+.mh-log {
+  max-height: 65vh;
+  overflow: auto;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  background: var(--code-bg);
+}
+
+.mh-log-line {
+  display: grid;
+  grid-template-columns: 64px 64px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.mh-log-time {
+  color: var(--text-3);
+}
+
+.mh-log-level {
+  font-weight: 600;
+  color: var(--accent-text);
+  text-transform: lowercase;
+}
+
+.mh-log-text {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.mh-log-line.is-warning .mh-log-level,
+.mh-log-line.is-warn .mh-log-level {
+  color: var(--warning);
+}
+
+.mh-log-line.is-error .mh-log-level {
+  color: var(--danger);
+}
+
+.mh-log-line.is-ok .mh-log-level {
+  color: var(--success);
+}
+
+.mh-log-line.is-debug .mh-log-level {
+  color: var(--text-3);
+}
+
+@media (max-width: 640px) {
+  .mh-log-line {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .mh-log-level {
+    display: none;
+  }
+}
+
+/* ---------- config editor ---------- */
+
+.mh-url {
+  max-width: 280px;
+}
+
+.mh-rule-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mh-rule-add input:not([type="checkbox"]) {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.mh-filter {
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.mh-yaml {
+  min-height: 60vh;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.mh-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.mh-changes li {
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.mh-change-kind {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.mh-changes .is-added .mh-change-kind {
+  color: var(--success);
+}
+
+.mh-changes .is-removed .mh-change-kind {
+  color: var(--danger);
+}
+
+.mh-changes .is-changed .mh-change-kind {
+  color: var(--warning);
+}
+
+.mh-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mh-targets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mh-target {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-2);
+}
+
+.mh-target-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mh-target-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mh-target-row .mh-target-status {
+  flex: 0 0 84px;
+}
+
+.mh-target-more summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.mh-target-more[open] summary {
+  margin-bottom: 8px;
+}
+
+.mh-target-more > .field,
+.mh-target-more > .form-grid {
+  margin-top: 6px;
+}
+
+.mh-setrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.mh-setrow > div:first-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mh-setrow strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.mh-setrow-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mh-danger-card {
+  border-color: var(--danger-border);
+}
+
+/* ---------- install ---------- */
+
+.mh-plan {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mh-plan li {
+  padding-left: 4px;
+}
+
+.mh-plan li > strong,
+.mh-plan li > span {
+  display: block;
+}
+
+.mh-plan li.is-done::marker,
+.mh-plan li.is-done > strong {
+  color: var(--success);
+}
+
+.mh-plan li.is-active::marker,
+.mh-plan li.is-active > strong {
+  color: var(--accent-text);
+}
+
+.mh-plan li.is-failed::marker,
+.mh-plan li.is-failed > strong {
+  color: var(--danger);
+}
+
+.mh-rule-add select {
+  width: auto;
+  flex: 0 0 auto;
+  max-width: 100%;
+}

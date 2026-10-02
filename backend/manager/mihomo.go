@@ -509,34 +509,45 @@ func (a *app) applyMihomoHosts(s mihomoSettings, routes schema.Routes, validate 
 	if s.secret == "" {
 		s.secret = secret
 	}
+	backup, err := mihomoSwapConfig(s, target, original, candidate, "hosts", validate, reload)
+	if err != nil {
+		return false, err.Error()
+	}
+	return true, fmt.Sprintf("Added %d Mihomo DNS hosts; backup: %s", len(changes), backup)
+}
+
+// mihomoSwapConfig validates candidate, keeps a private backup of original,
+// replaces target and reloads Mihomo. A failed reload restores the original
+// file and runtime unless someone else changed the file meanwhile.
+func mihomoSwapConfig(s mihomoSettings, target string, original, candidate []byte, what string, validate func(mihomoSettings, string) error, reload func(mihomoSettings) error) (string, error) {
 	staged, err := mihomoPrivateFile(filepath.Dir(target), ".homenet-staged-*.yaml", candidate)
 	if err != nil {
-		return false, fmt.Sprintf("stage Mihomo hosts: %v", err)
+		return "", fmt.Errorf("stage Mihomo %s: %v", what, err)
 	}
 	defer os.Remove(staged)
 	if err := validate(s, staged); err != nil {
-		return false, err.Error()
+		return "", err
 	}
 	currentTarget, err := filepath.EvalSymlinks(s.config)
 	if err != nil || currentTarget != target {
-		return false, "Mihomo active profile changed during validation; retry the preview"
+		return "", fmt.Errorf("Mihomo active profile changed during validation; retry the preview")
 	}
 	current, err := os.ReadFile(target)
 	if err != nil || !bytes.Equal(current, original) {
-		return false, "Mihomo configuration changed during validation; retry the preview"
+		return "", fmt.Errorf("Mihomo configuration changed during validation; retry the preview")
 	}
 	backup, err := mihomoPrivateFile(filepath.Dir(target), ".homenet-backup-*.yaml", original)
 	if err != nil {
-		return false, fmt.Sprintf("back up Mihomo configuration: %v", err)
+		return "", fmt.Errorf("back up Mihomo configuration: %v", err)
 	}
 	if err := os.Rename(staged, target); err != nil {
-		return false, fmt.Sprintf("replace Mihomo configuration: %v; backup: %s", err, backup)
+		return "", fmt.Errorf("replace Mihomo configuration: %v; backup: %s", err, backup)
 	}
 	if err := reload(s); err != nil {
 		// Do not overwrite a concurrent third-party edit during recovery.
 		current, readErr := os.ReadFile(target)
 		if readErr != nil || !bytes.Equal(current, candidate) {
-			return false, fmt.Sprintf("%v; configuration changed concurrently; manual recovery required using %s", err, backup)
+			return "", fmt.Errorf("%v; configuration changed concurrently; manual recovery required using %s", err, backup)
 		}
 		restore, restoreErr := mihomoPrivateFile(filepath.Dir(target), ".homenet-restore-*.yaml", original)
 		if restoreErr == nil {
@@ -544,12 +555,12 @@ func (a *app) applyMihomoHosts(s mihomoSettings, routes schema.Routes, validate 
 			_ = os.Remove(restore)
 		}
 		if restoreErr != nil {
-			return false, fmt.Sprintf("%v; failed to restore configuration; recovery backup: %s", err, backup)
+			return "", fmt.Errorf("%v; failed to restore configuration; recovery backup: %s", err, backup)
 		}
 		if rollbackErr := reload(s); rollbackErr != nil {
-			return false, fmt.Sprintf("%v; original file restored but controller rollback failed; recovery backup: %s", err, backup)
+			return "", fmt.Errorf("%v; original file restored but controller rollback failed; recovery backup: %s", err, backup)
 		}
-		return false, fmt.Sprintf("%v; original file and runtime restored; backup: %s", err, backup)
+		return "", fmt.Errorf("%v; original file and runtime restored; backup: %s", err, backup)
 	}
-	return true, fmt.Sprintf("Added %d Mihomo DNS hosts; backup: %s", len(changes), backup)
+	return backup, nil
 }

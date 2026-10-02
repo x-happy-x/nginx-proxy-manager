@@ -67,6 +67,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		w.Header().Set("Cache-Control", "no-store")
 	}
+	if strings.HasPrefix(r.URL.Path, mihomoAPIPrefix+"/") {
+		a.handleMihomoAPI(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		if strings.HasPrefix(r.URL.Path, "/api/dms/") {
@@ -112,6 +116,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/core/") {
+		a.handleCoreGet(w, r)
+		return
+	}
 	switch path {
 	case "/api/launcher":
 		a.handleLauncherGet(w)
@@ -277,6 +285,10 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/core/") {
+		a.handleCorePost(w, r)
+		return
+	}
 	switch path {
 	case "/api/launcher":
 		a.handleLauncherSave(w, r)

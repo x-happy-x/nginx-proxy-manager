@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { ConsoleItem, NginxStatus } from "../types";
 import { NAV, NAV_GROUPS, type PageKey } from "../navigation";
 import { Icon } from "./ui/Icon";
@@ -93,7 +93,9 @@ export function Topbar({
   onOperations,
   onApply,
   busy,
+  extra,
 }: {
+  extra?: ReactNode;
   page: PageKey;
   status: NginxStatus | null;
   theme: "light" | "dark";
@@ -125,6 +127,7 @@ export function Topbar({
         <strong>{current.title}</strong>
       </div>
       <div className="topbar-actions">
+        {extra}
         <span className="proxy-status" title={statusText} aria-label={statusText}>
           <span className={`dot ${status ? (status.running ? "success" : "danger") : ""}`} />
           <span className="label">{statusText}</span>
