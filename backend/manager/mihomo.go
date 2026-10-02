@@ -490,6 +490,23 @@ func mihomoValidateCandidate(s mihomoSettings, staged string) error {
 	return nil
 }
 
+// mihomoValidateDetail runs mihomo -t and returns "" when the file passes,
+// otherwise the reason without addresses or credentials (NPM-34).
+func mihomoValidateDetail(s mihomoSettings, staged string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, s.binary, "-t", "-d", s.home, "-f", staged)
+	cmd.Dir = s.home
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return ""
+	}
+	if d := sanitizeValidator(out); d != "" {
+		return d
+	}
+	return "mihomo -t отклонил конфигурацию"
+}
+
 func (a *app) applyMihomoHosts(s mihomoSettings, routes schema.Routes, validate func(mihomoSettings, string) error, reload func(mihomoSettings) error) (bool, string) {
 	target, err := filepath.EvalSymlinks(s.config)
 	if err != nil {
