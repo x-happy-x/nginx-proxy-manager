@@ -3,8 +3,8 @@ app: homenet
 
 metadata:
   name: HomeNet
-  version: NPM-23
-  description: Р”РѕРјР°С€РЅРёР№ РїРѕСЂС‚Р°Р» Рё СѓРїСЂР°РІР»РµРЅРёРµ РїСЂРѕРєСЃРё
+  version: ae25837
+  description: Домашний портал и управление прокси
   icon: frontend/static/icons/server.svg
   os: linux
   arch: arm64
