@@ -1416,3 +1416,44 @@ button.mh-tile-delay:hover {
   flex-direction: column;
   gap: 8px;
 }
+
+/* NPM-32: cards packed by height */
+.mh-groups.is-masonry {
+  grid-auto-rows: 4px;
+  row-gap: 0;
+}
+
+.masonry-item {
+  min-width: 0;
+}
+
+/* NPM-32: dots in their own block, the label does not stretch the last row */
+.mh-health {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+button.mh-health {
+  align-items: flex-end;
+}
+
+.mh-health-dots {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.mh-health-more {
+  font-size: 11px;
+  line-height: 10px;
+  color: var(--text-3);
+}
+
+.mh-health-toggle {
+  flex: none;
+  line-height: 1;
+}

@@ -6,7 +6,7 @@ import { bytes, dateTime, errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy } from "./api";
 import { useMihomo } from "./context";
 import { Delay, TabCount, Tabs, lastDelay } from "./shared";
-import { HealthDots, NodeTiles, NodeViewSwitch, dotOfDelay, useNodeView, type NodeView } from "./NodeTiles";
+import { HealthDots, Masonry, NodeTiles, NodeViewSwitch, dotOfDelay, useNodeView, type NodeView } from "./NodeTiles";
 import { OlcrtcTab, TailscaleTab } from "./Extras";
 
 type Tab = "groups" | "providers" | "tailscale" | "olcrtc";
@@ -222,7 +222,7 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
           {ordering ? (
             <GroupOrder groups={groups.map((g) => g.name)} custom={order.length > 0} onChange={setOrder} />
           ) : groups.length ? (
-            <div className="mh-groups">
+            <Masonry className="mh-groups">
               {groups.map((g) => (
                 <GroupCard
                   key={g.name}
@@ -240,7 +240,7 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
                   onUnfix={() => void act(`Группа ${g.name}`, () => mihomo.unfix(g.name), "Закрепление снято").then(load)}
                 />
               ))}
-            </div>
+            </Masonry>
           ) : (
             <EmptyState icon="layers" title="Групп нет">
               В config.yaml нет proxy-groups. Добавьте группу в «Конфигурации».
@@ -258,16 +258,17 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
               <NodeViewSwitch value={view} onChange={setView} />
             </div>
           ) : null}
-          <div className="mh-groups">
-            {providerList.map((p) => (
-              <ProviderCard key={p.name} p={p} view={view} onReload={load} onChecks={onChecks} />
-            ))}
-            {!providerList.length ? (
-              <EmptyState icon="layers" title="Подписок нет">
-                Добавьте подписку в «Конфигурация → Подписки».
-              </EmptyState>
-            ) : null}
-          </div>
+          {providerList.length ? (
+            <Masonry className="mh-groups">
+              {providerList.map((p) => (
+                <ProviderCard key={p.name} p={p} view={view} onReload={load} onChecks={onChecks} />
+              ))}
+            </Masonry>
+          ) : (
+            <EmptyState icon="layers" title="Подписок нет">
+              Добавьте подписку в «Конфигурация → Подписки».
+            </EmptyState>
+          )}
         </>
       )}
     </div>
