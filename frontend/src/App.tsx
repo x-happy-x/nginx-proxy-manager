@@ -160,7 +160,7 @@ type RunOptions = {
   success?: string;
 };
 
-export default function App() {
+export default function App({ onPortal }: { onPortal?: () => void } = {}) {
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "dark" ? "dark" : "light",
   );
@@ -613,6 +613,7 @@ export default function App() {
         onClose={() => setNavOpen(false)}
         status={status}
         appsCount={doc.apps.length}
+        onPortal={onPortal}
         unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty, coreconfig: coreDirty }}
       />
       <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />

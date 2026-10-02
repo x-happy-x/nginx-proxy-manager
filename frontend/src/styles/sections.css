@@ -425,3 +425,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* NPM-37: the way back to the portal sits in the menu, under the sections */
+.nav-portal {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
