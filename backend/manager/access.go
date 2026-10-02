@@ -6,6 +6,7 @@ import (
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/access"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -65,6 +66,11 @@ func (a *app) accessGuard(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	defer res.Body.Close()
+	if r.URL.Path == "/api/portal" {
+		// One line per portal load: which identity the gateway granted (no cookies or tokens).
+		_, hasGate := r.Header["Cookie"]
+		log.Printf("portal gate=%d login=%q role=%q host=%q cookie=%t", res.StatusCode, res.Header.Get("X-Gate-Login"), res.Header.Get("X-Gate-Role"), r.Host, hasGate)
+	}
 	if res.StatusCode != 204 {
 		http.Error(w, "Authentication required", res.StatusCode)
 		return true
