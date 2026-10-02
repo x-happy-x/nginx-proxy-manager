@@ -9,15 +9,15 @@ export function defaultLauncher(): LauncherConfig {
   return {
     devices: [
       { id: "router", name: "Роутер", kind: "router", note: "Netcraze Ultra · 192.168.1.1", addresses: ["192.168.1.1", "192.168.1.2", "192.168.99.1", "192.168.99.2", "127.0.0.1", "localhost"] },
-      { id: "home-server", name: "Домашний сервер", kind: "server", note: "Proxmox ps2 · 192.168.99.20", addresses: ["192.168.99.20", "192.168.99.21"] },
-      { id: "ps1", name: "Сервер ps1", kind: "server", note: "Proxmox ps1 · 192.168.99.10", addresses: ["192.168.99.10", "192.168.99.11", "192.168.99.12", "192.168.99.13"] },
+      // 192.168.99.20 is the same machine as ps1 (Proxmox host plus its VMs).
+      { id: "ps1", name: "Сервер ps1", kind: "server", note: "Proxmox · 192.168.99.10–21", addresses: ["192.168.99.10", "192.168.99.11", "192.168.99.12", "192.168.99.13", "192.168.99.20", "192.168.99.21"] },
       { id: "pc-x", name: "PC-X", kind: "pc", note: "192.168.1.10", addresses: ["192.168.1.10"] },
       { id: "pc-a", name: "PC-A", kind: "pc", note: "192.168.1.20", addresses: ["192.168.1.20"] },
     ],
     links: [
       { id: "keenetic", title: "Веб-интерфейс роутера", url: "http://192.168.1.1/", device: "router", description: "Настройки Netcraze", art: "router" },
       { id: "jetkvm", title: "JetKVM", url: "http://192.168.99.11/", device: "ps1", description: "KVM-доступ к серверу", art: "kvm" },
-      { id: "tracker", title: "Задачи", url: "https://task.crubs.crazedns.ru/", device: "home-server", description: "Трекер задач", art: "tracker" },
+      { id: "tracker", title: "Задачи", url: "https://task.crubs.crazedns.ru/", device: "ps1", description: "Трекер задач", art: "tracker" },
     ],
     apps: {},
     order: [],
