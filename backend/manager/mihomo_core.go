@@ -537,21 +537,53 @@ type coreBackup struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 	Time string `json:"time"`
+	// auto: made by HomeNet before applying; manual: config.yaml.bak-* and
+	// similar copies made by hand (NPM-35).
+	Kind string `json:"kind"`
 }
 
 func listCoreBackups(target string) []coreBackup {
-	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(target), ".homenet-backup-*.yaml"))
+	dir, base := filepath.Dir(target), filepath.Base(target)
+	auto, _ := filepath.Glob(filepath.Join(dir, ".homenet-backup-*.yaml"))
+	manual, _ := filepath.Glob(filepath.Join(dir, base+".*"))
 	out := []coreBackup{}
-	for _, m := range matches {
-		if fi, err := os.Stat(m); err == nil {
-			out = append(out, coreBackup{Name: filepath.Base(m), Size: fi.Size(), Time: fi.ModTime().UTC().Format("2006-01-02T15:04:05Z")})
+	add := func(m, kind string) {
+		if strings.Contains(filepath.Base(m), ".homenet-staged-") {
+			return
+		}
+		if fi, err := os.Stat(m); err == nil && fi.Mode().IsRegular() {
+			out = append(out, coreBackup{Name: filepath.Base(m), Size: fi.Size(), Time: fi.ModTime().UTC().Format("2006-01-02T15:04:05Z"), Kind: kind})
 		}
 	}
+	for _, m := range auto {
+		add(m, "auto")
+	}
+	for _, m := range manual {
+		add(m, "manual")
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Time > out[j].Time })
-	if len(out) > 30 {
-		out = out[:30]
+	if len(out) > 40 {
+		out = out[:40]
 	}
 	return out
+}
+
+// readCoreBackup returns one listed copy, masked like the active config.
+func readCoreBackup(target, name string) ([]byte, error) {
+	for _, b := range listCoreBackups(target) {
+		if b.Name == name {
+			body, err := os.ReadFile(filepath.Join(filepath.Dir(target), name))
+			if err != nil {
+				return nil, err
+			}
+			masked, _, err := maskConfig(body)
+			if err != nil {
+				return nil, fmt.Errorf("копия %s не разбирается как YAML: %v", name, err)
+			}
+			return masked, nil
+		}
+	}
+	return nil, fmt.Errorf("копии %q нет рядом с конфигом", name)
 }
 
 /* ---------- handlers ---------- */
@@ -599,6 +631,23 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "install": installer.snapshot()})
 	case "/api/core/routing":
 		a.handleRoutingGet(w)
+	case "/api/core/config/version":
+		s, err := coreSettings()
+		if err != nil {
+			a.writeJSON(w, http.StatusServiceUnavailable, response{"ok": false, "error": err.Error()})
+			return
+		}
+		target, _, err := readActiveConfig(s)
+		if err != nil {
+			a.writeJSON(w, http.StatusNotFound, response{"ok": false, "error": err.Error()})
+			return
+		}
+		body, err := readCoreBackup(target, r.URL.Query().Get("name"))
+		if err != nil {
+			a.writeJSON(w, http.StatusNotFound, response{"ok": false, "error": err.Error()})
+			return
+		}
+		a.writeJSON(w, http.StatusOK, response{"ok": true, "yaml": string(body)})
 	default:
 		http.NotFound(w, r)
 	}

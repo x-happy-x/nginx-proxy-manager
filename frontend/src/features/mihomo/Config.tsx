@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
@@ -9,6 +9,10 @@ import { core, mihomo, type ConfigChange, type CoreDevice } from "./api";
 import { useMihomo } from "./context";
 import { TabCount, Tabs } from "./shared";
 import { Routing } from "./Routing";
+import { ReviewModal, type ReviewState } from "./Review";
+
+// CodeMirror and the YAML parser load only with the YAML tab (NPM-35).
+const YamlTab = lazy(() => import("./YamlTab"));
 
 type Tab = "subs" | "rules" | "routing" | "groups" | "nodes" | "devices" | "net" | "yaml";
 type Obj = Record<string, unknown>;
@@ -166,8 +170,7 @@ export function Config() {
   const [tab, setTab] = useHashTab<Tab>("coreconfig", "subs");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [yamlText, setYamlText] = useState<string | null>(null);
-  const [review, setReview] = useState<{ changes: ConfigChange[]; valid: boolean; message?: string; mode: "set" | "yaml" } | null>(null);
+  const [review, setReview] = useState<ReviewState | null>(null);
   const [discard, setDiscard] = useState(false);
 
   const load = useCallback(async () => {
@@ -175,7 +178,6 @@ export function Config() {
       const c = await core.config();
       setCfg(c);
       setDraft(clone(c.sections));
-      setYamlText(null);
       setError("");
     } catch (err) {
       setError(errText(err));
@@ -199,16 +201,15 @@ export function Config() {
     return out;
   }, [cfg, draft]);
 
-  const check = async (mode: "set" | "yaml") => {
+  const check = async () => {
     if (!cfg) return;
     setBusy(true);
     try {
-      const body = mode === "yaml" ? { sha: cfg.sha, yaml: yamlText ?? cfg.yaml } : { sha: cfg.sha, set: changedSet };
-      const res = await core.checkConfig(body);
-      setReview({ changes: res.changes || [], valid: res.valid, message: res.message, mode });
+      const res = await core.checkConfig({ sha: cfg.sha, set: changedSet });
+      setReview({ changes: res.changes || [], valid: res.valid, message: res.message, detail: res.detail, before: cfg.yaml, after: res.yaml });
     } catch (err) {
       const body = (err as { body?: { changes?: ConfigChange[] } }).body;
-      setReview({ changes: body?.changes || [], valid: false, message: errText(err), mode });
+      setReview({ changes: body?.changes || [], valid: false, message: errText(err) });
     } finally {
       setBusy(false);
     }
@@ -218,8 +219,7 @@ export function Config() {
     if (!cfg || !review) return;
     setBusy(true);
     try {
-      const body = review.mode === "yaml" ? { sha: cfg.sha, yaml: yamlText ?? cfg.yaml } : { sha: cfg.sha, set: changedSet };
-      const res = await core.applyConfig(body);
+      const res = await core.applyConfig({ sha: cfg.sha, set: changedSet });
       log("Конфигурация mihomo", res.message || "Применено", "success");
       setReview(null);
       setCfg(null);
@@ -299,30 +299,16 @@ export function Config() {
       {tab === "devices" ? <DevicesEditor rules={rules} groups={groups} onRules={(r) => update("rules", r)} /> : null}
       {tab === "net" ? <NetEditor draft={d} onChange={(k, v) => update(k, v)} /> : null}
       {tab === "yaml" ? (
-        <section className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">config.yaml целиком</h2>
-              <p className="cell-sub">secret скрыт и сохранится как был; external-controller и external-ui тоже не меняются.</p>
-            </div>
-            <div className="button-row">
-              <button type="button" className="btn" onClick={() => setYamlText(null)} disabled={yamlText == null}>
-                Отменить правки
-              </button>
-              <button type="button" className="btn btn-primary" disabled={busy || configDirty || yamlText == null || !cfg.can_validate} onClick={() => void check("yaml")}>
-                Проверить YAML
-              </button>
-            </div>
-          </div>
-          {configDirty ? <Alert tone="warning">В других вкладках есть несохранённые правки. Примените или отмените их, прежде чем править YAML целиком.</Alert> : null}
-          <textarea className="config-editor mh-yaml" spellCheck={false} aria-label="config.yaml" value={yamlText ?? cfg.yaml} onChange={(e) => setYamlText(e.target.value)} />
-          {cfg.backups.length ? (
-            <div className="card-footer">
-              Резервные копии рядом с конфигом: {cfg.backups.slice(0, 5).map((b) => `${b.name} (${dateTime(b.time)})`).join(", ")}
-              {cfg.backups.length > 5 ? ` и ещё ${cfg.backups.length - 5}` : ""}.
-            </div>
-          ) : null}
-        </section>
+        <Suspense fallback={<div className="launcher-loading">Загружаю редактор…</div>}>
+          <YamlTab
+            cfg={cfg}
+            configDirty={configDirty}
+            onApplied={async () => {
+              setCfg(null);
+              await load();
+            }}
+          />
+        </Suspense>
       ) : null}
 
       {configDirty ? (
@@ -339,7 +325,7 @@ export function Config() {
               <button type="button" className="btn btn-ghost" onClick={() => setDiscard(true)} disabled={busy}>
                 Отменить
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => void check("set")} disabled={busy || !cfg.can_validate}>
+              <button type="button" className="btn btn-primary" onClick={() => void check()} disabled={busy || !cfg.can_validate}>
                 {busy ? <span className="spinner" /> : <Icon name="test" />}
                 Проверить и применить
               </button>
@@ -348,41 +334,7 @@ export function Config() {
         </div>
       ) : null}
 
-      <Modal
-        open={!!review}
-        onClose={() => !busy && setReview(null)}
-        locked={busy}
-        size="lg"
-        title={review?.valid ? "Изменения прошли проверку" : "Проверка не пройдена"}
-        description={review?.message}
-        footer={
-          <>
-            <button type="button" className="btn" onClick={() => setReview(null)} disabled={busy}>
-              Вернуться к правкам
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => void apply()} disabled={busy || !review?.valid}>
-              {busy ? <span className="spinner" /> : <Icon name="bolt" />}
-              Применить на роутере
-            </button>
-          </>
-        }
-      >
-        <div className="stack">
-          <ul className="mh-changes">
-            {(review?.changes || []).map((c, i) => (
-              <li key={i} className={`is-${c.kind}`}>
-                <span className="mh-change-kind">{c.kind === "added" ? "+" : c.kind === "removed" ? "−" : "~"}</span>
-                <span className="mono">{c.section}</span>
-                {c.item ? <span className="mono truncate">{c.item}</span> : null}
-              </li>
-            ))}
-            {!review?.changes.length ? <li>Изменений нет.</li> : null}
-          </ul>
-          <p className="cell-sub">
-            При применении: копия текущего файла → замена config.yaml → перечитывание через контроллер. Если ядро не примет конфиг, старый файл и состояние вернутся автоматически.
-          </p>
-        </div>
-      </Modal>
+      <ReviewModal review={review} busy={busy} onClose={() => setReview(null)} onApply={() => void apply()} applyLabel="Применить на роутере" />
       <ConfirmDialog
         open={discard}
         title="Отменить правки конфигурации?"

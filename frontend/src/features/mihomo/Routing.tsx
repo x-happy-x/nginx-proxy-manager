@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "../../components/ui/Icon";
-import { Modal } from "../../components/ui/Modal";
 import { Alert, Switch } from "../../components/ui/controls";
 import { errText, number } from "../../lib/format";
-import { core, mihomo, type ConfigChange, type CoreConfig, type MProvider, type MProxy, type RoutingSettings } from "./api";
+import { core, mihomo, type CoreConfig, type MProvider, type MProxy, type RoutingSettings } from "./api";
+import { ReviewModal, type ReviewState } from "./Review";
 import { useMihomo } from "./context";
 import { lastDelay } from "./shared";
 
@@ -12,6 +12,9 @@ import { lastDelay } from "./shared";
  * each kind of traffic, drawn from the live groups, and the few settings the
  * manager builds the groups from.
  */
+
+/** Groups the manager generates (backend/manager/routing.go routingManaged). */
+export const ROUTING_MANAGED = new Set(["Прямые EU", "Прямые мир", "Обходы", "RU", "Каскад", "Резерв", "Быстрые", "AUTO", "ИИ прямые", "ИИ обходы", "ALL", "ИИ", "РФ", "Headscale", "Keycloak", "Игры", "Заблокированные сервисы", "Остальное", "Белые списки", "QUIC", "GLOBAL"]);
 
 const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*");
 export const wordsMatcher = (words: string[]) => (words.length ? new RegExp(`(${words.map(esc).join("|")})`, "i") : null);
@@ -218,7 +221,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [review, setReview] = useState<{ valid: boolean; changes: ConfigChange[]; message?: string; detail?: string } | null>(null);
+  const [review, setReview] = useState<ReviewState | null>(null);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -298,7 +301,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
     setBusy(true);
     try {
       const r = await core.checkRouting({ sha: cfg.sha, settings: s });
-      setReview({ valid: r.valid, changes: r.changes || [], message: r.message, detail: r.detail });
+      setReview({ valid: r.valid, changes: r.changes || [], message: r.message, detail: r.detail, before: cfg.yaml, after: r.yaml });
       if (thenApply && r.valid && !(r.changes || []).length) await apply();
     } catch (err) {
       setReview({ valid: false, changes: [], message: errText(err) });
@@ -459,40 +462,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
         </div>
       ) : null}
 
-      <Modal
-        open={!!review}
-        onClose={() => !busy && setReview(null)}
-        locked={busy}
-        size="lg"
-        title={review?.valid ? (review.changes.length ? "Изменения прошли проверку" : "Конфиг уже такой") : "Проверка не пройдена"}
-        description={review?.message}
-        footer={
-          <>
-            <button type="button" className="btn" onClick={() => setReview(null)} disabled={busy}>
-              Вернуться
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => void apply()} disabled={busy || !review?.valid}>
-              {busy ? <span className="spinner" /> : <Icon name="bolt" />}
-              {review?.changes.length ? "Применить на роутере" : "Сохранить настройки"}
-            </button>
-          </>
-        }
-      >
-        <div className="stack">
-          {review?.detail ? <Alert tone="danger" title="Ответ mihomo -t">{review.detail}</Alert> : null}
-          <ul className="mh-changes">
-            {(review?.changes || []).map((ch, i) => (
-              <li key={i} className={`is-${ch.kind}`}>
-                <span className="mh-change-kind">{ch.kind === "added" ? "+" : ch.kind === "removed" ? "−" : "~"}</span>
-                <span className="mono">{ch.section}</span>
-                {ch.item ? <span className="mono truncate">{ch.item}</span> : null}
-              </li>
-            ))}
-            {!review?.changes.length ? <li>Изменений в config.yaml нет.</li> : null}
-          </ul>
-          <p className="cell-sub">При применении: копия текущего файла → замена config.yaml → перечитывание через контроллер. Если ядро не примет конфиг, старый файл вернётся автоматически.</p>
-        </div>
-      </Modal>
+      <ReviewModal review={review} busy={busy} onClose={() => setReview(null)} onApply={() => void apply()} applyLabel={review?.changes.length ? "Применить на роутере" : "Сохранить настройки"} />
     </div>
   );
 }

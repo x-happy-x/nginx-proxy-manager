@@ -564,6 +564,7 @@ var (
 	validatorURL    = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"']+`)
 	validatorSecret = regexp.MustCompile(`(?i)(password|uuid|private-key|token|secret|auth|key)[=:]\s*\S+`)
 	validatorMsg    = regexp.MustCompile(`msg="((?:[^"\\]|\\.)*)"`)
+	validatorPath   = regexp.MustCompile(`(?:[A-Za-z]:\\|/)[^\s"']*\.ya?ml`)
 )
 
 // sanitizeValidator keeps the reason mihomo gives, without addresses or
@@ -571,13 +572,15 @@ var (
 func sanitizeValidator(out []byte) string {
 	lines := strings.Split(string(out), "\n")
 	reason := ""
+	// the first error is the cause; "test failed" only closes the run
 	for _, l := range lines {
-		if strings.Contains(l, "level=error") || strings.Contains(l, "level=fatal") || strings.Contains(strings.ToLower(l), "test failed") {
+		if strings.Contains(l, "level=error") || strings.Contains(l, "level=fatal") {
 			if mm := validatorMsg.FindStringSubmatch(l); mm != nil {
 				reason = mm[1]
 			} else {
 				reason = l
 			}
+			break
 		}
 	}
 	if reason == "" {
@@ -589,6 +592,7 @@ func sanitizeValidator(out []byte) string {
 		}
 	}
 	reason = validatorURL.ReplaceAllString(reason, "<адрес>")
+	reason = validatorPath.ReplaceAllString(reason, "config.yaml")
 	reason = validatorSecret.ReplaceAllString(reason, "$1=***")
 	if r := []rune(reason); len(r) > 400 {
 		reason = string(r[:400]) + "…"
