@@ -11,10 +11,17 @@ APP_DIR="${HOME_NET_APP_DIR:-/opt/etc/homenet/nginx}"
 [ -f "$APP_DIR/config/runtime.env" ] || exit 0
 . "$APP_DIR/config/runtime.env"
 TAG="homenet_tls_sni"
+# Only listeners that are HomeNet's own aliases (PROXY_INTERFACE_IPS) are exempt,
+# never the router's own address.
+aliases=" "
+for entry in ${PROXY_INTERFACE_IPS:-}; do
+  cidr="${entry#*=}"
+  aliases="$aliases${cidr%/*} "
+done
 for ip in $(echo "${NGINX_LISTEN_IPS:-}" | tr ',' ' '); do
-  case "$ip" in
-    192.168.1.2|192.168.99.2) ;;
-    *) echo "homenet: listener $ip is not an allowed proxy alias; TLS filter left unchanged" >&2; continue ;;
+  case "$aliases" in
+    *" $ip "*) ;;
+    *) echo "homenet: listener $ip is not an alias from PROXY_INTERFACE_IPS; TLS filter left unchanged" >&2; continue ;;
   esac
   rule="-d $ip/32 -p tcp --dport 443 -m comment --comment $TAG -j ACCEPT"
   if [ "${1:-}" = "remove" ]; then
