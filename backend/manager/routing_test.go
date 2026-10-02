@@ -130,6 +130,17 @@ func TestBuildRouting(t *testing.T) {
 	if ad["depends-on"] != "ROUTER" || ad["network-key"] != "home-uplink" {
 		t.Errorf("AI adaptive = %v", ad)
 	}
+	// NPM-39: no flag filter — the exit country is checked by the trace target
+	if _, ok := ai["filter"]; ok {
+		t.Errorf("AI provider still filters by flags: %v", ai["filter"])
+	}
+	if ex, _ := ai["exclude-filter"].(string); !strings.Contains(ex, flag("RU")) {
+		t.Errorf("AI exclude-filter = %q", ex)
+	}
+	trace := ad["targets"].([]any)[0].(map[string]any)
+	if re, _ := trace["body-regex"].(string); !strings.Contains(re, "|KZ)") || strings.Contains(re, "EU") || strings.Contains(re, "RU") {
+		t.Errorf("trace body-regex = %q", re)
+	}
 	if _, ok := pp["CHAIN"].(map[string]any)["override"].(map[string]any)["dialer-proxy"]; !ok {
 		t.Error("CHAIN without dialer-proxy")
 	}
@@ -154,6 +165,19 @@ func TestBuildRouting(t *testing.T) {
 	}
 	if string(again) != string(out) {
 		t.Error("second build differs from the first")
+	}
+}
+
+func TestBuildRoutingAIWithoutCheck(t *testing.T) {
+	s := defaultRouting()
+	s.AIServiceOK = false
+	out, err := buildRouting([]byte(routingFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ai := routingDoc(t, out)["proxy-providers"].(map[string]any)["AI"].(map[string]any)
+	if _, ok := ai["filter"]; !ok {
+		t.Error("without the service check the AI provider must keep the flag filter")
 	}
 }
 

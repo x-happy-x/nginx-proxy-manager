@@ -369,12 +369,23 @@ func providerNode(base *yaml.Node, kind string, s routingSettings) (*yaml.Node, 
 		hc["lazy"] = true
 		hc["timeout"] = 8000
 	case routingAIProvider:
+		// With the service check the exit country is checked for real
+		// (cdn-cgi/trace), so nodes without a country flag — bypass ones
+		// marked 🇫🇲 — are candidates too; only the flags of unsupported
+		// countries are dropped up front (NPM-39). Without the check the
+		// flags are all there is.
+		ex := flagsRE(s.Never)
 		if junk != "" {
-			p["exclude-filter"] = junk
+			ex = junk + "|" + ex
 		}
+		if s.AIServiceOK && mapGet(mapGet(base, "health-check"), "adaptive") != nil {
+			delete(p, "filter")
+		}
+		p["exclude-filter"] = ex
 		p["override"] = m{"additional-prefix": "ИИ | "}
 		hc["lazy"] = false
 		hc["timeout"] = 5000
+		hc["interval"] = 300
 	}
 	node := orderedNode(p)
 	hcNode := orderedNode(hc)
@@ -401,7 +412,13 @@ func routingAIAdaptive(base *yaml.Node, s routingSettings) *yaml.Node {
 	if ba == nil {
 		return nil
 	}
-	never := append(append([]string{}, s.Never...), "SY", "CU", "VE", "AF")
+	// the exit country must be one of the chosen ones ("EU" is a flag, not a country code)
+	allowed := []string{}
+	for _, c := range s.AI {
+		if c != "EU" {
+			allowed = append(allowed, c)
+		}
+	}
 	ad := orderedNode(m{"enable": true, "depends-on": s.Base, "confirmations": 2, "concurrency": 2, "failure-threshold": 3, "recovery-threshold": 2})
 	for _, key := range []string{"network-key", "direct-allowed", "direct-global"} {
 		if v := mapGet(ba, key); v != nil {
@@ -411,7 +428,7 @@ func routingAIAdaptive(base *yaml.Node, s routingSettings) *yaml.Node {
 	}
 	targets := []any{
 		m{"url": "https://chatgpt.com/cdn-cgi/trace", "expected-status": "200", "content-type": "text/plain",
-			"body-regex": `(?m)^loc=[A-Z]{2}$`, "body-not-regex": "(?m)^loc=(" + strings.Join(never, "|") + ")$"},
+			"body-regex": "(?m)^loc=(" + strings.Join(allowed, "|") + ")$"},
 		m{"url": "https://api.openai.com/v1/models", "expected-status": "401", "content-type": "application/json",
 			"body-not-regex": "(?i)unsupported_country"},
 	}
