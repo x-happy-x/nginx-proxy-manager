@@ -30,7 +30,7 @@ func (a *app) handleDMSProxy(w http.ResponseWriter, r *http.Request) {
 			a.dmsLegacyApps(w)
 			return
 		}
-		a.writeJSON(w, 503, response{"ok": false, "error": "DMS API РЅРµ РЅР°СЃС‚СЂРѕРµРЅ: СѓСЃС‚Р°РЅРѕРІРёС‚Рµ СЃРµСЂРІРёСЃ Рё С„Р°Р№Р» С‚РѕРєРµРЅР°"})
+		a.writeJSON(w, 503, response{"ok": false, "error": "DMS API не настроен: установите сервис и файл токена"})
 		return
 	}
 	path := "/v1/" + suffix
@@ -51,7 +51,7 @@ func (a *app) handleDMSProxy(w http.ResponseWriter, r *http.Request) {
 			a.dmsLegacyApps(w)
 			return
 		}
-		a.writeJSON(w, 503, response{"ok": false, "error": "DMS API РЅРµРґРѕСЃС‚СѓРїРµРЅ"})
+		a.writeJSON(w, 503, response{"ok": false, "error": "DMS API недоступен"})
 		return
 	}
 	defer res.Body.Close()
