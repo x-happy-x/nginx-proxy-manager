@@ -597,6 +597,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreTraffic(w, r)
 	case "/api/core/install/log":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "install": installer.snapshot()})
+	case "/api/core/routing":
+		a.handleRoutingGet(w)
 	default:
 		http.NotFound(w, r)
 	}
@@ -620,6 +622,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreTrafficReset(w)
 	case "/api/core/config/check", "/api/core/config/apply":
 		a.handleCoreConfigWrite(w, r, r.URL.Path == "/api/core/config/apply")
+	case "/api/core/routing/check", "/api/core/routing/apply":
+		a.handleRoutingWrite(w, r, r.URL.Path == "/api/core/routing/apply")
 	case "/api/core/install":
 		var req installRequest
 		if !a.decodeJSON(w, r, &req) {
@@ -677,11 +681,12 @@ func (a *app) handleCoreConfigWrite(w http.ResponseWriter, r *http.Request, appl
 			return
 		}
 		defer os.Remove(staged)
-		if err := mihomoValidateCandidate(s, staged); err != nil {
-			a.writeJSON(w, http.StatusOK, response{"ok": true, "valid": false, "changes": changes, "message": "mihomo -t отклонил конфигурацию"})
+		masked, _, _ := maskConfig(candidate)
+		if detail := mihomoValidateDetail(s, staged); detail != "" {
+			a.writeJSON(w, http.StatusOK, response{"ok": true, "valid": false, "changes": changes, "yaml": string(masked), "detail": detail, "message": "mihomo -t отклонил конфигурацию"})
 			return
 		}
-		a.writeJSON(w, http.StatusOK, response{"ok": true, "valid": true, "changes": changes, "message": "mihomo -t: конфигурация корректна"})
+		a.writeJSON(w, http.StatusOK, response{"ok": true, "valid": true, "changes": changes, "yaml": string(masked), "message": "mihomo -t: конфигурация корректна"})
 		return
 	}
 	backup, err := mihomoSwapConfig(s, target, original, candidate, "config", mihomoValidateCandidate, mihomoReload)

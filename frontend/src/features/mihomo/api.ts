@@ -158,6 +158,24 @@ export type CoreDevice = { ip: string; mac?: string; name: string; hostname?: st
 
 export type ConfigChange = { section: string; kind: "added" | "removed" | "changed"; item?: string };
 
+/** «VPN → Настройка → Маршрутизация» (NPM-34): what the manager builds the groups from. */
+export type RoutingSettings = {
+  base: string;
+  bypass: string[];
+  junk: string[];
+  fast_ms: number;
+  eu: string[];
+  ai: string[];
+  never: string[];
+  ru_check: string;
+  headscale_check: string;
+  keycloak_check: string;
+  cascade: boolean;
+  ai_service_check: boolean;
+};
+
+export type ConfigCheck = { valid: boolean; changes: ConfigChange[]; message?: string; detail?: string; yaml?: string };
+
 export type CoreConfig = {
   path: string;
   target: string;
@@ -299,9 +317,13 @@ export const core = {
   saveLabels: (labels: Record<string, string>) => call<unknown>("/api/core/devices", json("POST", { labels })),
   config: () => call<CoreConfig>("/api/core/config"),
   checkConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
-    call<{ valid: boolean; changes: ConfigChange[]; message?: string }>("/api/core/config/check", json("POST", body)),
+    call<ConfigCheck>("/api/core/config/check", json("POST", body)),
   applyConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup: string; sha: string; message: string }>("/api/core/config/apply", json("POST", body)),
+  routing: () => call<{ settings: RoutingSettings; defaults: RoutingSettings; saved: boolean; sha?: string; providers?: string[]; managed?: boolean }>("/api/core/routing"),
+  checkRouting: (body: { sha: string; settings: RoutingSettings }) => call<ConfigCheck>("/api/core/routing/check", json("POST", body)),
+  applyRouting: (body: { sha: string; settings: RoutingSettings }) =>
+    call<{ applied: boolean; changes: ConfigChange[]; backup?: string; sha?: string; message: string; warning?: string }>("/api/core/routing/apply", json("POST", body)),
   health: (provider: string, period: string) =>
     call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),

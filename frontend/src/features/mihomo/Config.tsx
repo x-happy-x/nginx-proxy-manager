@@ -8,8 +8,9 @@ import { dateTime, errText, number } from "../../lib/format";
 import { core, mihomo, type ConfigChange, type CoreDevice } from "./api";
 import { useMihomo } from "./context";
 import { TabCount, Tabs } from "./shared";
+import { Routing } from "./Routing";
 
-type Tab = "subs" | "rules" | "groups" | "nodes" | "devices" | "net" | "yaml";
+type Tab = "subs" | "rules" | "routing" | "groups" | "nodes" | "devices" | "net" | "yaml";
 type Obj = Record<string, unknown>;
 type Provider = Obj & { type?: string; url?: string; path?: string; interval?: number; filter?: string; "exclude-filter"?: string; header?: Record<string, string[]>; "health-check"?: Obj };
 type Group = Obj & { name: string; type: string; proxies?: string[]; use?: string[]; url?: string; interval?: number; filter?: string };
@@ -270,6 +271,7 @@ export function Config() {
         items={[
           ["subs", <>Подписки <TabCount n={Object.keys(providers).length} /></>],
           ["rules", <>Правила <TabCount n={rules.length} /></>],
+          ["routing", "Маршрутизация"],
           ["groups", <>Группы <TabCount n={groups.length} /></>],
           ["nodes", <>Свои узлы <TabCount n={nodes.length} /></>],
           ["devices", "Устройства"],
@@ -278,6 +280,19 @@ export function Config() {
         ]}
       />
       {tab === "subs" ? <Subscriptions providers={providers} groups={groups} rules={rules} onChange={(p, g) => setDraft({ ...d, "proxy-providers": p, "proxy-groups": g })} onService={(p, g, r) => setDraft({ ...d, "proxy-providers": p, "proxy-groups": g, rules: r })} /> : null}
+      {tab === "routing" ? (
+        configDirty ? (
+          <Alert tone="warning" title="Сначала примените или отмените правки в других вкладках">Маршрутизация собирает группы из текущего config.yaml на роутере.</Alert>
+        ) : (
+          <Routing
+            cfg={cfg}
+            onApplied={async () => {
+              setCfg(null);
+              await load();
+            }}
+          />
+        )
+      ) : null}
       {tab === "rules" ? <RulesEditor rules={rules} groups={groups} onChange={(r) => update("rules", r)} /> : null}
       {tab === "groups" ? <GroupsEditor groups={groups} providers={Object.keys(providers)} nodes={nodes.map((n) => n.name)} onChange={(g) => update("proxy-groups", g)} /> : null}
       {tab === "nodes" ? <NodesEditor nodes={nodes} groups={groups} onChange={(n, g) => setDraft({ ...d, proxies: n, "proxy-groups": g })} /> : null}
