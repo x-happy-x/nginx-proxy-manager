@@ -159,6 +159,15 @@ export type CoreDevice = { ip: string; mac?: string; name: string; hostname?: st
 export type ConfigChange = { section: string; kind: "added" | "removed" | "changed"; item?: string };
 
 /** «VPN → Настройка → Маршрутизация» (NPM-34): what the manager builds the groups from. */
+/** An empty provider comes back with `proxies: null`; the console expects a list (NPM-38). */
+function normalizeProviders(list: Record<string, MProvider> | null | undefined): Record<string, MProvider> {
+  const out: Record<string, MProvider> = {};
+  Object.entries(list || {}).forEach(([k, v]) => {
+    out[k] = { ...v, proxies: v.proxies || [] };
+  });
+  return out;
+}
+
 export type RoutingSettings = {
   base: string;
   bypass: string[];
@@ -281,10 +290,11 @@ export const mihomo = {
   /** /proxies plus nodes that live only inside providers (newer cores list them there). */
   allProxies: async () => {
     const [p, pr] = await Promise.all([call<{ proxies: Record<string, MProxy> }>(m("/proxies")), call<{ providers: Record<string, MProvider> }>(m("/providers/proxies"))]);
+    const providers = normalizeProviders(pr.providers);
     const all: Record<string, MProxy> = {};
-    Object.values(pr.providers || {}).forEach((prov) => prov.proxies?.forEach((x) => (all[x.name] = x)));
+    Object.values(providers).forEach((prov) => prov.proxies.forEach((x) => (all[x.name] = x)));
     Object.assign(all, p.proxies || {});
-    return { proxies: all, providers: pr.providers || {} };
+    return { proxies: all, providers };
   },
   select: (group: string, name: string) => call<unknown>(m(`/proxies/${enc(group)}`), json("PUT", { name })),
   unfix: (group: string) => call<unknown>(m(`/proxies/${enc(group)}`), json("DELETE")),
@@ -292,7 +302,7 @@ export const mihomo = {
     call<{ delay: number }>(m(`/proxies/${enc(name)}/delay?url=${enc(url)}&timeout=${timeout}`)),
   groupDelay: (group: string, url: string, timeout = 5000) =>
     call<Record<string, number>>(m(`/group/${enc(group)}/delay?url=${enc(url)}&timeout=${timeout}`)),
-  providers: () => call<{ providers: Record<string, MProvider> }>(m("/providers/proxies")),
+  providers: () => call<{ providers: Record<string, MProvider> }>(m("/providers/proxies")).then((r) => ({ providers: normalizeProviders(r.providers) })),
   provider: (name: string) => call<MProvider>(m(`/providers/proxies/${enc(name)}`)),
   updateProvider: (name: string) => call<unknown>(m(`/providers/proxies/${enc(name)}`), json("PUT")),
   tailscale: (name: string) => call<TailscaleStatus>(m(`/proxies/${enc(name)}/tailscale`)),

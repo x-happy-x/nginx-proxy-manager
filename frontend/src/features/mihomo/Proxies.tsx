@@ -6,11 +6,10 @@ import { bytes, dateTime, errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy } from "./api";
 import { useMihomo } from "./context";
 import { Delay, TabCount, Tabs, lastDelay } from "./shared";
-import { HealthDots, Masonry, NodeTiles, NodeViewSwitch, dotOfDelay, useNodeView, type NodeView } from "./NodeTiles";
+import { HealthDots, Masonry, NodeControls, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
 import { OlcrtcTab, TailscaleTab } from "./Extras";
 
 type Tab = "groups" | "providers" | "tailscale" | "olcrtc";
-type Sort = "default" | "name" | "delay";
 const GROUP_TYPES = new Set(["Selector", "URLTest", "Fallback", "LoadBalance", "Smart", "Relay"]);
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
 const COLLAPSE_KEY = "homenet.mihomo.collapsed";
@@ -40,11 +39,11 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>("default");
-  const [hideDead, setHideDead] = useState(false);
+  // view, sort and «hide unavailable»: one set for every node tab, remembered per browser (NPM-38)
+  const prefs = useNodePrefs();
+  const { sort, hideDead, view } = prefs;
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
-  const [view, setView] = useNodeView();
   const [order, setOrderState] = useState<string[]>(readOrder);
   const [ordering, setOrdering] = useState(false);
   const setOrder = (next: string[]) => {
@@ -197,28 +196,17 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
       />
       {shownTab === "groups" ? (
         <>
-          <div className="toolbar">
+          <NodeControls
+            prefs={prefs}
+            end={
+              <button type="button" className={`btn btn-sm${ordering ? " btn-primary" : ""}`} onClick={() => setOrdering(!ordering)} aria-pressed={ordering}>
+                <Icon name="grip" />
+                {ordering ? "Готово" : "Порядок групп"}
+              </button>
+            }
+          >
             <SearchInput label="Поиск узла или группы" placeholder="Узел или группа" value={query} onChange={setQuery} />
-            <Segmented<Sort>
-              label="Порядок узлов"
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: "default", label: "Как в конфиге" },
-                { value: "name", label: "По имени" },
-                { value: "delay", label: "По задержке" },
-              ]}
-            />
-            <NodeViewSwitch value={view} onChange={setView} />
-            <label className="mh-check">
-              <input type="checkbox" checked={hideDead} onChange={(e) => setHideDead(e.target.checked)} />
-              Скрыть недоступные
-            </label>
-            <button type="button" className={`btn btn-sm${ordering ? " btn-primary" : ""}`} onClick={() => setOrdering(!ordering)} aria-pressed={ordering}>
-              <Icon name="grip" />
-              {ordering ? "Готово" : "Порядок групп"}
-            </button>
-          </div>
+          </NodeControls>
           {ordering ? (
             <GroupOrder groups={groups.map((g) => g.name)} custom={order.length > 0} onChange={setOrder} />
           ) : groups.length ? (
@@ -248,20 +236,18 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
           )}
         </>
       ) : shownTab === "tailscale" ? (
-        <TailscaleTab nodes={tsNodes} view={view} onView={setView} />
+        <TailscaleTab nodes={tsNodes} prefs={prefs} />
       ) : shownTab === "olcrtc" ? (
-        <OlcrtcTab providers={olcProviders} standalone={olcStandalone} groups={groups} onReload={load} />
+        <OlcrtcTab providers={olcProviders} standalone={olcStandalone} groups={groups} onReload={load} prefs={prefs} />
       ) : (
         <>
           {providerList.length ? (
-            <div className="toolbar">
-              <NodeViewSwitch value={view} onChange={setView} />
-            </div>
+            <NodeControls prefs={prefs} />
           ) : null}
           {providerList.length ? (
             <Masonry className="mh-groups">
               {providerList.map((p) => (
-                <ProviderCard key={p.name} p={p} view={view} onReload={load} onChecks={onChecks} />
+                <ProviderCard key={p.name} p={p} prefs={prefs} onReload={load} onChecks={onChecks} />
               ))}
             </Masonry>
           ) : (
@@ -425,7 +411,8 @@ function GroupOrder({ groups, custom, onChange }: { groups: string[]; custom: bo
   );
 }
 
-function ProviderCard({ p, view, onReload, onChecks }: { p: MProvider; view: NodeView; onReload: () => Promise<void>; onChecks: () => void }) {
+function ProviderCard({ p, prefs, onReload, onChecks }: { p: MProvider; prefs: NodePrefs; onReload: () => Promise<void>; onChecks: () => void }) {
+  const { view, sort, hideDead } = prefs;
   const { act } = useMihomo();
   const [busy, setBusy] = useState("");
   const [open, setOpen] = useState(false);
@@ -435,7 +422,10 @@ function ProviderCard({ p, view, onReload, onChecks }: { p: MProvider; view: Nod
   const total = info?.Total || 0;
   const expire = info?.Expire ? new Date(info.Expire * 1000) : null;
   const daysLeft = expire ? Math.ceil((expire.getTime() - Date.now()) / 86400000) : null;
-  const alive = p.proxies.filter((x) => (lastDelay(x, p.testUrl) ?? 1) > 0).length;
+  // «отвечают»: admitted by the adaptive check when the provider has one, else the last check answered
+  const health = providerHealth(p);
+  const admitted = (name: string) => p.adaptive?.results?.[name]?.available;
+  const deadOf = (x: MProxy) => lastDelay(x, p.testUrl) === 0 || admitted(x.name) === false;
   const run = async (what: string, fn: () => Promise<unknown>, done: string) => {
     setBusy(what);
     await act(`Подписка ${p.name}`, fn, done);
@@ -452,7 +442,8 @@ function ProviderCard({ p, view, onReload, onChecks }: { p: MProvider; view: Nod
             {p.adaptive?.mode ? <AdaptiveModeBadge mode={p.adaptive.mode} /> : null}
           </span>
           <span className="mh-ghead-now">
-            {number(p.proxies.length)} узлов · {number(alive)} отвечают{p.updatedAt ? ` · обновлена ${dateTime(p.updatedAt)}` : ""}
+            {number(health.total)} узлов · {number(health.alive)} {p.adaptive ? "допущено" : "отвечают"}
+            {health.unchecked ? ` · ${number(health.unchecked)} не проверены` : ""}{p.updatedAt ? ` · обновлена ${dateTime(p.updatedAt)}` : ""}
           </span>
         </button>
         <span className="mh-ghead-side">
@@ -493,18 +484,28 @@ function ProviderCard({ p, view, onReload, onChecks }: { p: MProvider; view: Nod
           ) : null}
         </div>
       ) : null}
-      <HealthDots dots={p.proxies.map((x) => dotOfDelay(x.name, x.name, lastDelay(x, p.testUrl)))} open={open} onToggle={() => setOpen(!open)} label={`Узлы (${p.proxies.length})`} />
+      <HealthDots
+        dots={p.proxies.map((x) => {
+          const d = dotOfDelay(x.name, x.name, lastDelay(x, p.testUrl));
+          const a = p.adaptive?.results?.[x.name];
+          // the adaptive verdict wins over the last HEAD check
+          if (a && !a.skipped && !a.available) return { ...d, tone: "bad" as const, title: `${x.name}: не прошёл проверку подписки` };
+          if (a?.skipped) return { ...d, tone: "none" as const, title: `${x.name}: ждёт базовую проверку` };
+          return d;
+        })} open={open} onToggle={() => setOpen(!open)} label={`Узлы (${p.proxies.length})`} />
       {open ? (
         <NodeTiles
           view={view}
-          items={p.proxies.map((x) => {
+          empty={hideDead ? "Все узлы подписки сейчас недоступны." : undefined}
+          items={arrange(
+            p.proxies.map((x) => {
             const d = lastDelay(x, p.testUrl);
             return {
               key: x.name,
               name: x.name,
               meta: [x.type.toLowerCase(), x["dialer-proxy"] ? `через ${x["dialer-proxy"]}` : ""].filter(Boolean).join(" · "),
               delay: d,
-              dead: d === 0,
+              dead: deadOf(x),
               testing: testing[x.name],
               onTest: async () => {
                 setTesting((t) => ({ ...t, [x.name]: true }));
@@ -517,7 +518,10 @@ function ProviderCard({ p, view, onReload, onChecks }: { p: MProvider; view: Nod
                 await onReload();
               },
             };
-          })}
+          }),
+            sort,
+            hideDead,
+          )}
         />
       ) : null}
     </section>
