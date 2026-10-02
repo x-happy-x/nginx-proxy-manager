@@ -726,7 +726,7 @@ func listReleases(dir string) ([]releaseInfo, error) {
 			Committed: exists("COMMITTED"), Rollback: exists("rollback.sh"), Staged: exists("start-staged.sh") && !exists("rollback.sh"),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name > out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return out[i].Time > out[j].Time })
 	for i := range out {
 		if out[i].Committed && out[i].Rollback {
 			out[i].Current = true
