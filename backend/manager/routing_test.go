@@ -193,6 +193,22 @@ func TestWordsRE(t *testing.T) {
 	}
 }
 
+func TestSanitizeValidatorFirstError(t *testing.T) {
+	out := []byte(`time="a" level=warning msg="[CacheFile] can't open cache file: timeout"
+time="b" level=error msg="proxy group[15]: Игры: 'Прямые EU2' not found"
+configuration file C:\stand\mihomo\.homenet-staged-1.yaml test failed
+`)
+	if got := sanitizeValidator(out); got != "proxy group[15]: Игры: 'Прямые EU2' not found" {
+		t.Errorf("sanitizeValidator = %q", got)
+	}
+	if got := sanitizeValidator([]byte(`configuration file C:\stand\mihomo\.homenet-staged-1.yaml test failed`)); strings.Contains(got, `C:\`) {
+		t.Errorf("path kept: %q", got)
+	}
+	if got := sanitizeValidator([]byte("configuration file /opt/etc/mihomo/.homenet-staged-1.yaml test failed\n")); strings.Contains(got, "/opt/") {
+		t.Errorf("path kept: %q", got)
+	}
+}
+
 func TestSanitizeValidator(t *testing.T) {
 	out := []byte(`time="x" level=error msg="proxy group[Стриминг]: 'Обходы2' not found; provider https://sub.example/abc?token=1 password=hunter2"`)
 	got := sanitizeValidator(out)

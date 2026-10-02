@@ -182,7 +182,7 @@ export type CoreConfig = {
   sha: string;
   yaml: string;
   sections: Record<string, unknown>;
-  backups: Array<{ name: string; size: number; time: string }>;
+  backups: Array<{ name: string; size: number; time: string; kind?: "auto" | "manual" }>;
   can_validate: boolean;
 };
 
@@ -320,6 +320,7 @@ export const core = {
     call<ConfigCheck>("/api/core/config/check", json("POST", body)),
   applyConfig: (body: { sha: string; set?: Record<string, unknown>; yaml?: string }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup: string; sha: string; message: string }>("/api/core/config/apply", json("POST", body)),
+  configVersion: (name: string) => call<{ yaml: string }>(`/api/core/config/version?name=${enc(name)}`),
   routing: () => call<{ settings: RoutingSettings; defaults: RoutingSettings; saved: boolean; sha?: string; providers?: string[]; managed?: boolean }>("/api/core/routing"),
   checkRouting: (body: { sha: string; settings: RoutingSettings }) => call<ConfigCheck>("/api/core/routing/check", json("POST", body)),
   applyRouting: (body: { sha: string; settings: RoutingSettings }) =>
