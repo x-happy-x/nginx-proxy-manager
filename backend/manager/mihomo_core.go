@@ -627,6 +627,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreHealth(w, r)
 	case "/api/core/traffic":
 		a.handleCoreTraffic(w, r)
+	case "/api/core/traffic/bypass":
+		a.handleBypassTraffic(w, r)
 	case "/api/core/install/log":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "install": installer.snapshot()})
 	case "/api/core/routing":
@@ -669,6 +671,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": true})
 	case "/api/core/traffic/reset":
 		a.handleCoreTrafficReset(w)
+	case "/api/core/traffic/limit":
+		a.handleBypassLimit(w, r)
 	case "/api/core/config/check", "/api/core/config/apply":
 		a.handleCoreConfigWrite(w, r, r.URL.Path == "/api/core/config/apply")
 	case "/api/core/routing/check", "/api/core/routing/apply":

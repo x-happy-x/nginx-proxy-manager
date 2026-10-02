@@ -2187,3 +2187,151 @@ button.yt-badge {
   color: var(--text-3);
   font-size: 16px;
 }
+
+/* ---------- NPM-36: traffic through bypass nodes ---------- */
+
+.bt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 16px;
+  align-items: start;
+}
+
+.bt-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bt-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.bt-stats small {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.bt-stats b {
+  font-size: 21px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bt-stats em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.bt-stats em.is-warn {
+  color: var(--warning);
+}
+
+.bt-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bt-limit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.bt-limit-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bt-limit-edit input {
+  width: 90px;
+  height: 30px;
+}
+
+.bt-limit-edit select {
+  height: 30px;
+}
+
+.bar-fill.is-warn {
+  background: var(--warning);
+}
+
+.bar-fill.is-bad {
+  background: var(--danger);
+}
+
+.bt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.bt-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.bt-bars {
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.bt-bar {
+  flex: 1;
+  min-width: 2px;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+
+.bt-bar span {
+  display: block;
+  width: 100%;
+}
+
+.bt-top td strong {
+  display: block;
+  font-size: 13.5px;
+}
+
+.bt-top td .cell-sub {
+  display: block;
+}
+
+@media (max-width: 1100px) {
+  .bt-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .bt-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bt-bars {
+    height: 150px;
+    gap: 1px;
+  }
+}

@@ -8,6 +8,7 @@ import { core, type HealthPoint, type TrafficReport } from "../features/mihomo/a
 import { MODE_LABEL, useMihomo } from "../features/mihomo/context";
 import { speed } from "../features/mihomo/shared";
 import { useTailscaleIssues } from "../features/mihomo/Extras";
+import { useBypassStatus } from "../features/mihomo/BypassTraffic";
 import { bucketize, smoothArea, smoothLine, type Pt } from "../components/charts/smooth";
 
 type Alert = { tone: "warn" | "bad" | "info"; title: string; where: string; page: PageKey; href?: string };
@@ -142,6 +143,7 @@ export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; sta
   const d = useOverviewData(doc);
   const now = d.traffic[d.traffic.length - 1];
   const tsIssues = useTailscaleIssues(!!d.core?.controller_ok);
+  const bypass = useBypassStatus(!!d.core?.controller_ok);
 
   const alerts = useMemo(() => {
     const out: Alert[] = [];
@@ -155,9 +157,13 @@ export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; sta
     if (d.lastHealth && d.lastHealth.whitelist > 0) out.push({ tone: "warn", title: "Сеть в режиме белых списков", where: "VPN · Подписки", page: "checks" });
     if (d.lastHealth && d.lastHealth.total && d.lastHealth.working / d.lastHealth.total < 0.3)
       out.push({ tone: "warn", title: `Работает только ${d.lastHealth.working} из ${d.lastHealth.total} узлов`, where: "VPN · Подписки", page: "checks" });
+    if (bypass.limitPct != null && bypass.limitPct >= 75)
+      out.push({ tone: bypass.limitPct >= 90 ? "bad" : "warn", title: `Обходы: использовано ${Math.round(bypass.limitPct)}% месячного лимита`, where: `VPN · Трафик · ${bypass.gb} ГБ в месяц`, page: "traffic", href: "#/traffic/bypass" });
+    if (bypass.onBypass && !(d.lastHealth && d.lastHealth.whitelist > 0))
+      out.push({ tone: "info", title: "Прямые серверы не подходят — трафик идёт через обходы", where: "VPN · Настройка · Маршрутизация", page: "coreconfig", href: "#/coreconfig/routing" });
     tsIssues.forEach((t) => out.unshift({ tone: "bad", title: t.title, where: `VPN · Узлы · Tailscale ${t.name} — ${t.authURL ? "открыть и войти" : "запросить вход"}`, page: "proxies", href: "#/proxies/tailscale" }));
     return out;
-  }, [d.appsDown, status, d.netDown, d.stats, d.core, d.lastHealth, tsIssues]);
+  }, [d.appsDown, status, d.netDown, d.stats, d.core, d.lastHealth, tsIssues, bypass]);
 
   const sv = d.stats;
   const errRate = sv && sv.total_requests ? (100 * (sv.errors_5xx || 0)) / sv.total_requests : 0;

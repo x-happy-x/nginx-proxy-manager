@@ -185,7 +185,7 @@ func siteOf(host string) string {
 	return strings.Join(parts[len(parts)-take:], ".")
 }
 
-func dimKeys(c mihomoConn) map[string]string {
+func dimKeys(c mihomoConn, cls routeClassifier) map[string]string {
 	keys := map[string]string{
 		"device":   c.Metadata.SourceIP,
 		"site":     siteOf(connHost(c)),
@@ -196,6 +196,10 @@ func dimKeys(c mihomoConn) map[string]string {
 	if n := len(c.Chains); n > 0 {
 		keys["outbound"] = c.Chains[0]
 		keys["group"] = c.Chains[n-1]
+		// who spends the bypass traffic: device and site together (NPM-36)
+		if k := cls.class(c.Chains[0]); k == routeBypass || k == routeChain {
+			keys["bypass_use"] = c.Metadata.SourceIP + "|" + siteOf(connHost(c)) + "|" + c.Chains[n-1]
+		}
 	}
 	return keys
 }
@@ -302,6 +306,7 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 
 	// The first poll after a start only learns the open connections: their
 	// earlier bytes belong to time this process did not observe.
+	cls := currentClassifier()
 	baseline := len(t.live) == 0 && !t.started
 	t.started = true
 	seen := make(map[string]liveConn, len(conns))
@@ -318,7 +323,7 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 				du, dd = c.Upload, c.Download
 			}
 		}
-		keys := dimKeys(c)
+		keys := dimKeys(c, cls)
 		if du != 0 || dd != 0 || !known {
 			hb.add(keys, du, dd, !known)
 			db.add(keys, du, dd, !known)
