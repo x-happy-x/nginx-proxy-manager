@@ -813,20 +813,6 @@
 
 /* ---------- router console return button (unchanged behaviour) ---------- */
 
-.portal-back {
-  position: fixed;
-  bottom: 14px;
-  right: 24px;
-  z-index: 1000;
-  padding: 12px 20px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: var(--shadow-md);
-}
 
 /* ---------- small screens ---------- */
 

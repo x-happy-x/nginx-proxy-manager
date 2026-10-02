@@ -17,6 +17,7 @@ export function Sidebar({
   warnings,
   unsaved,
   status,
+  onPortal,
 }: {
   active: PageKey;
   onNavigate: (page: PageKey) => void;
@@ -25,6 +26,8 @@ export function Sidebar({
   warnings: Partial<Record<SectionKey, boolean>>;
   unsaved: Partial<Record<PageKey, boolean>>;
   status: NginxStatus | null;
+  /** Back to the portal (apps and access), when the console is opened from it. */
+  onPortal?: () => void;
 }) {
   const current = sectionOf(active).id;
   return (
@@ -70,6 +73,26 @@ export function Sidebar({
           );
         })}
       </nav>
+      {onPortal ? (
+        <nav className="nav nav-sections nav-portal" aria-label="Портал">
+          <a
+            href="#"
+            className="nav-section"
+            onClick={(event) => {
+              event.preventDefault();
+              onPortal();
+            }}
+          >
+            <span className="nav-section-icon">
+              <Icon name="apps" size={18} />
+            </span>
+            <span className="nav-section-text">
+              <span className="nav-section-title">Приложения и доступы</span>
+              <span className="nav-section-sub">портал HomeNet</span>
+            </span>
+          </a>
+        </nav>
+      ) : null}
       <div className="sidebar-foot">
         <div className="node-card">
           <span className={`dot ${status ? (status.running ? "success" : "danger") : ""}`} />

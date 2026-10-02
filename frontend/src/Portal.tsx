@@ -162,14 +162,7 @@ export default function Portal() {
   }, [data?.admin, items]);
 
   if (view === "manage" && data?.admin)
-    return (
-      <>
-        <button className="portal-back" onClick={() => setView("apps")}>
-          ← Приложения и доступы
-        </button>
-        <App />
-      </>
-    );
+    return <App onPortal={() => setView("apps")} />;
 
   if (guest) return <Guest />;
 
