@@ -56,6 +56,32 @@ export type MProvider = {
   adaptive?: AdaptiveHealth;
 };
 
+export type TailscalePeer = {
+  id: string;
+  hostName: string;
+  dnsName: string;
+  os?: string;
+  ips: string[] | null;
+  relay?: string;
+  online: boolean;
+  self: boolean;
+  exitNode: boolean;
+  exitNodeOption: boolean;
+  lastSeen?: string;
+  rxBytes: number;
+  txBytes: number;
+};
+
+export type TailscaleStatus = {
+  backendState: string;
+  self?: TailscalePeer;
+  authURL?: string;
+  exitNode: string;
+  exitNodeActive: boolean;
+  wantRunning: boolean;
+  peers: TailscalePeer[];
+};
+
 export type MRule = {
   index: number;
   type: string;
@@ -218,6 +244,15 @@ export const mihomo = {
   providers: () => call<{ providers: Record<string, MProvider> }>(m("/providers/proxies")),
   provider: (name: string) => call<MProvider>(m(`/providers/proxies/${enc(name)}`)),
   updateProvider: (name: string) => call<unknown>(m(`/providers/proxies/${enc(name)}`), json("PUT")),
+  tailscale: (name: string) => call<TailscaleStatus>(m(`/proxies/${enc(name)}/tailscale`)),
+  tailscaleExitNode: (name: string, exitNode: string) => call<unknown>(m(`/proxies/${enc(name)}/tailscale/exit-node`), json("PUT", { exitNode })),
+  tailscaleRunning: (name: string, running: boolean) => call<unknown>(m(`/proxies/${enc(name)}/tailscale/running`), json("PUT", { running })),
+  /** File providers of the x-happy-x fork: entries come back without secrets. */
+  providerProxies: (name: string) => call<{ proxies: Array<Record<string, unknown> & { name: string }> }>(m(`/providers/proxies/${enc(name)}/proxies`)),
+  addProviderProxy: (name: string, proxy: Record<string, unknown>) => call<unknown>(m(`/providers/proxies/${enc(name)}/proxies`), json("POST", proxy)),
+  updateProviderProxy: (name: string, proxy: string, patch: Record<string, unknown>) =>
+    call<unknown>(m(`/providers/proxies/${enc(name)}/proxies/${enc(proxy)}`), json("PUT", patch)),
+  deleteProviderProxy: (name: string, proxy: string) => call<unknown>(m(`/providers/proxies/${enc(name)}/proxies/${enc(proxy)}`), json("DELETE")),
   healthcheck: (name: string) => call<unknown>(m(`/providers/proxies/${enc(name)}/healthcheck`)),
   rules: () => call<{ rules: MRule[] }>(m("/rules")),
   disableRules: (map: Record<number, boolean>) => call<unknown>(m("/rules/disable"), json("PATCH", map)),

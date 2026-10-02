@@ -4,7 +4,10 @@ import { MODE_LABEL, useMihomo } from "./context";
 import { speed } from "./shared";
 
 /** Core mode and live speed in the top bar, visible from every page. */
-export function TopbarCore() {
+// Mode and speed belong to the Mihomo section, not to every console page.
+const CORE_PAGES = new Set(["proxies", "checks", "connections", "rules", "traffic", "corelog", "coreconfig", "core"]);
+
+export function TopbarCore({ page }: { page: string }) {
   const { status, configs, setMode, traffic, live } = useMihomo();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -22,7 +25,7 @@ export function TopbarCore() {
     };
   }, [open]);
 
-  if (!status?.controller_ok) return null;
+  if (!status?.controller_ok || !CORE_PAGES.has(page)) return null;
   const now = traffic[traffic.length - 1];
   const mode = configs?.mode || "rule";
   return (

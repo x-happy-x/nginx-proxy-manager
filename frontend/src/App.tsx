@@ -599,7 +599,7 @@ export default function App() {
           onOperations={() => setOpsOpen(true)}
           onApply={openApply}
           busy={busy}
-          extra={<TopbarCore />}
+          extra={<TopbarCore page={page} />}
         />
         <main className="page" id="main">
           {page === "overview" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}

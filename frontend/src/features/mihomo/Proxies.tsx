@@ -6,8 +6,9 @@ import { bytes, dateTime, errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy } from "./api";
 import { useMihomo } from "./context";
 import { Delay, TabCount, Tabs, lastDelay } from "./shared";
+import { OlcrtcTab, TailscaleTab } from "./Extras";
 
-type Tab = "groups" | "providers";
+type Tab = "groups" | "providers" | "tailscale" | "olcrtc";
 type Sort = "default" | "name" | "delay";
 const GROUP_TYPES = new Set(["Selector", "URLTest", "Fallback", "LoadBalance", "Smart", "Relay"]);
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
@@ -122,6 +123,18 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
   };
 
   const providerList = Object.values(providers).filter((p) => p.vehicleType !== "Compatible" && p.name !== "default");
+  const isOlc = (x: MProxy) => x.type.toLowerCase() === "olcrtc";
+  const tsNodes = Object.values(proxies).filter((x) => x.type.toLowerCase() === "tailscale");
+  const olcProviders = providerList.filter((p) => p.proxies.some(isOlc));
+  const olcInProviders = new Set(olcProviders.flatMap((p) => p.proxies.map((x) => x.name)));
+  const olcStandalone = Object.values(proxies).filter((x) => isOlc(x) && !olcInProviders.has(x.name));
+  const olcCount = olcProviders.reduce((n, p) => n + p.proxies.filter(isOlc).length, 0) + olcStandalone.length;
+  const tabs: Array<[Tab, React.ReactNode]> = [
+    ["groups", <>Группы <TabCount n={groups.length} /></>],
+    ["providers", <>Провайдеры <TabCount n={providerList.length} /></>],
+  ];
+  if (tsNodes.length) tabs.push(["tailscale", <>Tailscale <TabCount n={tsNodes.length} /></>]);
+  if (olcCount) tabs.push(["olcrtc", <>OLCRTC <TabCount n={olcCount} /></>]);
 
   return (
     <div className="stack">
@@ -138,12 +151,12 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
                 <Icon name="bolt" />
                 Проверить все
               </button>
-            ) : (
+            ) : tab === "providers" ? (
               <button type="button" className="btn btn-primary" onClick={() => providerList.forEach((p) => void act(`Подписка ${p.name}`, () => mihomo.updateProvider(p.name), "Обновлена").then(load))} disabled={!providerList.length}>
                 <Icon name="refresh" />
                 Обновить подписки
               </button>
-            )}
+            ) : null}
           </>
         }
       />
@@ -152,10 +165,7 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
         label="Раздел прокси"
         value={tab}
         onChange={setTab}
-        items={[
-          ["groups", <>Группы <TabCount n={groups.length} /></>],
-          ["providers", <>Провайдеры <TabCount n={providerList.length} /></>],
-        ]}
+        items={tabs}
       />
       {tab === "groups" ? (
         <>
@@ -248,6 +258,10 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
             </EmptyState>
           )}
         </>
+      ) : tab === "tailscale" ? (
+        <TailscaleTab nodes={tsNodes} />
+      ) : tab === "olcrtc" ? (
+        <OlcrtcTab providers={olcProviders} standalone={olcStandalone} groups={groups} onReload={load} />
       ) : (
         <div className="mh-groups">
           {providerList.map((p) => (
@@ -267,6 +281,8 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
 function ProviderCard({ p, onReload, onChecks }: { p: MProvider; onReload: () => Promise<void>; onChecks: () => void }) {
   const { act } = useMihomo();
   const [busy, setBusy] = useState("");
+  const [open, setOpen] = useState(false);
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
   const info = p.subscriptionInfo;
   const used = info ? (info.Download || 0) + (info.Upload || 0) : 0;
   const total = info?.Total || 0;
@@ -330,12 +346,48 @@ function ProviderCard({ p, onReload, onChecks }: { p: MProvider; onReload: () =>
           ) : null}
         </div>
       ) : null}
-      <div className="mh-health" aria-label="Состояние узлов">
+      <button type="button" className="mh-health" aria-expanded={open} aria-label={open ? "Свернуть узлы" : "Показать узлы"} onClick={() => setOpen(!open)}>
         {p.proxies.map((x) => {
           const d = lastDelay(x, p.testUrl);
           return <i key={x.name} className={`is-${d == null ? "none" : d <= 0 ? "bad" : d < 300 ? "good" : d < 800 ? "warn" : "bad"}`} title={`${x.name}: ${d == null ? "не проверялся" : d <= 0 ? "нет ответа" : `${d} мс`}`} />;
         })}
-      </div>
+        <span className="mh-health-toggle">
+          {open ? "Свернуть" : `Узлы (${p.proxies.length})`}
+          <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
+        </span>
+      </button>
+      {open ? (
+        <div className="mh-nodes">
+          {p.proxies.map((x) => (
+            <div key={x.name} className={`mh-node${lastDelay(x, p.testUrl) === 0 ? " is-dead" : ""}`}>
+              <span className="mh-node-main" title={x.name}>
+                <span className="mh-node-meta">
+                  <span>{x.type.toLowerCase()}</span>
+                  {x["dialer-proxy"] ? <span>через {x["dialer-proxy"]}</span> : null}
+                </span>
+                <span className="mh-node-name">{x.name}</span>
+              </span>
+              <button
+                type="button"
+                className="mh-node-delay"
+                title="Проверить задержку"
+                onClick={async () => {
+                  setTesting((t) => ({ ...t, [x.name]: true }));
+                  try {
+                    await mihomo.delay(x.name, p.testUrl || DEFAULT_TEST_URL);
+                  } catch {
+                    /* failure lands in history */
+                  }
+                  setTesting((t) => ({ ...t, [x.name]: false }));
+                  await onReload();
+                }}
+              >
+                <Delay value={lastDelay(x, p.testUrl)} testing={testing[x.name]} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
