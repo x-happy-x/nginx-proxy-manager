@@ -156,7 +156,17 @@ func (t *trafficCollector) healthReport(provider, period string, now time.Time) 
 	sort.Strings(names)
 	h := t.st.Health[provider]
 	if h == nil && len(names) > 0 {
-		provider = names[0]
+		// No provider asked: the main subscription, the one with most nodes.
+		best := -1
+		for _, name := range names {
+			c := t.st.Health[name]
+			if n := len(c.Minutes); n > 0 && c.Minutes[n-1].Total > best {
+				best, provider = c.Minutes[n-1].Total, name
+			}
+		}
+		if best < 0 {
+			provider = names[0]
+		}
 		h = t.st.Health[provider]
 	}
 	series := []healthPoint{}

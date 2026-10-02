@@ -5,7 +5,7 @@ import { speed } from "./shared";
 
 /** Core mode and live speed in the top bar, visible from every page. */
 // Mode and speed belong to the Mihomo section, not to every console page.
-const CORE_PAGES = new Set(["proxies", "checks", "connections", "rules", "traffic", "corelog", "coreconfig", "core"]);
+const CORE_PAGES = new Set(["vpn", "proxies", "checks", "connections", "rules", "traffic", "corelog", "coreconfig", "core"]);
 
 export function TopbarCore({ page }: { page: string }) {
   const { status, configs, setMode, traffic, live } = useMihomo();

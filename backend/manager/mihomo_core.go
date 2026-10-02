@@ -692,3 +692,58 @@ func (a *app) handleCoreConfigWrite(w http.ResponseWriter, r *http.Request, appl
 	a.writeJSON(w, http.StatusOK, response{"ok": true, "valid": true, "applied": true, "changes": changes, "backup": filepath.Base(backup), "sha": configSHA(candidate),
 		"message": fmt.Sprintf("Применено %d изменений; копия %s", len(changes), filepath.Base(backup))})
 }
+
+/* ---------- releases (NPM-30) ---------- */
+
+type releaseInfo struct {
+	Name      string `json:"name"`
+	Time      string `json:"time"`
+	Committed bool   `json:"committed"`
+	Rollback  bool   `json:"rollback"`
+	Current   bool   `json:"current"`
+	Staged    bool   `json:"staged"`
+}
+
+// listReleases reads the deploy script's release folders; read-only.
+func listReleases(dir string) ([]releaseInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := []releaseInfo{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		exists := func(name string) bool { _, err := os.Stat(filepath.Join(path, name)); return err == nil }
+		out = append(out, releaseInfo{
+			Name: e.Name(), Time: info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
+			Committed: exists("COMMITTED"), Rollback: exists("rollback.sh"), Staged: exists("start-staged.sh") && !exists("rollback.sh"),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name > out[j].Name })
+	for i := range out {
+		if out[i].Committed && out[i].Rollback {
+			out[i].Current = true
+			break
+		}
+	}
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	return out, nil
+}
+
+func (a *app) handleReleases(w http.ResponseWriter) {
+	list, err := listReleases(getenv("HOMENET_RELEASES_DIR", "/opt/etc/homenet/releases"))
+	if err != nil {
+		a.writeJSON(w, http.StatusOK, response{"ok": true, "releases": []releaseInfo{}, "note": err.Error()})
+		return
+	}
+	a.writeJSON(w, http.StatusOK, response{"ok": true, "releases": list})
+}

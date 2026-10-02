@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import type { ConsoleItem, NginxStatus } from "../types";
-import { NAV, NAV_GROUPS, type PageKey } from "../navigation";
+import { SECTIONS, SECTION_EXTRAS, pageItem, sectionOf, sectionPages, type PageKey, type SectionKey } from "../navigation";
 import { Icon } from "./ui/Icon";
 import { Modal } from "./ui/Modal";
 import { EmptyState } from "./ui/controls";
@@ -8,21 +8,25 @@ import { count, nginxVersion } from "../lib/format";
 
 /* ---------- Sidebar ---------- */
 
+// Five sections; the sub line under each is a live one-line summary (NPM-30).
 export function Sidebar({
   active,
   onNavigate,
   onClose,
-  counts,
+  summaries,
+  warnings,
   unsaved,
   status,
 }: {
   active: PageKey;
   onNavigate: (page: PageKey) => void;
   onClose: () => void;
-  counts: Partial<Record<PageKey, number>>;
+  summaries: Partial<Record<SectionKey, string>>;
+  warnings: Partial<Record<SectionKey, boolean>>;
   unsaved: Partial<Record<PageKey, boolean>>;
   status: NginxStatus | null;
 }) {
+  const current = sectionOf(active).id;
   return (
     <aside className="sidebar" aria-label="Навигация">
       <div className="sidebar-head">
@@ -32,36 +36,39 @@ export function Sidebar({
           </span>
           <span className="brand-name">
             <strong>HomeNet</strong>
-            <small>Proxy Manager</small>
+            <small>Управление роутером</small>
           </span>
         </a>
         <button type="button" className="btn btn-ghost btn-icon btn-sm sidebar-close" aria-label="Закрыть меню" onClick={onClose}>
           <Icon name="close" />
         </button>
       </div>
-      <nav className="nav">
-        {NAV_GROUPS.map(([group, label]) => (
-          <div className="nav-group" key={group}>
-            <div className="nav-label">{label}</div>
-            {NAV.filter((item) => item.group === group).map((item) => (
-              <a
-                key={item.id}
-                href={`#/${item.id}`}
-                className="nav-item"
-                aria-current={item.id === active ? "page" : undefined}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onNavigate(item.id);
-                }}
-              >
-                <Icon name={item.icon} size={18} />
-                <span>{item.title}</span>
-                {unsaved[item.id] ? <i className="unsaved" title="Есть несохранённые изменения" /> : null}
-                {counts[item.id] != null ? <small className="badge-count">{counts[item.id]}</small> : null}
-              </a>
-            ))}
-          </div>
-        ))}
+      <nav className="nav nav-sections">
+        {SECTIONS.map((section) => {
+          const first = sectionPages(section.id)[0].id;
+          const dirty = sectionPages(section.id).some((p) => unsaved[p.id]);
+          return (
+            <a
+              key={section.id}
+              href={`#/${first}`}
+              className="nav-section"
+              aria-current={section.id === current ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigate(first);
+              }}
+            >
+              <span className="nav-section-icon">
+                <Icon name={section.icon} size={18} />
+              </span>
+              <span className="nav-section-text">
+                <span className="nav-section-title">{section.title}</span>
+                <span className="nav-section-sub">{summaries[section.id] || section.description}</span>
+              </span>
+              {dirty ? <i className="unsaved" title="Есть несохранённые изменения" /> : warnings[section.id] ? <i className="nav-warn" title="Требует внимания" /> : null}
+            </a>
+          );
+        })}
       </nav>
       <div className="sidebar-foot">
         <div className="node-card">
@@ -77,6 +84,55 @@ export function Sidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+/* ---------- Section tabs ---------- */
+
+export function SectionTabs({
+  page,
+  onNavigate,
+  onOperations,
+  unsaved,
+}: {
+  page: PageKey;
+  onNavigate: (page: PageKey) => void;
+  onOperations: () => void;
+  unsaved: Partial<Record<PageKey, boolean>>;
+}) {
+  const section = sectionOf(page);
+  const pages = sectionPages(section.id);
+  const extras = SECTION_EXTRAS[section.id] || [];
+  if (pages.length + extras.length < 2) return null;
+  return (
+    <nav className="section-tabs" aria-label={`Вкладки раздела «${section.title}»`}>
+      {pages.map((p) => (
+        <a
+          key={p.id}
+          href={`#/${p.id}`}
+          className="section-tab"
+          aria-current={p.id === page ? "page" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigate(p.id);
+          }}
+        >
+          {p.tab}
+          {unsaved[p.id] ? <i className="unsaved" title="Есть несохранённые изменения" /> : null}
+        </a>
+      ))}
+      {extras.map((x) =>
+        x.href ? (
+          <a key={x.label} href={x.href} className="section-tab">
+            {x.label}
+          </a>
+        ) : (
+          <button key={x.label} type="button" className="section-tab" onClick={onOperations}>
+            {x.label}
+          </button>
+        ),
+      )}
+    </nav>
   );
 }
 
@@ -107,7 +163,8 @@ export function Topbar({
   onApply: () => void;
   busy: boolean;
 }) {
-  const current = NAV.find((item) => item.id === page) || NAV[0];
+  const current = pageItem(page);
+  const section = sectionOf(page);
   const errors = operations.filter((item) => item.level === "error").length;
   const statusText = status ? (status.running ? "Прокси работает" : "Прокси остановлен") : "Нет данных";
   return (
@@ -122,9 +179,15 @@ export function Topbar({
         <Icon name="menu" size={20} />
       </button>
       <div className="crumbs">
-        <span className="crumbs-root">HomeNet</span>
-        <Icon name="chevronRight" size={14} />
-        <strong>{current.title}</strong>
+        {section.id === "overview" ? (
+          <strong>{section.title}</strong>
+        ) : (
+          <>
+            <span className="crumbs-root">{section.title}</span>
+            <Icon name="chevronRight" size={14} />
+            <strong>{current.tab}</strong>
+          </>
+        )}
       </div>
       <div className="topbar-actions">
         {extra}

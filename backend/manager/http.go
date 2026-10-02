@@ -120,6 +120,10 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreGet(w, r)
 		return
 	}
+	if path == "/api/system/releases" {
+		a.handleReleases(w)
+		return
+	}
 	switch path {
 	case "/api/launcher":
 		a.handleLauncherGet(w)
