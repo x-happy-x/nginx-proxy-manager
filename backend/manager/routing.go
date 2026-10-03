@@ -20,7 +20,7 @@ import (
  * them from a few settings — which nodes are bypass ones (limited traffic),
  * the delay ceiling for direct ones, the countries for AI services, the check
  * addresses and the cascade. Rules and other sections stay the user's; only
- * the two Tailnt rules are kept in place. Groups HomeNet does not know
+ * the rules of the checked addresses are kept in place. Groups HomeNet does not know
  * (OLCRTC, Tailscale, the user's own) are preserved.
  */
 
@@ -33,10 +33,19 @@ type routingSettings struct {
 	AI          []string `json:"ai"`
 	Never       []string `json:"never"`
 	RUCheck     string   `json:"ru_check"`
-	Headscale   string   `json:"headscale_check"`
-	Keycloak    string   `json:"keycloak_check"`
 	Cascade     bool     `json:"cascade"`
 	AIServiceOK bool     `json:"ai_service_check"`
+	// Addresses that must always open (a tailnet's control server, its
+	// sign-in): each gets its own group DIRECT → RU → AUTO with a check of
+	// its own and a rule for its domain (NPM-41). Kept in routing.json on the
+	// router, never in the code.
+	Access []accessCheck `json:"access"`
+}
+
+type accessCheck struct {
+	Name string `json:"name"`
+	Host string `json:"host"`
+	URL  string `json:"url"`
 }
 
 var euCountries = strings.Fields("AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE EU GB CH NO IS")
@@ -51,8 +60,7 @@ func defaultRouting() routingSettings {
 		AI:          append(append([]string{}, euCountries...), strings.Fields("US CA JP KR SG AU KZ")...),
 		Never:       strings.Fields("RU BY HK CN MO IR KP"),
 		RUCheck:     "https://habr.com/ru/feed/",
-		Headscale:   "https://headscale.tailnt.ru/health",
-		Keycloak:    "https://keycloak.tailnt.ru/",
+		Access:      []accessCheck{},
 		Cascade:     true,
 		AIServiceOK: true,
 	}
@@ -62,7 +70,7 @@ func defaultRouting() routingSettings {
 var routingManaged = map[string]bool{
 	"Прямые EU": true, "Прямые мир": true, "Обходы": true, "RU": true, "Каскад": true, "Резерв": true,
 	"Быстрые": true, "AUTO": true, "ИИ прямые": true, "ИИ обходы": true, "ALL": true, "ИИ": true, "РФ": true,
-	"Headscale": true, "Keycloak": true, "Игры": true, "Заблокированные сервисы": true, "Остальное": true,
+	"Игры": true, "Заблокированные сервисы": true, "Остальное": true,
 	"Белые списки": true, "QUIC": true, "GLOBAL": true,
 	// replaced by the groups above (NPM-33)
 	"EU": true, "Без белых списков": true,
@@ -141,13 +149,36 @@ func (s *routingSettings) normalize() error {
 	if s.FastMS < 200 || s.FastMS > 5000 {
 		return errors.New("порог задержки: от 200 до 5000 мс")
 	}
-	for name, u := range map[string]string{"РФ": s.RUCheck, "Headscale": s.Headscale, "Keycloak": s.Keycloak} {
-		p, err := url.Parse(u)
-		if err != nil || (p.Scheme != "https" && p.Scheme != "http") || p.Host == "" {
-			return fmt.Errorf("проверочный адрес «%s»: нужен http(s)-адрес", name)
+	if !httpURL(s.RUCheck) {
+		return errors.New("проверочный адрес «РФ»: нужен http(s)-адрес")
+	}
+	if s.Access == nil {
+		s.Access = []accessCheck{}
+	}
+	seen := map[string]bool{}
+	for i := range s.Access {
+		a := &s.Access[i]
+		a.Name, a.Host, a.URL = strings.TrimSpace(a.Name), strings.ToLower(strings.TrimSpace(a.Host)), strings.TrimSpace(a.URL)
+		switch {
+		case a.Name == "" || len([]rune(a.Name)) > 40 || strings.ContainsAny(a.Name, ",'\"\n"):
+			return fmt.Errorf("проверяемый адрес %d: нужно короткое имя без запятых и кавычек", i+1)
+		case routingManaged[a.Name] || seen[a.Name]:
+			return fmt.Errorf("имя «%s» уже занято другой группой", a.Name)
+		case !hostRE.MatchString(a.Host):
+			return fmt.Errorf("«%s»: домен вида login.example.org", a.Name)
+		case !httpURL(a.URL):
+			return fmt.Errorf("«%s»: адрес проверки — http(s)-адрес", a.Name)
 		}
+		seen[a.Name] = true
 	}
 	return nil
+}
+
+var hostRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+
+func httpURL(u string) bool {
+	p, err := url.Parse(u)
+	return err == nil && (p.Scheme == "https" || p.Scheme == "http") && p.Host != ""
 }
 
 // wordsRE matches any of the words as a substring, case-insensitive; spaces
@@ -263,8 +294,6 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	tail = append(tail,
 		fallback("ИИ", m{"proxies": ai, "timeout": 5000}),
 		fallback("РФ", m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": s.RUCheck, "expected-status": "200-399", "timeout": 5000}),
-		fallback("Headscale", m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": s.Headscale, "expected-status": "200", "interval": 120, "timeout": 5000, "lazy": false}),
-		fallback("Keycloak", m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": s.Keycloak, "expected-status": "200-399", "interval": 120, "timeout": 5000, "lazy": false}),
 		m{"name": "Игры", "type": "select", "proxies": []any{"DIRECT", "RU", "AUTO", "Прямые EU", "ALL", "REJECT"}},
 		m{"name": "Заблокированные сервисы", "type": "select", "proxies": append(append([]any{}, blocked...), "DIRECT", "REJECT")},
 		m{"name": "Остальное", "type": "select", "proxies": append(append([]any{"AUTO", "DIRECT", "Прямые EU", "Прямые мир", "Обходы", "ALL"}, extras...), "REJECT")},
@@ -272,6 +301,10 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		m{"name": "QUIC", "type": "select", "proxies": []any{"REJECT", "DIRECT", "AUTO"}},
 		m{"name": "GLOBAL", "type": "select", "proxies": append(append([]any{}, blocked...), "DIRECT", "REJECT")},
 	)
+	// addresses that must always open: direct, then a RU server, then any
+	for _, a := range s.Access {
+		tail = append(tail, fallback(a.Name, m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": a.URL, "expected-status": "200-399", "interval": 120, "timeout": 5000, "lazy": false}))
+	}
 	_ = between
 	return head, tail
 }
@@ -441,13 +474,15 @@ func routingAIAdaptive(base *yaml.Node, s routingSettings) *yaml.Node {
 	return ad
 }
 
-var tailntRule = regexp.MustCompile(`(?i)^(DOMAIN|DOMAIN-SUFFIX),(headscale|keycloak)\.tailnt\.ru,`)
-
 // buildRouting returns config.yaml with the routing block regenerated.
 func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	doc, root, err := yamlRoot(original)
 	if err != nil {
 		return nil, err
+	}
+	accessNames := map[string]bool{}
+	for _, x := range s.Access {
+		accessNames[x.Name] = true
 	}
 	providers := yamlGet(root, "proxy-providers")
 	if providers == nil || providers.Kind != yaml.MappingNode {
@@ -497,7 +532,7 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	if oldGroups != nil && oldGroups.Kind == yaml.SequenceNode {
 		for _, g := range oldGroups.Content {
 			name := scalar(mapGet(g, "name"))
-			if routingManaged[name] {
+			if routingManaged[name] || accessNames[name] {
 				continue
 			}
 			g.HeadComment = ""
@@ -549,13 +584,17 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	}
 	yamlSet(root, "proxy-groups", seq)
 
-	// rules: the two Tailnt rules right after the private-network one
+	// rules: one per checked address, right after the private-network one
+	hosts := map[string]bool{}
+	for _, a := range s.Access {
+		hosts[a.Host] = true
+	}
 	rules := yamlGet(root, "rules")
 	if rules != nil && rules.Kind == yaml.SequenceNode {
 		out := []*yaml.Node{}
 		at := -1
 		for _, r := range rules.Content {
-			if tailntRule.MatchString(r.Value) {
+			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && (strings.EqualFold(parts[0], "DOMAIN") || strings.EqualFold(parts[0], "DOMAIN-SUFFIX")) && hosts[strings.ToLower(strings.TrimSpace(parts[1]))] {
 				continue
 			}
 			out = append(out, r)
@@ -566,9 +605,13 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 		if at < 0 {
 			at = 0
 		}
-		add := []*yaml.Node{
-			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "DOMAIN,headscale.tailnt.ru,Headscale", HeadComment: "Вход Tailnt для Tailscale: свои группы с проверкой (HomeNet)"},
-			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "DOMAIN,keycloak.tailnt.ru,Keycloak"},
+		add := []*yaml.Node{}
+		for i, a := range s.Access {
+			n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "DOMAIN," + a.Host + "," + a.Name}
+			if i == 0 {
+				n.HeadComment = "Проверяемые адреса: свои группы с проверкой (HomeNet, «Маршрутизация»)"
+			}
+			add = append(add, n)
 		}
 		rules.Content = append(append(append([]*yaml.Node{}, out[:at]...), add...), out[at:]...)
 	}

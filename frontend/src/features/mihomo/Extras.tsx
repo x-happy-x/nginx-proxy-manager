@@ -100,7 +100,8 @@ const isText = (v: unknown): v is string => typeof v === "string";
 
 /** «Проверка доступа»: a request through the Tailscale node to a tailnet address (NPM-38). */
 function AccessCheck({ name }: { name: string }) {
-  const [url, setUrl] = useStored("homenet.tailscale.checkUrl", "http://host01.infra.tailnt", isText);
+  // no default address: the tailnet's own names live only in this browser (NPM-41)
+  const [url, setUrl] = useStored("homenet.tailscale.checkUrl", "", isText);
   const [text, setText] = useState(url);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<{ ok: boolean; text: string; at: Date } | null>(null);
@@ -134,7 +135,7 @@ function AccessCheck({ name }: { name: string }) {
       >
         <label className="grow">
           <span className="sr-only">Адрес для проверки</span>
-          <input className="mono" value={text} onChange={(e) => setText(e.target.value)} placeholder="http://host01.infra.tailnt" />
+          <input className="mono" value={text} onChange={(e) => setText(e.target.value)} placeholder="http://адрес-внутри-tailnet" />
         </label>
         <button type="submit" className="btn btn-sm" disabled={busy || !text.trim()}>
           {busy ? <span className="spinner" /> : <Icon name="test" />}

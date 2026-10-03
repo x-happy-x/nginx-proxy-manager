@@ -33,7 +33,7 @@ proxy-providers:
     type: file
     path: ./olcrtc.yaml
 proxies:
-  - name: TS-TAILNT
+  - name: TS-HOME
     type: tailscale
 proxy-groups:
   - name: 'EU'
@@ -51,7 +51,7 @@ proxy-groups:
     use: ['olcrtc']
   - name: 'Tailscale'
     type: select
-    proxies: ['TS-TAILNT', REJECT]
+    proxies: ['TS-HOME', REJECT]
   - name: 'Моя группа'
     type: select
     proxies: ['AUTO', DIRECT]
@@ -61,7 +61,7 @@ proxy-groups:
 rules:
   - DOMAIN-SUFFIX,egovm.ru,DIRECT
   - GEOIP,private,DIRECT,no-resolve
-  - DOMAIN-SUFFIX,headscale.tailnt.ru,GLOBAL
+  - DOMAIN-SUFFIX,login.example.org,GLOBAL
   - MATCH,Остальное
 `
 
@@ -93,6 +93,10 @@ func groupByName(v map[string]any, name string) map[string]any {
 
 func TestBuildRouting(t *testing.T) {
 	s := defaultRouting()
+	s.Access = []accessCheck{
+		{Name: "Login", Host: "login.example.org", URL: "https://login.example.org/health"},
+		{Name: "SSO", Host: "sso.example.org", URL: "https://sso.example.org/"},
+	}
 	if err := s.normalize(); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +106,7 @@ func TestBuildRouting(t *testing.T) {
 	}
 	v := routingDoc(t, out)
 	names := strings.Join(routingGroupNames(v), ",")
-	for _, want := range []string{"Прямые EU", "Обходы", "Быстрые", "AUTO", "Каскад", "Резерв", "ИИ прямые", "ИИ", "РФ", "Headscale", "Keycloak", "OLCRTC", "Tailscale", "Моя группа"} {
+	for _, want := range []string{"Прямые EU", "Обходы", "Быстрые", "AUTO", "Каскад", "Резерв", "ИИ прямые", "ИИ", "РФ", "Login", "SSO", "OLCRTC", "Tailscale", "Моя группа"} {
 		if !strings.Contains(","+names+",", ","+want+",") {
 			t.Errorf("group %q missing in %s", want, names)
 		}
@@ -148,7 +152,7 @@ func TestBuildRouting(t *testing.T) {
 		t.Error("ROUTER changed")
 	}
 	rules := v["rules"].([]any)
-	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DOMAIN,headscale.tailnt.ru,Headscale", "DOMAIN,keycloak.tailnt.ru,Keycloak", "MATCH,Остальное"}
+	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DOMAIN,login.example.org,Login", "DOMAIN,sso.example.org,SSO", "MATCH,Остальное"}
 	if len(rules) != len(want) {
 		t.Fatalf("rules = %v", rules)
 	}
@@ -198,6 +202,19 @@ func TestRoutingNormalize(t *testing.T) {
 	s.AI = []string{"us", "Germany"}
 	if err := s.normalize(); err == nil {
 		t.Error("country name accepted as a code")
+	}
+	for _, bad := range []accessCheck{
+		{Name: "", Host: "a.example.org", URL: "https://a.example.org/"},
+		{Name: "AUTO", Host: "a.example.org", URL: "https://a.example.org/"},
+		{Name: "A,B", Host: "a.example.org", URL: "https://a.example.org/"},
+		{Name: "A", Host: "not a host", URL: "https://a.example.org/"},
+		{Name: "A", Host: "a.example.org", URL: "ftp://a.example.org/"},
+	} {
+		s = defaultRouting()
+		s.Access = []accessCheck{bad}
+		if err := s.normalize(); err == nil {
+			t.Errorf("access %+v accepted", bad)
+		}
 	}
 	s = defaultRouting()
 	s.Bypass = []string{" ", ""}
