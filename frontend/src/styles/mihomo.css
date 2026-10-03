@@ -2353,3 +2353,31 @@ button.yt-badge {
 .mh-ts-check-row input {
   width: 100%;
 }
+
+/* NPM-41: addresses that must always open */
+.rt-access {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.6fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.rt-access-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rt-access-add {
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .rt-access {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .rt-access input {
+    grid-column: 1 / -1;
+  }
+}

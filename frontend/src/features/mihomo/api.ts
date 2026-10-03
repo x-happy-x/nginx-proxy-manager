@@ -177,8 +177,8 @@ export type RoutingSettings = {
   ai: string[];
   never: string[];
   ru_check: string;
-  headscale_check: string;
-  keycloak_check: string;
+  /** Addresses that must always open: own group DIRECT → RU → AUTO and a rule each (NPM-41). */
+  access: Array<{ name: string; host: string; url: string }>;
   cascade: boolean;
   ai_service_check: boolean;
 };

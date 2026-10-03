@@ -14,7 +14,7 @@ import { lastDelay } from "./shared";
  */
 
 /** Groups the manager generates (backend/manager/routing.go routingManaged). */
-export const ROUTING_MANAGED = new Set(["Прямые EU", "Прямые мир", "Обходы", "RU", "Каскад", "Резерв", "Быстрые", "AUTO", "ИИ прямые", "ИИ обходы", "ALL", "ИИ", "РФ", "Headscale", "Keycloak", "Игры", "Заблокированные сервисы", "Остальное", "Белые списки", "QUIC", "GLOBAL"]);
+export const ROUTING_MANAGED = new Set(["Прямые EU", "Прямые мир", "Обходы", "RU", "Каскад", "Резерв", "Быстрые", "AUTO", "ИИ прямые", "ИИ обходы", "ALL", "ИИ", "РФ", "Игры", "Заблокированные сервисы", "Остальное", "Белые списки", "QUIC", "GLOBAL"]);
 
 const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*");
 export const wordsMatcher = (words: string[]) => (words.length ? new RegExp(`(${words.map(esc).join("|")})`, "i") : null);
@@ -155,19 +155,21 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
         <Node n="✓" title={pick("Белые списки") === "DIRECT" ? "Напрямую" : pick("Белые списки") || "—"} sub="выбрано" cur />
         <span className="rt-side">вручную: {(c.proxies["Белые списки"]?.all || []).filter((n) => n !== pick("Белые списки")).slice(0, 4).join(" · ")}</span>
       </Row>
-      <Row
-        icon="key"
-        title="Tailnt: вход в Tailscale"
-        sub="headscale.tailnt.ru · keycloak.tailnt.ru"
-        now={
-          <>
-            headscale <b className={loc("Headscale") && loc("Headscale") !== "нет ответа" ? "rt-ok" : "rt-bad"}>{loc("Headscale") || "—"}</b> · keycloak{" "}
-            <b className={loc("Keycloak") && loc("Keycloak") !== "нет ответа" ? "rt-ok" : "rt-bad"}>{loc("Keycloak") || "—"}</b>
-          </>
-        }
-      >
-        <Steps c={c} group="Headscale" sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : "любой")} />
-      </Row>
+      {(s.access || []).map((a) => (
+        <Row
+          key={a.name}
+          icon="key"
+          title={a.name}
+          sub={`${a.host} · всегда должен открываться`}
+          now={
+            <>
+              проверка <b className={loc(a.name) && loc(a.name) !== "нет ответа" ? "rt-ok" : "rt-bad"}>{loc(a.name) || "—"}</b>
+            </>
+          }
+        >
+          <Steps c={c} group={a.name} sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : "любой")} />
+        </Row>
+      ))}
       <Row icon="layers" title="Игры" sub="ручной выбор" now="выбрано вручную">
         <Node n="✓" title={pick("Игры") === "DIRECT" ? "Напрямую" : pick("Игры") || "—"} sub="выбрано" cur />
         <span className="rt-side">{(c.proxies["Игры"]?.all || []).filter((n) => n !== pick("Игры")).slice(0, 5).join(" · ")}</span>
@@ -335,7 +337,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
     <div className="stack">
       {!meta.managed ? (
         <Alert tone="info" title="Группы ещё не собраны HomeNet">
-          Первое применение заменит группы из списка ниже на сгенерированные. Группы, которых HomeNet не знает (OLCRTC, Tailscale, свои), останутся как есть; правила не меняются, кроме двух правил Tailnt.
+          Первое применение заменит группы из списка ниже на сгенерированные. Группы, которых HomeNet не знает (OLCRTC, Tailscale, свои), останутся как есть; правила не меняются, кроме правил проверяемых адресов.
         </Alert>
       ) : null}
       <div className="rt-cols">
@@ -429,14 +431,35 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
                 <span>РФ вне белых</span>
                 <input className="mono" aria-label="Проверка РФ" value={s.ru_check} onChange={(e) => set("ru_check", e.target.value)} />
                 {groupHealth("РФ")}
-                <span>Headscale</span>
-                <input className="mono" aria-label="Проверка headscale" value={s.headscale_check} onChange={(e) => set("headscale_check", e.target.value)} />
-                {groupHealth("Headscale")}
-                <span>Keycloak</span>
-                <input className="mono" aria-label="Проверка keycloak" value={s.keycloak_check} onChange={(e) => set("keycloak_check", e.target.value)} />
-                {groupHealth("Keycloak")}
               </div>
               <span className="rt-hint">Справа — последняя проверка группы через выбранный путь.</span>
+            </div>
+            <div className="rt-field">
+              <span className="rt-lab">
+                <span>Адреса, которые всегда должны открываться</span>
+                <small>{(s.access || []).length}</small>
+              </span>
+              {(s.access || []).map((a, i) => {
+                const upd = (patch: Partial<typeof a>) => set("access", s.access.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+                return (
+                  <div key={i} className="rt-access">
+                    <input aria-label="Имя группы" placeholder="Имя группы" value={a.name} onChange={(e) => upd({ name: e.target.value })} />
+                    <input className="mono" aria-label="Домен" placeholder="login.example.org" value={a.host} onChange={(e) => upd({ host: e.target.value })} />
+                    <input className="mono" aria-label="Адрес проверки" placeholder="https://login.example.org/health" value={a.url} onChange={(e) => upd({ url: e.target.value })} />
+                    <span className="rt-access-side">
+                      {groupHealth(a.name)}
+                      <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`Убрать ${a.name || "адрес"}`} onClick={() => set("access", s.access.filter((_, k) => k !== i))}>
+                        <Icon name="trash" />
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+              <button type="button" className="btn btn-sm rt-access-add" onClick={() => set("access", [...(s.access || []), { name: "", host: "", url: "" }])}>
+                <Icon name="plus" />
+                Добавить адрес
+              </button>
+              <span className="rt-hint">Например, сервер управления tailnet и его вход. Для каждого — своя группа «напрямую → RU → любой» с проверкой раз в 2 минуты и правило для домена. Хранится на роутере, не в коде.</span>
             </div>
             <Switch checked={s.cascade} onChange={(v) => set("cascade", v)} label="Каскад через обходы" hint="Если зарубежный сервер напрямую недоступен, соединение к нему идёт через обход. Последний вариант: тратит трафик обхода, задержка примерно вдвое больше." />
             <Switch checked={s.ai_service_check} onChange={(v) => set("ai_service_check", v)} label="Проверять узлы для ИИ" hint="Страна выхода по Cloudflare и ответ OpenAI API; узел из неподходящей страны не выбирается." />
