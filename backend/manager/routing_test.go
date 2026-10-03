@@ -270,11 +270,91 @@ func TestRoutingLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := defaultRouting()
+	if b := os.Getenv("ROUTING_BASE"); b != "" {
+		s.Base = b
+	}
 	out, err := buildRouting(body, s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(outPath, out, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A config as the original XKeen leaves it: another provider name, no adaptive check (NPM-42).
+const plainFixture = `proxy-providers:
+  SUB:
+    type: http
+    url: https://sub.example/x
+    path: ./providers/sub.yaml
+    health-check:
+      enable: false
+      url: https://www.gstatic.com/generate_204
+proxy-groups:
+  - name: PROXY
+    type: select
+    use: [SUB]
+rules:
+  - MATCH,PROXY
+`
+
+func TestBuildRoutingAddsAdaptive(t *testing.T) {
+	s := defaultRouting()
+	s.Base = "SUB"
+	out, err := buildRouting([]byte(plainFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pp := routingDoc(t, out)["proxy-providers"].(map[string]any)
+	hc := pp["SUB"].(map[string]any)["health-check"].(map[string]any)
+	if hc["enable"] != true || hc["lazy"] != false || hc["interval"] != 300 {
+		t.Errorf("SUB health-check = %v", hc)
+	}
+	ad, ok := hc["adaptive"].(map[string]any)
+	if !ok || ad["network-key"] != "uplink" || len(ad["targets"].([]any)) != 2 {
+		t.Fatalf("SUB adaptive = %v", hc["adaptive"])
+	}
+	if hc["url"] != "https://www.gstatic.com/generate_204" {
+		t.Errorf("existing url changed: %v", hc["url"])
+	}
+	// the AI provider follows the base: service check with depends-on SUB
+	aiAd := pp["AI"].(map[string]any)["health-check"].(map[string]any)["adaptive"].(map[string]any)
+	if aiAd["depends-on"] != "SUB" {
+		t.Errorf("AI depends-on = %v", aiAd["depends-on"])
+	}
+}
+
+func TestBuildRoutingKeepsAdaptive(t *testing.T) {
+	out, err := buildRouting([]byte(routingFixture), defaultRouting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ad := routingDoc(t, out)["proxy-providers"].(map[string]any)["ROUTER"].(map[string]any)["health-check"].(map[string]any)["adaptive"].(map[string]any)
+	if ad["network-key"] != "home-uplink" {
+		t.Errorf("existing adaptive block changed: %v", ad)
+	}
+}
+
+func TestBuildRoutingWithoutBaseAdaptive(t *testing.T) {
+	s := defaultRouting()
+	s.Base = "SUB"
+	s.BaseAdaptive = false
+	out, err := buildRouting([]byte(plainFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pp := routingDoc(t, out)["proxy-providers"].(map[string]any)
+	if _, ok := pp["SUB"].(map[string]any)["health-check"].(map[string]any)["adaptive"]; ok {
+		t.Error("adaptive added although switched off")
+	}
+	if _, ok := pp["AI"].(map[string]any)["filter"]; !ok {
+		t.Error("without an adaptive base the AI provider must keep the flag filter")
+	}
+}
+
+func TestBuildRoutingMissingBase(t *testing.T) {
+	if _, err := buildRouting([]byte(plainFixture), defaultRouting()); err == nil || !strings.Contains(err.Error(), "ROUTER") {
+		t.Errorf("missing base error = %v", err)
 	}
 }

@@ -179,9 +179,13 @@ export type RoutingSettings = {
   ru_check: string;
   /** Addresses that must always open: own group DIRECT → RU → AUTO and a rule each (NPM-41). */
   access: Array<{ name: string; host: string; url: string }>;
+  /** Add the adaptive check to the base provider when it has none (NPM-42). */
+  base_adaptive: boolean;
   cascade: boolean;
   ai_service_check: boolean;
 };
+
+export type RoutingProvider = { name: string; type: string; adaptive: boolean; homenet: boolean; service?: boolean };
 
 export type ConfigCheck = { valid: boolean; changes: ConfigChange[]; message?: string; detail?: string; yaml?: string };
 
@@ -342,7 +346,8 @@ export const core = {
   bypassTraffic: (period: "24h" | "7d" | "30d") => call<BypassReport>(`/api/core/traffic/bypass?period=${period}`),
   setBypassLimit: (gb: number, day: number) => call<unknown>("/api/core/traffic/limit", json("POST", { gb, day })),
   configVersion: (name: string) => call<{ yaml: string }>(`/api/core/config/version?name=${enc(name)}`),
-  routing: () => call<{ settings: RoutingSettings; defaults: RoutingSettings; saved: boolean; sha?: string; providers?: string[]; managed?: boolean }>("/api/core/routing"),
+  routing: () =>
+    call<{ settings: RoutingSettings; defaults: RoutingSettings; saved: boolean; sha?: string; providers?: string[]; provider_info?: RoutingProvider[]; managed?: boolean }>("/api/core/routing"),
   checkRouting: (body: { sha: string; settings: RoutingSettings }) => call<ConfigCheck>("/api/core/routing/check", json("POST", body)),
   applyRouting: (body: { sha: string; settings: RoutingSettings }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup?: string; sha?: string; message: string; warning?: string }>("/api/core/routing/apply", json("POST", body)),

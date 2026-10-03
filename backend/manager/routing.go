@@ -40,6 +40,10 @@ type routingSettings struct {
 	// its own and a rule for its domain (NPM-41). Kept in routing.json on the
 	// router, never in the code.
 	Access []accessCheck `json:"access"`
+	// Add the adaptive check (network mode, real GET through each node) to
+	// the base provider when it has none — a config that came with the
+	// original XKeen (NPM-42). An existing block is never changed.
+	BaseAdaptive bool `json:"base_adaptive"`
 }
 
 type accessCheck struct {
@@ -52,17 +56,18 @@ var euCountries = strings.Fields("AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT L
 
 func defaultRouting() routingSettings {
 	return routingSettings{
-		Base:        "ROUTER",
-		Bypass:      []string{"обход", "white", "белые списки", "белый список", "whitelist", "4g", "lte", "мобильн", "mobile"},
-		Junk:        []string{"[free]", "только tg"},
-		FastMS:      800,
-		EU:          append([]string{}, euCountries...),
-		AI:          append(append([]string{}, euCountries...), strings.Fields("US CA JP KR SG AU KZ")...),
-		Never:       strings.Fields("RU BY HK CN MO IR KP"),
-		RUCheck:     "https://habr.com/ru/feed/",
-		Access:      []accessCheck{},
-		Cascade:     true,
-		AIServiceOK: true,
+		Base:         "ROUTER",
+		Bypass:       []string{"обход", "white", "белые списки", "белый список", "whitelist", "4g", "lte", "мобильн", "mobile"},
+		Junk:         []string{"[free]", "только tg"},
+		FastMS:       800,
+		EU:           append([]string{}, euCountries...),
+		AI:           append(append([]string{}, euCountries...), strings.Fields("US CA JP KR SG AU KZ")...),
+		Never:        strings.Fields("RU BY HK CN MO IR KP"),
+		RUCheck:      "https://habr.com/ru/feed/",
+		Access:       []accessCheck{},
+		BaseAdaptive: true,
+		Cascade:      true,
+		AIServiceOK:  true,
 	}
 }
 
@@ -129,6 +134,9 @@ func (s *routingSettings) normalize() error {
 		return out
 	}
 	s.Base = strings.TrimSpace(s.Base)
+	if s.Base == "" {
+		return errors.New("выберите основную подписку")
+	}
 	s.Bypass = clean(s.Bypass, true)
 	s.Junk = clean(s.Junk, true)
 	if len(s.Bypass) == 0 {
@@ -474,6 +482,61 @@ func routingAIAdaptive(base *yaml.Node, s routingSettings) *yaml.Node {
 	return ad
 }
 
+// The adaptive check this router's subscription uses: the network mode by
+// direct probes, then a real GET through every node (MIHOMO-2..6).
+const defaultAdaptiveYAML = `enable: true
+network-key: uplink
+confirmations: 2
+concurrency: 4
+direct-allowed:
+  - url: https://ya.ru
+    expected-status: 200-399
+direct-global:
+  - url: https://www.gstatic.com/generate_204
+    expected-status: "204"
+  - url: https://cp.cloudflare.com/generate_204
+    expected-status: "204"
+targets:
+  - url: https://www.google.com/
+    expected-status: "200"
+    min-bytes: 1024
+  - url: https://www.cloudflare.com/cdn-cgi/trace
+    expected-status: "200"
+    min-bytes: 64
+`
+
+// ensureAdaptive adds health-check.adaptive to a provider without one and the
+// health-check fields it needs; whatever is there already stays.
+func ensureAdaptive(provider *yaml.Node) {
+	if provider == nil || provider.Kind != yaml.MappingNode {
+		return
+	}
+	hc := mapGet(provider, "health-check")
+	if hc == nil || hc.Kind != yaml.MappingNode {
+		hc = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		yamlSet(provider, "health-check", hc)
+	}
+	if mapGet(hc, "adaptive") != nil {
+		return
+	}
+	for _, kv := range [][2]string{{"enable", "true"}, {"url", routingCheck}, {"expected-status", "204"}, {"interval", "300"}, {"timeout", "5000"}, {"lazy", "false"}} {
+		if mapGet(hc, kv[0]) == nil {
+			var v yaml.Node
+			_ = yaml.Unmarshal([]byte(kv[1]), &v)
+			node := v.Content[0]
+			if kv[0] == "expected-status" {
+				node = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: kv[1], Style: yaml.DoubleQuotedStyle}
+			}
+			yamlSet(hc, kv[0], node)
+		}
+	}
+	// the check must run: a disabled one would leave the groups without data
+	yamlSet(hc, "enable", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+	var ad yaml.Node
+	_ = yaml.Unmarshal([]byte(defaultAdaptiveYAML), &ad)
+	yamlSet(hc, "adaptive", ad.Content[0])
+}
+
 // buildRouting returns config.yaml with the routing block regenerated.
 func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	doc, root, err := yamlRoot(original)
@@ -490,7 +553,10 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	}
 	base := mapGet(providers, s.Base)
 	if base == nil {
-		return nil, fmt.Errorf("подписки %q нет в proxy-providers", s.Base)
+		return nil, fmt.Errorf("подписки %q нет в proxy-providers: выберите основную подписку во вкладке «Маршрутизация»", s.Base)
+	}
+	if s.BaseAdaptive {
+		ensureAdaptive(base)
 	}
 
 	// providers: AI always, CHAIN with the cascade
@@ -670,12 +736,23 @@ func (a *app) handleRoutingGet(w http.ResponseWriter) {
 			res["sha"] = configSHA(body)
 			if _, root, err := yamlRoot(body); err == nil {
 				names := []string{}
+				info := []map[string]any{}
 				if p := yamlGet(root, "proxy-providers"); p != nil {
 					for i := 0; i+1 < len(p.Content); i += 2 {
-						names = append(names, p.Content[i].Value)
+						name, node := p.Content[i].Value, p.Content[i+1]
+						names = append(names, name)
+						info = append(info, map[string]any{
+							"name":     name,
+							"type":     scalar(mapGet(node, "type")),
+							"adaptive": mapGet(mapGet(node, "health-check"), "adaptive") != nil,
+							"homenet":  name == routingAIProvider || name == routingChainProvider,
+							// a service check that depends on another provider is no base
+							"service": scalar(mapGet(mapGet(mapGet(node, "health-check"), "adaptive"), "depends-on")) != "",
+						})
 					}
 				}
 				res["providers"] = names
+				res["provider_info"] = info
 				managed := false
 				if g := yamlGet(root, "proxy-groups"); g != nil && len(g.Content) > 0 {
 					managed = strings.Contains(g.Content[0].HeadComment, "HomeNet")

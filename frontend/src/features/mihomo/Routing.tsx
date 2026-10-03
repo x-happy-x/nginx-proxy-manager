@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Icon } from "../../components/ui/Icon";
 import { Alert, Switch } from "../../components/ui/controls";
 import { errText, number } from "../../lib/format";
-import { core, mihomo, type CoreConfig, type MProvider, type MProxy, type RoutingSettings } from "./api";
+import { core, mihomo, type CoreConfig, type MProvider, type MProxy, type RoutingProvider, type RoutingSettings } from "./api";
 import { ReviewModal, type ReviewState } from "./Review";
 import { useMihomo } from "./context";
 import { lastDelay } from "./shared";
@@ -215,7 +215,8 @@ function WordsField({ label, value, onChange, hint, count }: { label: string; va
 }
 
 export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => Promise<void> }) {
-  const { log, refreshStatus } = useMihomo();
+  const { log, refreshStatus, status } = useMihomo();
+  const [info, setInfo] = useState<RoutingProvider[]>([]);
   const [saved, setSaved] = useState<RoutingSettings | null>(null);
   const [s, setS] = useState<RoutingSettings | null>(null);
   const [meta, setMeta] = useState<{ managed?: boolean; saved?: boolean }>({});
@@ -233,9 +234,22 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
         setSaved(r.settings);
         setS(r.settings);
         setMeta({ managed: r.managed, saved: r.saved });
+        setInfo(r.provider_info || []);
       })
       .catch((e) => setError(errText(e)));
   }, []);
+
+  // Another router (NPM-42): no provider named as in the settings — take the one
+  // with the most nodes; the change shows as unsaved until applied.
+  const candidates = info.filter((p) => !p.homenet && !p.service && (p.type === "http" || p.type === "file"));
+  useEffect(() => {
+    if (!s || !candidates.length || !Object.keys(providers).length) return;
+    if (candidates.some((p) => p.name === s.base)) return;
+    // most nodes; on a tie a downloaded subscription (http) before a local file
+    const pick = [...candidates].sort((a, b) => (providers[b.name]?.proxies.length || 0) - (providers[a.name]?.proxies.length || 0) || Number(b.type === "http") - Number(a.type === "http"))[0];
+    if (pick) setS({ ...s, base: pick.name });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info, providers, s?.base]);
 
   const loadLive = useCallback(async () => {
     try {
@@ -364,6 +378,40 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
             </div>
           </div>
           <div className="card-body rt-form">
+            <label className="rt-field">
+              <span className="rt-lab">
+                <span>Основная подписка</span>
+                <small>{providers[s.base] ? `${number(providers[s.base].proxies.length)} узлов` : "нет в ядре"}</small>
+              </span>
+              <select value={s.base} onChange={(e) => set("base", e.target.value)}>
+                {!candidates.some((p) => p.name === s.base) ? <option value={s.base}>{s.base} — нет в config.yaml</option> : null}
+                {candidates.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} · {p.type}
+                    {providers[p.name] ? ` · ${providers[p.name].proxies.length} узлов` : ""}
+                    {p.adaptive ? " · адаптивная проверка" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="rt-hint">Из неё собираются группы; копии для ИИ и каскада читают её файл.</span>
+            </label>
+            <Switch
+              checked={s.base_adaptive}
+              onChange={(v) => set("base_adaptive", v)}
+              label="Адаптивная проверка основной подписки"
+              hint={
+                candidates.find((p) => p.name === s.base)?.adaptive
+                  ? "Уже настроена в config.yaml — останется как есть."
+                  : s.base_adaptive
+                    ? "Будет добавлена при применении: режим сети (обычный или белые списки) и настоящий GET через каждый узел. Без неё группы опираются на обычную проверку задержки, а ИИ — на флаги стран."
+                    : "Не добавляется: группы опираются на обычную проверку задержки, узлы для ИИ — на флаги стран."
+              }
+            />
+            {status && !status.fork && (s.base_adaptive || candidates.find((p) => p.name === s.base)?.adaptive) ? (
+              <Alert tone="warning" title="Ядро не из форка x-happy-x">
+                Адаптивная проверка есть только в x-happy-x/mihomo: обновите ядро («Ядро» → установка из форка или xkeen -um), иначе проверка mihomo -t не пропустит конфиг.
+              </Alert>
+            ) : null}
             <WordsField
               label="Какие узлы — обходы"
               value={s.bypass}
