@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -256,5 +258,51 @@ func TestRateLimitAndReturnValidation(t *testing.T) {
 		if safeReturn(s) != "/" {
 			t.Fatal(s)
 		}
+	}
+}
+
+func TestGeneratedHostsAreKnownAndReloaded(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateway-hosts.json")
+	g := newGateway(configuration{Secret: "test-secret", Hosts: map[string]hostPolicy{"lms.test": {App: "lms_node", MinRole: "admin"}}})
+	g.hostsPath = path
+	unknown := func(host string) bool {
+		r := httptest.NewRequest("GET", "http://gateway/_gate/nothing", nil)
+		r.RemoteAddr = "127.0.0.1:1"
+		r.Header.Set("X-Gate-Host", host)
+		r.Header.Set("X-Gate-Proto", "https")
+		w := httptest.NewRecorder()
+		g.ServeHTTP(w, r)
+		return w.Code == 403 && strings.Contains(w.Body.String(), "Unknown gateway host")
+	}
+	if !unknown("new.test") {
+		t.Fatal("host known without generated file")
+	}
+	write := func(body string, stamp time.Time) {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		os.Chtimes(path, stamp, stamp)
+	}
+	write(`{"managed":"x","hosts":{"new.test":{"app":"homenet","resource":"svc"},"lms.test":{"app":"homenet"},"blank.test":{"app":""}}}`, time.Now().Add(-time.Minute))
+	if unknown("new.test") || !unknown("blank.test") {
+		t.Fatal("generated hosts not applied")
+	}
+	if p, _ := g.policy("lms.test"); p.App != "lms_node" || p.MinRole != "admin" {
+		t.Fatal("gateway.json must win over generated hosts")
+	}
+	if p, _ := g.policy("new.test"); p.Resource != "svc" {
+		t.Fatal("resource lost")
+	}
+	write(`{"hosts":{"other.test":{"app":"homenet"}}}`, time.Now())
+	if !unknown("new.test") || unknown("other.test") {
+		t.Fatal("changed file not reread")
+	}
+	write(`{broken`, time.Now().Add(time.Minute))
+	if unknown("other.test") {
+		t.Fatal("broken file must keep the previous list")
+	}
+	os.Remove(path)
+	if !unknown("other.test") {
+		t.Fatal("removed file still grants hosts")
 	}
 }

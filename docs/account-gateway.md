@@ -16,8 +16,9 @@ User names come from Account through an administrator-only directory endpoint.
 Emergency router administrator sessions retain management access during an outage.
 
 For router applications, `access_ip_port` creates a distinct HTTP listener on the
-proxy's listen IPs, protected by the same gateway. Register each exact IP:port
-authority in gateway.json and each HTTP callback in Account gateway.json.
+proxy's listen IPs, protected by the same gateway. The generator lists those IP:port
+authorities in `gateway-hosts.json` (below); register each HTTP callback in
+Account gateway.json.
 `account_ip_url` selects the LAN Account URL when login starts at an IP address.
 Domain links use the configured public host; IP links use the registered IP proxy
 or the upstream. Native backend addresses and manual external links retain their
@@ -39,6 +40,16 @@ leaves Account itself reachable. The gateway's root-only JSON configuration at
 `/opt/etc/homenet/gateway.json` contains `secret`, `account_api`, `account_url`,
 `emergency_url`, `router_url`, and a `hosts` object mapping exact DNS names to
 `{ "app": "homenet", "min_role": "admin" }`. Never commit this file.
+
+Hosts no longer need to be added there by hand. On every apply the nginx
+generator writes `/opt/etc/homenet/proxy/gateway-hosts.json` (no secret) with each
+host that has `access_app`, plus its `access_ip_port` authorities, as
+`{ "app": <access_app>, "resource": <app_id> }`. The gateway (`-hosts` flag)
+rereads it when it changes, without a restart. An entry in gateway.json wins over
+the generated one, so keep there only hosts with special policies (e.g. LMS
+`min_role: admin`). A host missing from both returns 403 `Unknown gateway host`.
+Account accepts the callback of any `https://<name>.crubs.crazedns.ru` through its
+`callback_domains` setting (ACC-11).
 Account receives the same dedicated secret and an exact callback-to-app map in
 `/data/gateway.json`. Its normal application service token is not reused.
 
