@@ -62,6 +62,12 @@ type gateway struct {
 	healthUntil  time.Time
 	healthDown   bool
 	verifyRouter func(string) bool
+	// Hosts generated from routes.yml; reread when the file changes.
+	hostsPath  string
+	hostsMu    sync.Mutex
+	hostsStamp time.Time
+	hostsSize  int64
+	generated  map[string]hostPolicy
 }
 
 func newGateway(c configuration) *gateway {
@@ -71,13 +77,14 @@ func newGateway(c configuration) *gateway {
 }
 func main() {
 	path := flag.String("config", "/opt/etc/homenet/gateway.json", "configuration")
+	hosts := flag.String("hosts", "/opt/etc/homenet/proxy/gateway-hosts.json", "host policies generated from routes.yml")
 	flag.Parse()
 	b, e := os.ReadFile(*path)
 	if e != nil {
 		log.Fatal(e)
 	}
 	var c configuration
-	if json.Unmarshal(b, &c) != nil || len(c.Secret) < 32 || len(c.Hosts) == 0 {
+	if json.Unmarshal(b, &c) != nil || len(c.Secret) < 32 {
 		log.Fatal("invalid gateway config")
 	}
 	for _, raw := range []string{c.AccountAPI, c.AccountURL, c.EmergencyURL, c.RouterURL} {
@@ -89,8 +96,45 @@ func main() {
 	if !strings.HasPrefix(c.EmergencyURL, "https://") {
 		log.Fatal("emergency login requires HTTPS")
 	}
-	s := &http.Server{Addr: "127.0.0.1:63415", Handler: newGateway(c), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
+	g := newGateway(c)
+	g.hostsPath = *hosts
+	s := &http.Server{Addr: "127.0.0.1:63415", Handler: g, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
 	log.Fatal(s.ListenAndServe())
+}
+
+// policy prefers the hand-written gateway.json entry and falls back to the
+// hosts the nginx generator derived from protected routes.
+func (g *gateway) policy(host string) (hostPolicy, bool) {
+	if p, ok := g.cfg.Hosts[host]; ok {
+		return p, true
+	}
+	p, ok := g.generatedHosts()[host]
+	return p, ok && p.App != ""
+}
+func (g *gateway) generatedHosts() map[string]hostPolicy {
+	if g.hostsPath == "" {
+		return nil
+	}
+	g.hostsMu.Lock()
+	defer g.hostsMu.Unlock()
+	info, e := os.Stat(g.hostsPath)
+	if e != nil {
+		g.generated, g.hostsStamp, g.hostsSize = nil, time.Time{}, 0
+		return nil
+	}
+	if info.ModTime().Equal(g.hostsStamp) && info.Size() == g.hostsSize {
+		return g.generated
+	}
+	var f struct {
+		Hosts map[string]hostPolicy `json:"hosts"`
+	}
+	b, e := os.ReadFile(g.hostsPath)
+	if e != nil || json.Unmarshal(b, &f) != nil {
+		log.Printf("gateway hosts %s unreadable; keeping previous list", g.hostsPath)
+		return g.generated
+	}
+	g.generated, g.hostsStamp, g.hostsSize = f.Hosts, info.ModTime(), info.Size()
+	return g.generated
 }
 func random() string {
 	var b [32]byte
@@ -192,7 +236,7 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 	host := r.Header.Get("X-Gate-Host")
 	scheme := r.Header.Get("X-Gate-Proto")
-	policy, ok := g.cfg.Hosts[host]
+	policy, ok := g.policy(host)
 	if !ok || (scheme != "http" && scheme != "https") {
 		http.Error(w, "Unknown gateway host", 403)
 		return

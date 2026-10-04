@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 	"strings"
 	"testing"
@@ -88,5 +89,46 @@ func TestGatewayIPLinksKeepAuthorityAndProtection(t *testing.T) {
 	}
 	if strings.Count(all, "auth_request /_gate/check;") < 3 {
 		t.Fatal("IP route unprotected")
+	}
+}
+
+func TestGatewayHostsFileFollowsProtectedRoutes(t *testing.T) {
+	r := testRoutes()
+	r.Globals.AccessGateway = true
+	r.Hosts[0].AccessApp = "homenet"
+	r.Hosts[0].AccessIPPort = 22004
+	open := r.Hosts[0]
+	open.Host, open.AccessApp, open.AccessIPPort = "account.crubs.crazedns.ru", "", 0
+	open.Endpoints = []schema.Endpoint{{Name: "web", Listen: schema.EndpointListen{Protocol: "http", Port: 80}}}
+	r.Hosts = append(r.Hosts, open)
+	g := testGenerator(t)
+	g.command = func(string, ...string) error { return nil }
+	if err := g.apply(r); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Hosts map[string]struct{ App, Resource string } `json:"hosts"`
+	}
+	if err := json.Unmarshal([]byte(fileBody(t, g.gatewayHosts)), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"sub.crubs.crazedns.ru": true, "192.168.1.2:22004": true, "[fd00::2]:22004": true}
+	if len(got.Hosts) != len(want) {
+		t.Fatalf("hosts: %v", got.Hosts)
+	}
+	for host := range want {
+		if p := got.Hosts[host]; p.App != "homenet" || p.Resource != "sublab" {
+			t.Fatalf("%s: %+v", host, p)
+		}
+	}
+	if !owned(g.gatewayHosts) {
+		t.Fatal("generated hosts file must be owned so it can be replaced")
+	}
+	r.Globals.AccessGateway = false
+	if err := g.apply(r); err != nil {
+		t.Fatal(err)
+	}
+	if exists(g.gatewayHosts) {
+		t.Fatal("disabled gateway left a stale hosts file")
 	}
 }

@@ -36,7 +36,7 @@ type generator struct {
 	confRoot, mainConf, binary                                                 string
 	nginxListenIPs, localCACert, localCAKey, leRoot                            string
 	sitesEnabled, acmeWebroot, selfDir, mapsConf, proxySnippet, routeAccessLog string
-	errorsDir                                                                  string
+	errorsDir, gatewayHosts                                                    string
 	preview                                                                    bool
 	command                                                                    func(string, ...string) error
 	verifyProcess                                                              func() error
@@ -90,7 +90,7 @@ func main() {
 }
 
 func newGenerator(root string) *generator {
-	return &generator{confRoot: root, localCACert: filepath.Join(root, "local-ca", "ca.crt"), localCAKey: filepath.Join(root, "local-ca", "ca.key"), leRoot: "/opt/etc/letsencrypt", sitesEnabled: filepath.Join(root, "sites-enabled"), errorsDir: filepath.Join(root, "errors"), acmeWebroot: "/opt/var/www/_letsencrypt", selfDir: filepath.Join(root, "selfsigned"), mapsConf: filepath.Join(root, "conf.d", "npm_maps_v3.conf"), proxySnippet: filepath.Join(root, "snippets", "npm_proxy_v3.conf"), routeAccessLog: "/opt/var/log/nginx/route_access.log"}
+	return &generator{confRoot: root, localCACert: filepath.Join(root, "local-ca", "ca.crt"), localCAKey: filepath.Join(root, "local-ca", "ca.key"), leRoot: "/opt/etc/letsencrypt", sitesEnabled: filepath.Join(root, "sites-enabled"), errorsDir: filepath.Join(root, "errors"), gatewayHosts: filepath.Join(root, "gateway-hosts.json"), acmeWebroot: "/opt/var/www/_letsencrypt", selfDir: filepath.Join(root, "selfsigned"), mapsConf: filepath.Join(root, "conf.d", "npm_maps_v3.conf"), proxySnippet: filepath.Join(root, "snippets", "npm_proxy_v3.conf"), routeAccessLog: "/opt/var/log/nginx/route_access.log"}
 }
 func fatal(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
 func loadRuntimeEnv(baseDir string) {
@@ -214,6 +214,13 @@ func (g *generator) render(routes schema.Routes) (map[string]string, error) {
 		files[filepath.Join(g.sitesEnabled, host.Host+".conf")] = managedHeader + content
 	}
 	g.addUnavailablePages(routes, apps, files)
+	if g.gatewayEnabled {
+		body, err := gatewayHostsFile(routes, ips)
+		if err != nil {
+			return nil, err
+		}
+		files[g.gatewayHosts] = body
+	}
 	return files, nil
 }
 
@@ -368,7 +375,7 @@ func (g *generator) apply(routes schema.Routes) error {
 	sg.confRoot, sg.mainConf = stage, rebase(g.mainConf)
 	sg.sitesEnabled, sg.mapsConf, sg.proxySnippet, sg.selfDir = rebase(g.sitesEnabled), rebase(g.mapsConf), rebase(g.proxySnippet), rebase(g.selfDir)
 	sg.localCACert, sg.localCAKey = rebase(g.localCACert), rebase(g.localCAKey)
-	sg.errorsDir = rebase(g.errorsDir)
+	sg.errorsDir, sg.gatewayHosts = rebase(g.errorsDir), rebase(g.gatewayHosts)
 	remove := map[string]bool{}
 	// Owned host configs and error pages are regenerated; stale ones are removed.
 	for _, dir := range []string{g.sitesEnabled, g.errorsDir} {
@@ -390,8 +397,7 @@ func (g *generator) apply(routes schema.Routes) error {
 	if err != nil {
 		return err
 	}
-	for _, optional := range []string{"npm_keenetic_v3.conf", "npm_stub_v3.conf"} {
-		path := filepath.Join(g.confRoot, "conf.d", optional)
+	for _, path := range []string{filepath.Join(g.confRoot, "conf.d", "npm_keenetic_v3.conf"), filepath.Join(g.confRoot, "conf.d", "npm_stub_v3.conf"), g.gatewayHosts} {
 		if _, needed := files[rebase(path)]; !needed && owned(path) {
 			remove[path] = true
 			if err := os.Remove(rebase(path)); err != nil {
