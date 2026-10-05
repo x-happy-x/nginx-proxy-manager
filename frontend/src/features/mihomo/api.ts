@@ -181,6 +181,8 @@ export type RoutingSettings = {
   access: Array<{ name: string; host: string; url: string }>;
   /** Add the adaptive check to the base provider when it has none (NPM-42). */
   base_adaptive: boolean;
+  /** Telegram's own group, bypass servers first (NPM-44). */
+  telegram: boolean;
   cascade: boolean;
   ai_service_check: boolean;
 };

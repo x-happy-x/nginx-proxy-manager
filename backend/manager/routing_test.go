@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -106,7 +107,7 @@ func TestBuildRouting(t *testing.T) {
 	}
 	v := routingDoc(t, out)
 	names := strings.Join(routingGroupNames(v), ",")
-	for _, want := range []string{"Прямые EU", "Обходы", "Быстрые", "AUTO", "Каскад", "Резерв", "ИИ прямые", "ИИ", "РФ", "Login", "SSO", "OLCRTC", "Tailscale", "Моя группа"} {
+	for _, want := range []string{"Прямые EU", "Обходы", "AUTO", "Каскад", "Резерв", "ИИ прямые", "ИИ", "РФ", "Игры", "Telegram", "Подписки", "Login", "SSO", "OLCRTC", "Tailscale", "Моя группа"} {
 		if !strings.Contains(","+names+",", ","+want+",") {
 			t.Errorf("group %q missing in %s", want, names)
 		}
@@ -114,8 +115,35 @@ func TestBuildRouting(t *testing.T) {
 	if strings.Contains(","+names+",", ",EU,") {
 		t.Errorf("old group EU kept: %s", names)
 	}
-	if g := groupByName(v, "Быстрые"); g["timeout"] != 800 {
-		t.Errorf("Быстрые timeout = %v", g["timeout"])
+	// NPM-44: AUTO takes the leaf groups directly, the direct ones count only
+	// within FastMS, every fallback switches after two failed connections
+	if strings.Contains(","+names+",", ",Быстрые,") {
+		t.Errorf("old group Быстрые kept: %s", names)
+	}
+	if g := groupByName(v, "AUTO"); !equalAny(g["proxies"], "Прямые EU", "Прямые мир", "Обходы", "Каскад") || g["interval"] != 120 {
+		t.Errorf("AUTO = %v", g)
+	}
+	if g := groupByName(v, "Прямые EU"); g["timeout"] != 800 || g["interval"] != 600 {
+		t.Errorf("Прямые EU = %v", g)
+	}
+	for _, name := range []string{"Прямые EU", "Обходы", "RU", "Каскад", "AUTO", "ИИ", "РФ", "Игры", "Telegram", "Подписки", "Login"} {
+		if g := groupByName(v, name); g["type"] != "fallback" || g["max-failed-times"] != 2 {
+			t.Errorf("%s: type %v, max-failed-times %v", name, g["type"], g["max-failed-times"])
+		}
+	}
+	for name, want := range map[string][]string{
+		"Login":    {"DIRECT", "Обходы", "Каскад"},
+		"Игры":     {"DIRECT", "Обходы", "AUTO"},
+		"РФ":       {"DIRECT", "RU", "Обходы", "AUTO"},
+		"Telegram": {"Обходы", "Каскад", "Прямые EU"},
+		"Подписки": {"DIRECT", "Обходы", "Каскад"},
+	} {
+		if g := groupByName(v, name); !equalAny(g["proxies"], want...) {
+			t.Errorf("%s proxies = %v, want %v", name, g["proxies"], want)
+		}
+	}
+	if g := groupByName(v, "Login"); g["interval"] != 60 || g["url"] != "https://login.example.org/health" {
+		t.Errorf("Login = %v", g)
 	}
 	// the RU check address configured before is kept
 	if g := groupByName(v, "RU"); g["url"] != "https://ya.ru" {
@@ -148,11 +176,24 @@ func TestBuildRouting(t *testing.T) {
 	if _, ok := pp["CHAIN"].(map[string]any)["override"].(map[string]any)["dialer-proxy"]; !ok {
 		t.Error("CHAIN without dialer-proxy")
 	}
-	if pp["ROUTER"].(map[string]any)["url"] != "https://sub.example/secret-token" {
+	router := pp["ROUTER"].(map[string]any)
+	if router["url"] != "https://sub.example/secret-token" {
 		t.Error("ROUTER changed")
 	}
+	// NPM-44: the subscription downloads through its own group and is checked
+	// every 15 minutes; file providers download nothing
+	if router["proxy"] != "Подписки" || router["health-check"].(map[string]any)["interval"] != 900 {
+		t.Errorf("ROUTER proxy = %v, health-check = %v", router["proxy"], router["health-check"])
+	}
+	if _, ok := pp["BACKUP"].(map[string]any)["proxy"]; ok {
+		t.Error("file provider got a proxy")
+	}
+	if ai["health-check"].(map[string]any)["interval"] != 900 {
+		t.Errorf("AI health-check interval = %v", ai["health-check"].(map[string]any)["interval"])
+	}
 	rules := v["rules"].([]any)
-	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DOMAIN,login.example.org,Login", "DOMAIN,sso.example.org,SSO", "MATCH,Остальное"}
+	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DOMAIN,login.example.org,Login", "DOMAIN,sso.example.org,SSO",
+		"GEOSITE,telegram,Telegram", "GEOIP,telegram,Telegram,no-resolve", "MATCH,Остальное"}
 	if len(rules) != len(want) {
 		t.Fatalf("rules = %v", rules)
 	}
@@ -169,6 +210,49 @@ func TestBuildRouting(t *testing.T) {
 	}
 	if string(again) != string(out) {
 		t.Error("second build differs from the first")
+	}
+}
+
+func equalAny(v any, want ...string) bool {
+	l, ok := v.([]any)
+	if !ok || len(l) != len(want) {
+		return false
+	}
+	for i := range want {
+		if l[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Without the Telegram group its rules go and the user's ones apply again;
+// a proxy or a longer interval the user set on a provider stays (NPM-44).
+func TestBuildRoutingTelegramOffKeepsUserProvider(t *testing.T) {
+	s := defaultRouting()
+	on, err := buildRouting([]byte(routingFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Telegram = false
+	user := strings.Replace(string(on), "proxy: Подписки", "proxy: DIRECT", 1)
+	user = strings.Replace(user, "interval: 900", "interval: 3600", 1)
+	out, err := buildRouting([]byte(user), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := routingDoc(t, out)
+	if groupByName(v, "Telegram") != nil {
+		t.Error("Telegram group kept")
+	}
+	for _, r := range v["rules"].([]any) {
+		if strings.HasSuffix(r.(string), ",Telegram") || strings.Contains(r.(string), ",Telegram,") {
+			t.Errorf("Telegram rule kept: %v", r)
+		}
+	}
+	router := v["proxy-providers"].(map[string]any)["ROUTER"].(map[string]any)
+	if router["proxy"] != "DIRECT" || router["health-check"].(map[string]any)["interval"] != 3600 {
+		t.Errorf("user's ROUTER settings changed: proxy %v, health-check %v", router["proxy"], router["health-check"])
 	}
 }
 
@@ -258,7 +342,7 @@ func TestSanitizeValidator(t *testing.T) {
 	}
 }
 
-// ROUTING_LIVE=<config.yaml> ROUTING_OUT=<file> go test -run TestRoutingLive
+// ROUTING_LIVE=<config.yaml> ROUTING_OUT=<file> [ROUTING_SETTINGS=<routing.json>] go test -run TestRoutingLive
 // builds the block for a real config (kept out of the repository).
 func TestRoutingLive(t *testing.T) {
 	in, outPath := os.Getenv("ROUTING_LIVE"), os.Getenv("ROUTING_OUT")
@@ -270,8 +354,21 @@ func TestRoutingLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := defaultRouting()
+	// ROUTING_SETTINGS=<routing.json> takes the router's own settings
+	if p := os.Getenv("ROUTING_SETTINGS"); p != "" {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &s); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if b := os.Getenv("ROUTING_BASE"); b != "" {
 		s.Base = b
+	}
+	if err := s.normalize(); err != nil {
+		t.Fatal(err)
 	}
 	out, err := buildRouting(body, s)
 	if err != nil {
@@ -308,7 +405,7 @@ func TestBuildRoutingAddsAdaptive(t *testing.T) {
 	}
 	pp := routingDoc(t, out)["proxy-providers"].(map[string]any)
 	hc := pp["SUB"].(map[string]any)["health-check"].(map[string]any)
-	if hc["enable"] != true || hc["lazy"] != false || hc["interval"] != 300 {
+	if hc["enable"] != true || hc["lazy"] != false || hc["interval"] != 900 {
 		t.Errorf("SUB health-check = %v", hc)
 	}
 	ad, ok := hc["adaptive"].(map[string]any)
