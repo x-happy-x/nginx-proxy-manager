@@ -14,7 +14,7 @@ import { lastDelay } from "./shared";
  */
 
 /** Groups the manager generates (backend/manager/routing.go routingManaged). */
-export const ROUTING_MANAGED = new Set(["Прямые EU", "Прямые мир", "Обходы", "RU", "Каскад", "Резерв", "Быстрые", "AUTO", "ИИ прямые", "ИИ обходы", "ALL", "ИИ", "РФ", "Игры", "Заблокированные сервисы", "Остальное", "Белые списки", "QUIC", "GLOBAL"]);
+export const ROUTING_MANAGED = new Set(["Прямые EU", "Прямые мир", "Обходы", "RU", "Каскад", "Резерв", "Быстрые", "AUTO", "ИИ прямые", "ИИ обходы", "ALL", "ИИ", "РФ", "Игры", "Заблокированные сервисы", "Остальное", "Белые списки", "QUIC", "GLOBAL", "Telegram", "Подписки"]);
 
 const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*");
 export const wordsMatcher = (words: string[]) => (words.length ? new RegExp(`(${words.map(esc).join("|")})`, "i") : null);
@@ -123,6 +123,14 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
   return (
     <div className="rt-flow">
       <Row icon="globe" title="Всё остальное" sub="AUTO · заблокированные, остальное, GLOBAL" now={nowText(c, "AUTO")}>
+        {!fast?.all ? (
+          // NPM-44: AUTO takes the leaf groups directly
+          <Steps
+            c={c}
+            group="AUTO"
+            sub={(n) => (n === "Каскад" ? "⛓ через обход" : n.startsWith("Прямые") ? `${stat(c, n)} · до ${s.fast_ms} мс` : stat(c, n))}
+          />
+        ) : null}
         {fast?.all ? (
           <div className="rt-box">
             <span className="rt-box-l">
@@ -136,7 +144,7 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
             ))}
           </div>
         ) : null}
-        {(auto?.all || [])
+        {(fast?.all ? auto?.all || [] : [])
           .filter((n) => n !== "Быстрые")
           .map((name, i) => (
             <span key={name} className="rt-step">
@@ -149,7 +157,7 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
         <Steps c={c} group="ИИ" sub={(n) => (n === "Каскад" ? "⛓ через обход" : stat(c, n))} />
       </Row>
       <Row icon="home" title="РФ" sub=".ru, .рф, GeoIP RU · кроме белых списков" now={nowText(c, "РФ")}>
-        <Steps c={c} group="РФ" sub={(n) => (n === "DIRECT" ? loc("РФ") || "проверка" : n === "RU" ? stat(c, "RU") : "любой")} />
+        <Steps c={c} group="РФ" sub={(n) => (n === "DIRECT" ? loc("РФ") || "проверка" : n === "RU" || n === "Обходы" ? stat(c, n) : "любой")} />
       </Row>
       <Row icon="list" title="Белые списки" sub="ru_whitelist_domains" now={pick("Белые списки") === "DIRECT" ? "всегда напрямую" : nowText(c, "Белые списки")}>
         <Node n="✓" title={pick("Белые списки") === "DIRECT" ? "Напрямую" : pick("Белые списки") || "—"} sub="выбрано" cur />
@@ -167,13 +175,29 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
             </>
           }
         >
-          <Steps c={c} group={a.name} sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : "любой")} />
+          <Steps c={c} group={a.name} sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : n === "Обходы" ? stat(c, n) : n === "Каскад" ? "⛓ через обход" : "любой")} />
         </Row>
       ))}
-      <Row icon="layers" title="Игры" sub="ручной выбор" now="выбрано вручную">
-        <Node n="✓" title={pick("Игры") === "DIRECT" ? "Напрямую" : pick("Игры") || "—"} sub="выбрано" cur />
-        <span className="rt-side">{(c.proxies["Игры"]?.all || []).filter((n) => n !== pick("Игры")).slice(0, 5).join(" · ")}</span>
-      </Row>
+      {c.proxies.Telegram ? (
+        <Row icon="inbox" title="Telegram" sub="GeoSite и GeoIP telegram · сначала обходы" now={nowText(c, "Telegram")}>
+          <Steps c={c} group="Telegram" sub={(n) => (n === "Каскад" ? "⛓ через обход" : stat(c, n))} />
+        </Row>
+      ) : null}
+      {c.proxies["Игры"]?.type === "Selector" ? (
+        <Row icon="layers" title="Игры" sub="ручной выбор" now="выбрано вручную">
+          <Node n="✓" title={pick("Игры") === "DIRECT" ? "Напрямую" : pick("Игры") || "—"} sub="выбрано" cur />
+          <span className="rt-side">{(c.proxies["Игры"]?.all || []).filter((n) => n !== pick("Игры")).slice(0, 5).join(" · ")}</span>
+        </Row>
+      ) : (
+        <Row icon="layers" title="Игры" sub="напрямую, а в режиме белых списков — через обходы" now={nowText(c, "Игры")}>
+          <Steps c={c} group="Игры" sub={(n) => (n === "DIRECT" ? "напрямую" : n === "AUTO" ? "любой" : stat(c, n))} />
+        </Row>
+      )}
+      {c.proxies["Подписки"] ? (
+        <Row icon="download" title="Обновление подписок" sub="скачиваются своим путём, не через AUTO" now={nowText(c, "Подписки")}>
+          <Steps c={c} group="Подписки" sub={(n) => (n === "DIRECT" ? "напрямую" : n === "Каскад" ? "⛓ через обход" : stat(c, n))} />
+        </Row>
+      ) : null}
       <div className="rt-legend">
         <span>
           <i className="rt-lg-cur" />
@@ -509,6 +533,12 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
               </button>
               <span className="rt-hint">Например, сервер управления tailnet и его вход. Для каждого — своя группа «напрямую → RU → любой» с проверкой раз в 2 минуты и правило для домена. Хранится на роутере, не в коде.</span>
             </div>
+            <Switch
+              checked={s.telegram}
+              onChange={(v) => set("telegram", v)}
+              label="Своя группа для Telegram"
+              hint="Сначала обходы, потом каскад и прямые серверы EU: обходы переживают режим белых списков. Без группы Telegram идёт по общим правилам."
+            />
             <Switch checked={s.cascade} onChange={(v) => set("cascade", v)} label="Каскад через обходы" hint="Если зарубежный сервер напрямую недоступен, соединение к нему идёт через обход. Последний вариант: тратит трафик обхода, задержка примерно вдвое больше." />
             <Switch checked={s.ai_service_check} onChange={(v) => set("ai_service_check", v)} label="Проверять узлы для ИИ" hint="Страна выхода по Cloudflare и ответ OpenAI API; узел из неподходящей страны не выбирается." />
           </div>

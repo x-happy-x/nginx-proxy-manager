@@ -44,6 +44,9 @@ type routingSettings struct {
 	// the base provider when it has none — a config that came with the
 	// original XKeen (NPM-42). An existing block is never changed.
 	BaseAdaptive bool `json:"base_adaptive"`
+	// Telegram gets its own group, bypass servers first: they survive the
+	// whitelist mode of the uplink (NPM-44).
+	Telegram bool `json:"telegram"`
 }
 
 type accessCheck struct {
@@ -66,6 +69,7 @@ func defaultRouting() routingSettings {
 		RUCheck:      "https://habr.com/ru/feed/",
 		Access:       []accessCheck{},
 		BaseAdaptive: true,
+		Telegram:     true,
 		Cascade:      true,
 		AIServiceOK:  true,
 	}
@@ -76,7 +80,7 @@ var routingManaged = map[string]bool{
 	"Прямые EU": true, "Прямые мир": true, "Обходы": true, "RU": true, "Каскад": true, "Резерв": true,
 	"Быстрые": true, "AUTO": true, "ИИ прямые": true, "ИИ обходы": true, "ALL": true, "ИИ": true, "РФ": true,
 	"Игры": true, "Заблокированные сервисы": true, "Остальное": true,
-	"Белые списки": true, "QUIC": true, "GLOBAL": true,
+	"Белые списки": true, "QUIC": true, "GLOBAL": true, "Telegram": true, "Подписки": true,
 	// replaced by the groups above (NPM-33)
 	"EU": true, "Без белых списков": true,
 }
@@ -86,6 +90,8 @@ const (
 	routingAIProvider    = "AI"
 	routingCheck         = "https://www.gstatic.com/generate_204"
 	routingCheck2        = "https://cp.cloudflare.com/generate_204"
+	routingTelegramCheck = "https://api.telegram.org/"
+	routingSubs          = "Подписки"
 	routingMarker        = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
 )
 
@@ -227,6 +233,26 @@ func fallback(name string, extra m) m {
 	return g
 }
 
+// Timing (NPM-44). A check of a group tests every member, so groups over a
+// whole subscription are checked rarely; the switch away from a dead node comes
+// from max-failed-times: two failed connections trigger a check at once. Small
+// groups of groups are cheap to check and are checked often.
+func leafGroup(name string, timeout int, extra m) m {
+	g := fallback(name, m{"interval": 600, "timeout": timeout, "max-failed-times": 2, "lazy": false})
+	for k, v := range extra {
+		g[k] = v
+	}
+	return g
+}
+
+func pathGroup(name string, proxies []any, extra m) m {
+	g := fallback(name, m{"proxies": proxies, "interval": 120, "timeout": 5000, "max-failed-times": 2, "lazy": false})
+	for k, v := range extra {
+		g[k] = v
+	}
+	return g
+}
+
 // routingGroups returns the generated groups, in order: base, automatic,
 // then (after `between`, the preserved groups) the rule groups.
 func routingGroups(s routingSettings, reserve []string, ruURL string, between []string, hasOLC, hasTS bool) (head, tail []m) {
@@ -244,30 +270,32 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		return strings.Join(out, "|")
 	}
 	base := []any{s.Base}
+	// Direct servers count only while they answer within FastMS; bypass ones
+	// are slower by nature (600-1000 ms in the whitelist mode).
 	head = append(head,
-		fallback("Прямые EU", m{"use": base, "filter": flagsRE(s.EU), "exclude-filter": or(bypass, junk)}),
-		fallback("Прямые мир", m{"use": base, "exclude-filter": or(bypass, junk, flagsRE(s.Never), flagsRE(s.EU))}),
-		fallback("Обходы", m{"use": base, "filter": bypass, "exclude-filter": junk}),
-		fallback("RU", m{"use": base, "filter": flag("RU"), "exclude-filter": or(bypass, junk), "url": ruURL, "expected-status": "200"}),
+		leafGroup("Прямые EU", s.FastMS, m{"use": base, "filter": flagsRE(s.EU), "exclude-filter": or(bypass, junk)}),
+		leafGroup("Прямые мир", s.FastMS, m{"use": base, "exclude-filter": or(bypass, junk, flagsRE(s.Never), flagsRE(s.EU))}),
+		leafGroup("Обходы", 4000, m{"use": base, "filter": bypass, "exclude-filter": junk}),
+		leafGroup("RU", 3000, m{"use": base, "filter": flag("RU"), "exclude-filter": or(bypass, junk), "url": ruURL, "expected-status": "200"}),
 	)
 	if junk == "" {
 		delete(head[2], "exclude-filter")
 	}
+	cascade := []any{}
 	if s.Cascade {
-		head = append(head, fallback("Каскад", m{"use": []any{routingChainProvider}, "interval": 600, "timeout": 8000, "lazy": true}))
+		cascade = []any{"Каскад"}
+		head = append(head, leafGroup("Каскад", 8000, m{"use": []any{routingChainProvider}, "lazy": true}))
 	}
 	if len(reserve) > 0 {
 		head = append(head, m{"name": "Резерв", "type": "select", "use": toAny(reserve)})
 	}
-	last := []any{"Быстрые", "Обходы"}
-	if s.Cascade {
-		last = append(last, "Каскад")
-	}
+	// AUTO takes the leaf groups directly: one level less to go stale (NPM-44).
+	// It checks through the node each leaf picked, so a leaf without a fast
+	// direct server drops out when that node does not answer.
 	head = append(head,
-		fallback("Быстрые", m{"proxies": []any{"Прямые EU", "Прямые мир", "Обходы"}, "health-check-urls": []any{routingCheck2}, "timeout": s.FastMS, "lazy": false}),
-		fallback("AUTO", m{"proxies": last, "health-check-urls": []any{routingCheck2}, "timeout": 5000, "lazy": false}),
-		fallback("ИИ прямые", m{"use": []any{routingAIProvider}, "exclude-filter": bypass, "interval": 600}),
-		fallback("ИИ обходы", m{"use": []any{routingAIProvider}, "filter": bypass, "interval": 600}),
+		pathGroup("AUTO", append([]any{"Прямые EU", "Прямые мир", "Обходы"}, cascade...), m{"health-check-urls": []any{routingCheck2}}),
+		leafGroup("ИИ прямые", 5000, m{"use": []any{routingAIProvider}, "exclude-filter": bypass}),
+		leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}, "filter": bypass}),
 	)
 	all := []any{"AUTO", "Прямые EU", "Прямые мир", "Обходы", "RU"}
 	if s.Cascade {
@@ -278,10 +306,7 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	}
 	head = append(head, m{"name": "ALL", "type": "select", "proxies": append(all, "DIRECT"), "use": base})
 
-	ai := []any{"ИИ прямые", "ИИ обходы"}
-	if s.Cascade {
-		ai = append(ai, "Каскад")
-	}
+	ai := append([]any{"ИИ прямые", "ИИ обходы"}, cascade...)
 	extras := []any{}
 	if hasOLC {
 		extras = append(extras, "OLCRTC")
@@ -293,25 +318,35 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		out := append([]any{}, first...)
 		return out
 	}
-	cascade := []any{}
-	if s.Cascade {
-		cascade = []any{"Каскад"}
-	}
 	blocked := pick("AUTO", "Прямые EU", "Прямые мир", "Обходы")
 	blocked = append(append(append(blocked, cascade...), "ALL"), extras...)
 	tail = append(tail,
-		fallback("ИИ", m{"proxies": ai, "timeout": 5000}),
-		fallback("РФ", m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": s.RUCheck, "expected-status": "200-399", "timeout": 5000}),
-		m{"name": "Игры", "type": "select", "proxies": []any{"DIRECT", "RU", "AUTO", "Прямые EU", "ALL", "REJECT"}},
+		pathGroup("ИИ", ai, nil),
+		// bypass servers exit in Russian clouds: RU sites outside the whitelist
+		// open through them without a trip abroad
+		pathGroup("РФ", []any{"DIRECT", "RU", "Обходы", "AUTO"}, m{"url": s.RUCheck, "expected-status": "200-399"}),
+		// direct while the uplink is open; the gstatic check fails in the
+		// whitelist mode, and direct UDP is closed there anyway
+		pathGroup("Игры", []any{"DIRECT", "Обходы", "AUTO"}, nil),
+	)
+	if s.Telegram {
+		tail = append(tail, pathGroup("Telegram", append(append([]any{"Обходы"}, cascade...), "Прямые EU"), m{"url": routingTelegramCheck, "expected-status": "200-399"}))
+	}
+	tail = append(tail,
 		m{"name": "Заблокированные сервисы", "type": "select", "proxies": append(append([]any{}, blocked...), "DIRECT", "REJECT")},
 		m{"name": "Остальное", "type": "select", "proxies": append(append([]any{"AUTO", "DIRECT", "Прямые EU", "Прямые мир", "Обходы", "ALL"}, extras...), "REJECT")},
 		m{"name": "Белые списки", "type": "select", "proxies": []any{"DIRECT", "AUTO", "Обходы", "ALL", "REJECT"}},
 		m{"name": "QUIC", "type": "select", "proxies": []any{"REJECT", "DIRECT", "AUTO"}},
 		m{"name": "GLOBAL", "type": "select", "proxies": append(append([]any{}, blocked...), "DIRECT", "REJECT")},
 	)
-	// addresses that must always open: direct, then a RU server, then any
+	// Subscriptions download through their own path: direct, then bypass, so
+	// an update never waits on the nodes it is meant to replace (NPM-44).
+	tail = append(tail, pathGroup(routingSubs, append([]any{"DIRECT", "Обходы"}, cascade...), m{"interval": 600}))
+	// Addresses that must always open: direct, then bypass servers. RU servers
+	// and AUTO share the entry points of the foreign ones and fall with them
+	// (NPM-44).
 	for _, a := range s.Access {
-		tail = append(tail, fallback(a.Name, m{"proxies": []any{"DIRECT", "RU", "AUTO"}, "url": a.URL, "expected-status": "200-399", "interval": 120, "timeout": 5000, "lazy": false}))
+		tail = append(tail, pathGroup(a.Name, append([]any{"DIRECT", "Обходы"}, cascade...), m{"url": a.URL, "expected-status": "200-399", "interval": 60}))
 	}
 	_ = between
 	return head, tail
@@ -326,7 +361,7 @@ func toAny(in []string) []any {
 }
 
 // Key order for generated mappings, so the YAML reads like a hand-written one.
-var routingKeyOrder = []string{"name", "type", "proxies", "use", "filter", "exclude-filter", "url", "health-check-urls", "expected-status", "interval", "timeout", "lazy"}
+var routingKeyOrder = []string{"name", "type", "proxies", "use", "filter", "exclude-filter", "url", "health-check-urls", "expected-status", "interval", "timeout", "max-failed-times", "lazy"}
 
 func orderedNode(v any) *yaml.Node {
 	switch t := v.(type) {
@@ -398,7 +433,7 @@ func providerNode(base *yaml.Node, kind string, s routingSettings) (*yaml.Node, 
 		junk = wordsRE(s.Junk)
 	}
 	p := m{"type": "file", "path": path, "interval": 3600, "filter": flagsRE(s.AI)}
-	hc := m{"enable": true, "url": routingCheck, "expected-status": "204", "interval": 600}
+	hc := m{"enable": true, "url": routingCheck, "expected-status": "204", "interval": routingProviderInterval}
 	switch kind {
 	case routingChainProvider:
 		ex := bypass
@@ -426,7 +461,6 @@ func providerNode(base *yaml.Node, kind string, s routingSettings) (*yaml.Node, 
 		p["override"] = m{"additional-prefix": "ИИ | "}
 		hc["lazy"] = false
 		hc["timeout"] = 5000
-		hc["interval"] = 300
 	}
 	node := orderedNode(p)
 	hcNode := orderedNode(hc)
@@ -537,6 +571,35 @@ func ensureAdaptive(provider *yaml.Node) {
 	yamlSet(hc, "adaptive", ad.Content[0])
 }
 
+// A full check of a subscription took over 5 minutes with its 300 s interval:
+// the nodes were checked without a pause, and the bypass servers dropped
+// connections while it ran (NPM-44). Groups react to failures on their own.
+const routingProviderInterval = 900
+
+// tuneProviders makes the subscriptions download through the «Подписки» group
+// and checks the base one no more often than routingProviderInterval. A proxy
+// or a longer interval the user set stays.
+func tuneProviders(providers *yaml.Node, base string) {
+	for i := 0; i+1 < len(providers.Content); i += 2 {
+		name, p := providers.Content[i].Value, providers.Content[i+1]
+		if p.Kind != yaml.MappingNode || name == routingAIProvider || name == routingChainProvider {
+			continue
+		}
+		if scalar(mapGet(p, "type")) == "http" && mapGet(p, "proxy") == nil {
+			yamlSet(p, "proxy", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: routingSubs})
+		}
+		if name != base {
+			continue
+		}
+		if hc := mapGet(p, "health-check"); hc != nil && hc.Kind == yaml.MappingNode {
+			var iv int
+			if n := mapGet(hc, "interval"); n == nil || n.Decode(&iv) != nil || iv < routingProviderInterval {
+				yamlSet(hc, "interval", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: fmt.Sprint(routingProviderInterval)})
+			}
+		}
+	}
+}
+
 // buildRouting returns config.yaml with the routing block regenerated.
 func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	doc, root, err := yamlRoot(original)
@@ -558,6 +621,7 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	if s.BaseAdaptive {
 		ensureAdaptive(base)
 	}
+	tuneProviders(providers, s.Base)
 
 	// providers: AI always, CHAIN with the cascade
 	setKey := func(parent *yaml.Node, key string, value *yaml.Node) {
@@ -650,7 +714,8 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	}
 	yamlSet(root, "proxy-groups", seq)
 
-	// rules: one per checked address, right after the private-network one
+	// rules: one per checked address, right after the private-network one,
+	// then Telegram's own
 	hosts := map[string]bool{}
 	for _, a := range s.Access {
 		hosts[a.Host] = true
@@ -661,6 +726,9 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 		at := -1
 		for _, r := range rules.Content {
 			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && (strings.EqualFold(parts[0], "DOMAIN") || strings.EqualFold(parts[0], "DOMAIN-SUFFIX")) && hosts[strings.ToLower(strings.TrimSpace(parts[1]))] {
+				continue
+			}
+			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && strings.TrimSpace(parts[2]) == "Telegram" && strings.EqualFold(strings.TrimSpace(parts[1]), "telegram") {
 				continue
 			}
 			out = append(out, r)
@@ -678,6 +746,11 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 				n.HeadComment = "Проверяемые адреса: свои группы с проверкой (HomeNet, «Маршрутизация»)"
 			}
 			add = append(add, n)
+		}
+		if s.Telegram {
+			n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "GEOSITE,telegram,Telegram"}
+			n.HeadComment = "Telegram: своя группа, сначала обходы (HomeNet, «Маршрутизация»)"
+			add = append(add, n, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "GEOIP,telegram,Telegram,no-resolve"})
 		}
 		rules.Content = append(append(append([]*yaml.Node{}, out[:at]...), add...), out[at:]...)
 	}
