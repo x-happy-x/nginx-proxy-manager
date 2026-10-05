@@ -192,7 +192,7 @@ func TestBuildRouting(t *testing.T) {
 		t.Errorf("AI health-check interval = %v", ai["health-check"].(map[string]any)["interval"])
 	}
 	rules := v["rules"].([]any)
-	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DOMAIN,login.example.org,Login", "DOMAIN,sso.example.org,SSO",
+	want := []any{"DOMAIN-SUFFIX,egovm.ru,DIRECT", "GEOIP,private,DIRECT,no-resolve", "DST-PORT,53,HomeNet DNS", "DOMAIN,login.example.org,Login", "DOMAIN,sso.example.org,SSO",
 		"GEOSITE,telegram,Telegram", "GEOIP,telegram,Telegram,no-resolve", "MATCH,Остальное"}
 	if len(rules) != len(want) {
 		t.Fatalf("rules = %v", rules)
@@ -224,6 +224,34 @@ func equalAny(v any, want ...string) bool {
 		}
 	}
 	return true
+}
+
+// NPM-46: the dns outbound comes first in proxies, once, and goes with the
+// interception off; the user's proxies stay.
+func TestBuildRoutingDNSIntercept(t *testing.T) {
+	s := defaultRouting()
+	out, err := buildRouting([]byte(routingFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := routingDoc(t, out)["proxies"].([]any)
+	if len(px) != 2 || px[0].(map[string]any)["name"] != "HomeNet DNS" || px[0].(map[string]any)["type"] != "dns" || px[1].(map[string]any)["name"] != "TS-HOME" {
+		t.Fatalf("proxies = %v", px)
+	}
+	s.DNSIntercept = false
+	off, err := buildRouting(out, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := routingDoc(t, off)
+	if px := v["proxies"].([]any); len(px) != 1 || px[0].(map[string]any)["name"] != "TS-HOME" {
+		t.Errorf("proxies without interception = %v", px)
+	}
+	for _, r := range v["rules"].([]any) {
+		if strings.Contains(r.(string), "HomeNet DNS") {
+			t.Errorf("DNS rule kept: %v", r)
+		}
+	}
 }
 
 // Without the Telegram group its rules go and the user's ones apply again;
