@@ -534,6 +534,12 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
               <span className="rt-hint">Например, сервер управления tailnet и его вход. Для каждого — своя группа «напрямую → RU → любой» с проверкой раз в 2 минуты и правило для домена. Хранится на роутере, не в коде.</span>
             </div>
             <Switch
+              checked={s.dns_intercept}
+              onChange={(v) => set("dns_intercept", v)}
+              label="Перехват DNS устройств"
+              hint="Запросы устройств к публичным DNS (1.1.1.1, 8.8.8.8, Яндекс) отвечает DNS роутера, а не узел VPN: если узел умер, адреса всё равно находятся. Домашние DNS-серверы не затрагиваются."
+            />
+            <Switch
               checked={s.telegram}
               onChange={(v) => set("telegram", v)}
               label="Своя группа для Telegram"

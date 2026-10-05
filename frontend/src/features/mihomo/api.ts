@@ -183,6 +183,8 @@ export type RoutingSettings = {
   base_adaptive: boolean;
   /** Telegram's own group, bypass servers first (NPM-44). */
   telegram: boolean;
+  /** DNS queries of devices to public resolvers answered by mihomo's DNS (NPM-46). */
+  dns_intercept: boolean;
   cascade: boolean;
   ai_service_check: boolean;
 };

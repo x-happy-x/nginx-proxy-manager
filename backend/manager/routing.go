@@ -47,6 +47,10 @@ type routingSettings struct {
 	// Telegram gets its own group, bypass servers first: they survive the
 	// whitelist mode of the uplink (NPM-44).
 	Telegram bool `json:"telegram"`
+	// Devices that ask a public resolver (1.1.1.1, 8.8.8.8, Yandex) get the
+	// answer from mihomo's own DNS instead of a trip through a node: a dead
+	// node no longer takes the whole internet of such a device (NPM-46).
+	DNSIntercept bool `json:"dns_intercept"`
 }
 
 type accessCheck struct {
@@ -70,6 +74,7 @@ func defaultRouting() routingSettings {
 		Access:       []accessCheck{},
 		BaseAdaptive: true,
 		Telegram:     true,
+		DNSIntercept: true,
 		Cascade:      true,
 		AIServiceOK:  true,
 	}
@@ -92,6 +97,7 @@ const (
 	routingCheck2        = "https://cp.cloudflare.com/generate_204"
 	routingTelegramCheck = "https://api.telegram.org/"
 	routingSubs          = "Подписки"
+	routingDNS           = "HomeNet DNS"
 	routingMarker        = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
 )
 
@@ -714,6 +720,25 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	}
 	yamlSet(root, "proxy-groups", seq)
 
+	// the dns outbound: added with the interception, removed without it
+	proxies := yamlGet(root, "proxies")
+	if proxies == nil || proxies.Kind != yaml.SequenceNode {
+		proxies = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		if s.DNSIntercept {
+			yamlSet(root, "proxies", proxies)
+		}
+	}
+	keptProxies := []*yaml.Node{}
+	for _, px := range proxies.Content {
+		if scalar(mapGet(px, "name")) != routingDNS {
+			keptProxies = append(keptProxies, px)
+		}
+	}
+	if s.DNSIntercept {
+		keptProxies = append([]*yaml.Node{orderedNode(m{"name": routingDNS, "type": "dns"})}, keptProxies...)
+	}
+	proxies.Content = keptProxies
+
 	// rules: one per checked address, right after the private-network one,
 	// then Telegram's own
 	hosts := map[string]bool{}
@@ -731,6 +756,9 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && strings.TrimSpace(parts[2]) == "Telegram" && strings.EqualFold(strings.TrimSpace(parts[1]), "telegram") {
 				continue
 			}
+			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && strings.TrimSpace(parts[2]) == routingDNS {
+				continue
+			}
 			out = append(out, r)
 			if at < 0 && strings.HasPrefix(strings.ToUpper(r.Value), "GEOIP,PRIVATE,") {
 				at = len(out)
@@ -740,6 +768,12 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			at = 0
 		}
 		add := []*yaml.Node{}
+		// after the private-network rule, so a home DNS server keeps its queries
+		if s.DNSIntercept {
+			n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "DST-PORT,53," + routingDNS}
+			n.HeadComment = "DNS устройств к публичным серверам отвечает DNS mihomo (HomeNet, «Маршрутизация»)"
+			add = append(add, n)
+		}
 		for i, a := range s.Access {
 			n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "DOMAIN," + a.Host + "," + a.Name}
 			if i == 0 {
