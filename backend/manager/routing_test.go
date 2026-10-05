@@ -132,7 +132,7 @@ func TestBuildRouting(t *testing.T) {
 		}
 	}
 	for name, want := range map[string][]string{
-		"Login":    {"DIRECT", "Обходы", "Каскад"},
+		"Login":    {"DIRECT"},
 		"Игры":     {"DIRECT", "Обходы", "AUTO"},
 		"РФ":       {"DIRECT", "RU", "Обходы", "AUTO"},
 		"Telegram": {"Обходы", "Каскад", "Прямые EU"},
@@ -142,7 +142,8 @@ func TestBuildRouting(t *testing.T) {
 			t.Errorf("%s proxies = %v, want %v", name, g["proxies"], want)
 		}
 	}
-	if g := groupByName(v, "Login"); g["interval"] != 60 || g["url"] != "https://login.example.org/health" {
+	// every bypass and cascade node is checked by the address itself
+	if g := groupByName(v, "Login"); g["interval"] != 300 || g["url"] != "https://login.example.org/health" || !equalAny(g["use"], "ROUTER", "CHAIN") || !strings.HasSuffix(g["filter"].(string), "|⛓") {
 		t.Errorf("Login = %v", g)
 	}
 	// the RU check address configured before is kept

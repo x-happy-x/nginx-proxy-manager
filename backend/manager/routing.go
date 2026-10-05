@@ -348,11 +348,22 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	// Subscriptions download through their own path: direct, then bypass, so
 	// an update never waits on the nodes it is meant to replace (NPM-44).
 	tail = append(tail, pathGroup(routingSubs, append([]any{"DIRECT", "Обходы"}, cascade...), m{"interval": 600}))
-	// Addresses that must always open: direct, then bypass servers. RU servers
-	// and AUTO share the entry points of the foreign ones and fall with them
-	// (NPM-44).
+	// Addresses that must always open: direct, then every bypass node, then
+	// every cascade node, each checked by the address itself. A bypass node
+	// that reaches gstatic may not reach the address (on 06.10 one of ten
+	// reached the tailnet's servers), so the «Обходы» group's pick is no
+	// answer here (NPM-44). RU servers and AUTO share the entry points of the
+	// foreign ones and fall with them.
+	accessUse, accessFilter := []any{s.Base}, bypass
+	if s.Cascade {
+		accessUse, accessFilter = append(accessUse, routingChainProvider), bypass+"|⛓"
+	}
 	for _, a := range s.Access {
-		tail = append(tail, pathGroup(a.Name, append([]any{"DIRECT", "Обходы"}, cascade...), m{"url": a.URL, "expected-status": "200-399", "interval": 60}))
+		g := pathGroup(a.Name, []any{"DIRECT"}, m{"use": accessUse, "filter": accessFilter, "url": a.URL, "expected-status": "200-399", "interval": 300})
+		if junk != "" {
+			g["exclude-filter"] = junk
+		}
+		tail = append(tail, g)
 	}
 	_ = between
 	return head, tail

@@ -175,7 +175,21 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
             </>
           }
         >
-          <Steps c={c} group={a.name} sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : n === "Обходы" ? stat(c, n) : n === "Каскад" ? "⛓ через обход" : "любой")} />
+          {(c.proxies[a.name]?.all?.length || 0) > 4 ? (
+            // NPM-44: every bypass and cascade node, checked by this address
+            <>
+              <Node n={1} title="Напрямую" sub="напрямую" cur={c.proxies[a.name]?.now === "DIRECT"} />
+              <Cn />
+              <Node
+                n={2}
+                title="Узел обхода или каскада"
+                sub={c.proxies[a.name]?.now && c.proxies[a.name]?.now !== "DIRECT" ? c.proxies[a.name]!.now! : `${(c.proxies[a.name]?.all?.length || 1) - 1} узлов`}
+                cur={!!c.proxies[a.name]?.now && c.proxies[a.name]?.now !== "DIRECT"}
+              />
+            </>
+          ) : (
+            <Steps c={c} group={a.name} sub={(n) => (n === "DIRECT" ? "напрямую" : n === "RU" ? "🇷🇺" : n === "Обходы" ? stat(c, n) : n === "Каскад" ? "⛓ через обход" : "любой")} />
+          )}
         </Row>
       ))}
       {c.proxies.Telegram ? (
