@@ -240,7 +240,12 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
         </>
       ) : shownTab === "servers" ? (
         <>
-          <NodeControls prefs={prefs} />
+          <div className="toolbar">
+            <button type="button" className={`vn-chip mh-hide-chip${hideDead ? " is-on" : ""}`} aria-pressed={hideDead} onClick={() => prefs.setHideDead(!hideDead)}>
+              {hideDead ? <Icon name="check" size={13} /> : null}
+              Скрыть молчащие
+            </button>
+          </div>
           <Servers providers={providerList} prefs={prefs} />
         </>
       ) : shownTab === "tailscale" ? (
