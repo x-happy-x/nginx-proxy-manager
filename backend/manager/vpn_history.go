@@ -169,10 +169,15 @@ func (t *trafficCollector) observeGroups(now time.Time, px map[string]proxySnaps
 				continue
 			}
 		}
+		// the adaptive check admits nodes; the core's own flag is stale there
 		alive := 0
-		for _, x := range p.Proxies {
-			if x.Alive {
-				alive++
+		if p.Adaptive != nil {
+			alive = working(p.Adaptive)
+		} else {
+			for _, x := range p.Proxies {
+				if x.Alive {
+					alive++
+				}
 			}
 		}
 		at := now.Unix()
