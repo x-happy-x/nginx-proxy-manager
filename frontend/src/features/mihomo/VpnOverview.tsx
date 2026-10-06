@@ -147,6 +147,22 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
         last.end = p.t;
       } else out.push({ t: p.t, end: p.t, mode, n: 1 });
     });
+    // runs under ten minutes (a missed sample, a short flap) join the neighbour
+    for (let i = 0; i < out.length; i++) {
+      if (out.length > 1 && out[i].n < 10) {
+        const into = i > 0 ? out[i - 1] : out[i + 1];
+        into.n += out[i].n;
+        into.t = Math.min(into.t, out[i].t);
+        into.end = Math.max(into.end, out[i].end);
+        out.splice(i, 1);
+        i = Math.max(-1, i - 2);
+      } else if (i > 0 && out[i].mode === out[i - 1].mode) {
+        out[i - 1].n += out[i].n;
+        out[i - 1].end = out[i].end;
+        out.splice(i, 1);
+        i -= 1;
+      }
+    }
     return out;
   }, [day]);
   const mode: Mode = modes.length ? modes[modes.length - 1] : "unknown";
@@ -306,225 +322,260 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
     .map((x) => x.s);
   const current = list.find((s) => s.id === open);
 
+  const modeTone: Tone = mode === "normal" ? "ok" : mode === "whitelist" ? "warn" : mode === "offline" ? "bad" : "idle";
+  const selSeg = seg >= 0 && seg < strip.length ? seg : strip.length - 1;
+  const normalShare = day.length ? day.reduce((a, p) => a + p.normal, 0) / Math.max(1, day.reduce((a, p) => a + p.normal + p.whitelist + p.offline + p.unknown, 0)) : 0;
+  const whitelistMin = day.reduce((a, p) => a + p.whitelist, 0);
+  const tiles: Array<{ key: string; title: string; value: string; unit: string; note: ReactNode; pct: number; tone: Tone; onClick: () => void }> = [
+    {
+      key: "channel",
+      title: "Канал провайдера",
+      value: MODE_TEXT[mode][0].toUpperCase() + MODE_TEXT[mode].slice(1),
+      unit: since ? `с ${hhmm(since)}` : "",
+      pct: normalShare * 100,
+      tone: modeTone,
+      note: directProbes.length ? (
+        <span className="vn-probes" aria-label="Прямые проверки ядра">
+          {directProbes.map((p) => (
+            <span key={p.url} className={`vn-probe ${p.ok ? "is-ok" : "is-bad"}`} title={`${p.url} · ${p.allowed ? "из белого списка" : "зарубежный"}${p.error ? ` · ${p.error}` : ""}`}>
+              <i aria-hidden="true">{p.ok ? "✓" : "×"}</i>
+              {probeName(p.url)} {p.ok ? `${p.ms} мс` : FAIL_TEXT[p.fail || ""] || "нет ответа"}
+            </span>
+          ))}
+        </span>
+      ) : whitelistMin ? (
+        `белые списки за сутки — ${ago(whitelistMin * 60)}`
+      ) : (
+        "за сутки без ограничений"
+      ),
+      onClick: () => setSeg(strip.length - 1),
+    },
+    {
+      key: "nodes",
+      title: "VPN-узлы",
+      value: lastPoint ? number(lastPoint.working) : "—",
+      unit: lastPoint ? `из ${number(lastPoint.total)} живы` : "",
+      pct: lastPoint && lastPoint.total ? (lastPoint.working / lastPoint.total) * 100 : 0,
+      tone: vpnOK ? "ok" : "bad",
+      note: autoLeaf ? `сейчас ${autoLeaf.name === "DIRECT" ? "напрямую" : autoLeaf.name}${autoDelay && autoDelay > 0 ? ` · ${autoDelay} мс` : ""}` : "нет данных",
+      onClick: () => onNavigate("proxies"),
+    },
+    {
+      key: "services",
+      title: "Сервисы",
+      value: list.length ? String(working) : "—",
+      unit: list.length ? `из ${list.length} открываются` : "",
+      pct: list.length ? (working / list.length) * 100 : 0,
+      tone: !list.length ? "idle" : down.length ? "warn" : "ok",
+      note: !list.length ? "проверка ещё не прошла" : down.length ? `не открываются: ${down.map((s) => s.name).join(", ")}` : "все открываются",
+      onClick: () => onNavigate("vpnsvc"),
+    },
+    {
+      key: "bypass",
+      title: "Обходы за месяц",
+      value: (bypass.used / 1024 ** 3).toFixed(1).replace(".", ","),
+      unit: bypass.gb ? `из ${bypass.gb} ГБ` : "ГБ",
+      pct: bypass.gb ? Math.min(100, bypass.limitPct || 0) : 0,
+      tone: bypass.limitPct != null && bypass.limitPct >= 90 ? "bad" : bypass.limitPct != null && bypass.limitPct >= 75 ? "warn" : "ok",
+      note: bypass.gb ? "лимит обходов · что тратит →" : "лимит не задан · что тратит →",
+      onClick: () => {
+        location.hash = "#/traffic/bypass";
+      },
+    },
+  ];
+  const sel = strip[selSeg];
+  const axis = day.length ? [day[0].t, day[Math.floor(day.length / 3)].t, day[Math.floor((day.length * 2) / 3)].t] : [];
+
   return (
     <div className="stack vn">
-      <PageHeader
-        page="vpn"
-        actions={
-          <button className="btn btn-sm" disabled={!!busy} onClick={() => void check()}>
-            <Icon name="refresh" size={14} /> {busy === "all" ? "Проверяю…" : "Проверить всё"}
-          </button>
-        }
-      />
+      <PageHeader page="vpn" />
       {err ? <p className="vn-err">{err}</p> : null}
 
-      <section className={`vn-hero vn-hero-${hero.tone}`} aria-label="Состояние интернета">
-        <div className="vn-hero-main">
-          <span className="vn-hero-ic">
-            <Icon name={hero.icon} size={26} />
-          </span>
-          <div className="vn-hero-text">
-            <span className="vn-eyebrow">{hero.eyebrow}</span>
+      <section className={`vo-hero vo-${hero.tone}`} aria-label="Состояние интернета">
+        <div className="vo-hero-top">
+          <div className="vo-hero-text">
+            <span className="vo-eyebrow">
+              <i className="vo-pulse" aria-hidden="true" />
+              {hero.eyebrow}
+            </span>
             <h2>{hero.title}</h2>
             <p>{hero.text}</p>
           </div>
-        </div>
-        <div className="vn-layers">
-          <div className="vn-layer">
-            <i className={`vn-dot vn-${mode === "normal" ? "ok" : mode === "whitelist" ? "warn" : mode === "offline" ? "bad" : "idle"}`} />
-            <span>
-              <b>Канал провайдера</b>
-              <small>{mode === "whitelist" ? "напрямую — только белый список" : mode === "normal" ? "без ограничений" : mode === "offline" ? "нет связи" : "режим ещё определяется"}</small>
-              {directProbes.length ? (
-                <span className="vn-probes" aria-label="Прямые проверки ядра">
-                  {directProbes.map((p) => (
-                    <span key={p.url} className={`vn-probe ${p.ok ? "is-ok" : "is-bad"}`} title={`${p.url} · ${p.allowed ? "из белого списка" : "зарубежный"}${p.error ? ` · ${p.error}` : ""}`}>
-                      <i aria-hidden="true">{p.ok ? "✓" : "×"}</i>
-                      {probeName(p.url)} {p.ok ? `${p.ms} мс` : FAIL_TEXT[p.fail || ""] || "нет ответа"}
-                    </span>
-                  ))}
-                  {probedAt ? <small>напрямую, проверено в {hhmm(probedAt)}</small> : null}
-                </span>
-              ) : null}
-            </span>
-            <Pill tone={mode === "normal" ? "ok" : mode === "whitelist" ? "warn" : mode === "offline" ? "bad" : "idle"}>{MODE_TEXT[mode]}</Pill>
-          </div>
-          <div className="vn-layer">
-            <i className={`vn-dot vn-${vpnOK ? "ok" : "bad"}`} />
-            <span>
-              <b>VPN</b>
-              <small>
-                {lastPoint ? `${number(lastPoint.working)} из ${number(lastPoint.total)} узлов · ` : ""}
-                {autoLeaf ? `сейчас ${autoLeaf.name === "DIRECT" ? "напрямую" : autoLeaf.name}${autoDelay && autoDelay > 0 ? `, ${autoDelay} мс` : ""}` : "нет данных"}
-              </small>
-            </span>
-            <Pill tone={vpnOK ? "ok" : "bad"}>{vpnOK ? "работает" : "не отвечает"}</Pill>
-          </div>
-          <div className="vn-layer">
-            <i className={`vn-dot vn-${!list.length ? "idle" : down.length ? "bad" : "ok"}`} />
-            <span>
-              <b>Ваши сервисы</b>
-              <small>{!list.length ? "проверка ещё не прошла" : down.length ? `не открываются ${down.map((s) => s.name).join(", ")}` : "все открываются"}</small>
-            </span>
-            <Pill tone={!list.length ? "idle" : down.length ? "bad" : "ok"}>{list.length ? `${working} из ${list.length}` : "—"}</Pill>
+          <div className="vo-hero-actions">
+            <a className="btn" href="#/why">
+              Почему не открывается…
+            </a>
+            <button className="btn btn-primary" disabled={!!busy} onClick={() => void check()}>
+              <Icon name="refresh" size={14} /> {busy === "all" ? "Проверяю…" : "Проверить всё"}
+            </button>
           </div>
         </div>
-        {day.length ? (
-          <div className="vn-strip">
-            <div className="vn-strip-head">
-              <span>Режим канала за сутки</span>
+
+        <div className="vo-tiles">
+          {tiles.map((t) => (
+            <button key={t.key} type="button" className="vo-tile" onClick={t.onClick}>
+              <span className="vo-tile-title">{t.title}</span>
+              <span className="vo-tile-value">
+                <b>{t.value}</b>
+                <span>{t.unit}</span>
+              </span>
+              <span className="vo-tile-bar">
+                <span className={`vo-fill vo-fill-${t.tone}`} style={{ width: `${Math.max(t.pct ? 3 : 0, t.pct)}%` }} />
+              </span>
+              <span className="vo-tile-note">{t.note}</span>
+            </button>
+          ))}
+        </div>
+
+        {strip.length ? (
+          <div className="vo-strip">
+            <div className="vo-strip-head">
+              <span className="vo-tile-title">Канал провайдера за сутки</span>
               <span className="vn-legend">
-                <span><i className="vn-sq vn-m-normal" />обычный</span>
-                <span><i className="vn-sq vn-m-whitelist" />белый список</span>
-                <span><i className="vn-sq vn-m-offline" />без интернета</span>
+                <span>
+                  <i className="vn-sq vn-m-normal" />
+                  обычный
+                </span>
+                <span>
+                  <i className="vn-sq vn-m-whitelist" />
+                  белые списки
+                </span>
+                <span>
+                  <i className="vn-sq vn-m-offline" />
+                  без интернета
+                </span>
               </span>
             </div>
-            <div className="vn-strip-cells">
+            <div className="vo-segs">
               {strip.map((p, k) => (
                 <button
                   key={p.t}
                   type="button"
-                  className={`vn-m-${p.mode}${k === seg ? " is-sel" : ""}`}
-                  style={{ width: `${(p.n / day.length) * 100}%` }}
-                  aria-pressed={k === seg}
-                  aria-label={`${hhmm(p.t)}–${hhmm(p.end)}, ${MODE_TEXT[p.mode]}`}
-                  onClick={() => setSeg(k === seg ? -1 : k)}
+                  className={`vn-m-${p.mode}${k === selSeg ? " is-sel" : ""}`}
+                  style={{ flexGrow: p.n }}
+                  aria-pressed={k === selSeg}
+                  aria-label={`${hhmm(p.t)}–${k === strip.length - 1 ? "сейчас" : hhmm(p.end + 60)}, ${MODE_TEXT[p.mode]}`}
+                  onClick={() => setSeg(k)}
                 />
               ))}
             </div>
-            {strip[seg] ? (
-              <div className="vn-strip-sel">
+            <div className="vo-axis" aria-hidden="true">
+              {axis.map((t) => (
+                <span key={t}>{hhmm(t)}</span>
+              ))}
+              <span>сейчас {hhmm(day[day.length - 1].t)}</span>
+            </div>
+            {sel ? (
+              <div className="vo-strip-sel">
                 <b>
-                  {hhmm(strip[seg].t)}–{seg === strip.length - 1 ? "сейчас" : hhmm(strip[seg].end + 60)}
+                  {hhmm(sel.t)}–{selSeg === strip.length - 1 ? "сейчас" : hhmm(sel.end + 60)}
                 </b>
-                <Pill tone={strip[seg].mode === "normal" ? "ok" : strip[seg].mode === "whitelist" ? "warn" : strip[seg].mode === "offline" ? "bad" : "idle"}>{MODE_TEXT[strip[seg].mode]}</Pill>
+                <Pill tone={sel.mode === "normal" ? "ok" : sel.mode === "whitelist" ? "warn" : sel.mode === "offline" ? "bad" : "idle"}>{MODE_TEXT[sel.mode]}</Pill>
                 <span>
-                  {ago(strip[seg].n * 60)}
-                  {strip[seg].mode === "whitelist" ? " — прямые узлы молчали, работали обходы" : strip[seg].mode === "offline" ? " — канала не было" : ""}
+                  {ago(sel.n * 60)}
+                  {sel.mode === "whitelist" ? " — прямые узлы молчали, работали обходы" : sel.mode === "offline" ? " — канала не было" : sel.mode === "normal" ? " — без ограничений" : ""}
                 </span>
               </div>
             ) : null}
-            <div className="vn-strip-axis">
-              <span>{hhmm(day[0].t)}</span>
-              <span>{hhmm(day[Math.floor(day.length / 2)].t)}</span>
-              <span>сейчас</span>
-            </div>
           </div>
         ) : null}
       </section>
 
-      <Connectivity report={svc} onReport={setSvc} />
-
       <DayChart proxies={proxies} main={day} />
 
-      {issues.length ? (
-        <section aria-label="Требует внимания" className="vn-section">
-          <h3>Требует внимания</h3>
-          <div className="vn-issues">
-            {issues.map((it) => (
-              <div key={it.key} className="vn-issue">
-                <i className={`vn-dot vn-${it.tone}`} />
-                <span>
-                  <b>{it.title}</b>
-                  <small>{it.sub}</small>
-                </span>
-                {it.action}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section aria-label="Сервисы" className="vn-section">
-        <div className="vn-section-head">
-          <h3>
-            Чем пользуются дома <span>· проверка раз в 2 минуты через те же правила, что у устройств</span>
-          </h3>
-          <div className="vn-chips">
-            <button className="vn-chip" onClick={() => setEditing(true)} disabled={!svc}>
-              <Icon name="edit" size={13} /> Настроить список
-            </button>
-            <a className="vn-chip" href="#/vpnsvc" onClick={(e) => (e.preventDefault(), onNavigate("vpnsvc"))}>
-              Все {list.length} сервисов →
-            </a>
-          </div>
-        </div>
-        <div className="vn-grid">
-          {shown.map((s) => {
-            const t = tones[s.id];
-            const last = s.history[s.history.length - 1];
-            return (
-              <button key={s.id} className={`vn-card${t.tone === "bad" ? " is-bad" : ""}`} onClick={() => setOpen(s.id)}>
-                <span className="vn-card-top">
-                  <span className="vn-mono" aria-hidden="true">{s.name.slice(0, 2)}</span>
-                  <span className="vn-card-name" title={`${s.name} — ${s.what}`}>
-                    <b>{s.name}</b>
-                    <small>{s.what}</small>
-                  </span>
-                  <Pill tone={t.tone}>{t.text}</Pill>
-                </span>
-                <Bars s={s} slow={slow} />
-                <span className="vn-card-foot">
-                  <span className="truncate">{pathText(s)}</span>
-                  <span>{last?.ok ? `${last.ms} мс` : "—"}</span>
-                </span>
-              </button>
-            );
-          })}
-          {!list.length ? <p className="mh-muted">Первая проверка сервисов пройдёт через минуту после запуска HomeNet.</p> : null}
-        </div>
-      </section>
-
-      <Usage known={knownSites} onAdd={addSite} />
-
-      <div className="vn-row">
-        <section className="vn-flow" aria-label="Как идёт трафик">
+      <div className="vo-cols">
+        <section className="vo-panel vo-main" aria-label="Сервисы">
           <div className="vn-section-head">
-            <h3>Как сейчас идёт трафик</h3>
-            <a href="#/coreconfig/routing" onClick={(e) => (e.preventDefault(), onNavigate("coreconfig"))}>
-              Настройка
-            </a>
+            <h3>Чем пользуются дома</h3>
+            <div className="vn-chips">
+              <button className="vn-chip" onClick={() => setEditing(true)} disabled={!svc}>
+                <Icon name="edit" size={13} /> Настроить
+              </button>
+              <a className="vn-chip" href="#/vpnsvc" onClick={(e) => (e.preventDefault(), onNavigate("vpnsvc"))}>
+                Все {list.length} →
+              </a>
+            </div>
           </div>
-          <div className="vn-path">
-            {(proxies.AUTO?.all || []).map((name, i) => {
-              const g = proxies[name];
-              const l = leaf(name);
-              const d = l ? lastDelay(l, proxies.AUTO?.testUrl) : null;
-              const cur = usedGroups.includes(name);
-              const dead = d === 0;
+          <div className="vo-grid">
+            {shown.map((s) => {
+              const t = tones[s.id];
+              const last = s.history[s.history.length - 1];
               return (
-                <span key={name} className="vn-path-step">
-                  {i ? <span className="vn-arrow">→</span> : null}
-                  <span className={`vn-step${cur ? " is-cur" : dead ? " is-dead" : ""}`}>
-                    <b>
-                      {i + 1} · {name}
-                    </b>
-                    <small>{cur && l ? `${l.name}${d && d > 0 ? ` · ${d} мс` : ""}` : dead ? "не отвечает" : g?.all ? `${g.all.length} узлов` : ""}</small>
+                <button key={s.id} className={`vn-card${t.tone === "bad" ? " is-bad" : ""}`} onClick={() => setOpen(s.id)}>
+                  <span className="vn-card-top">
+                    <span className="vn-mono" aria-hidden="true">
+                      {s.name.slice(0, 2)}
+                    </span>
+                    <span className="vn-card-name" title={`${s.name} — ${pathText(s)}`}>
+                      <b>{s.name}</b>
+                      <small>{pathText(s)}</small>
+                    </span>
                   </span>
-                </span>
+                  <span className="vn-card-foot">
+                    <Pill tone={t.tone}>{t.text}</Pill>
+                    <span>{last?.ok ? `${last.ms} мс` : "—"}</span>
+                  </span>
+                </button>
               );
             })}
+            {!list.length ? <p className="mh-muted">Первая проверка сервисов пройдёт через минуту после запуска HomeNet.</p> : null}
           </div>
-          <p className="mh-muted">Следующий вариант берётся, когда предыдущий не отвечает. Прямые серверы быстрее и не тратят лимит обходов.</p>
         </section>
-        <section className="vn-limit" aria-label="Лимит обходов">
-          <h3>Лимит обходов</h3>
-          {bypass.gb ? (
-            <>
-              <div className="vn-big">
-                {(bypass.used / 1024 ** 3).toFixed(1).replace(".", ",")} <span>из {bypass.gb} ГБ</span>
+
+        <aside className="vo-side">
+          <section className="vo-panel" aria-label="Требует внимания">
+            <h3>Требует внимания</h3>
+            {issues.length ? (
+              <div className="vo-issues">
+                {issues.map((it) => (
+                  <div key={it.key} className="vo-issue">
+                    <i className={`vn-dot vn-${it.tone}`} />
+                    <span>
+                      <b>{it.title}</b>
+                      <small>{it.sub}</small>
+                      <span className="vo-issue-act">{it.action}</span>
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${Math.min(100, bypass.limitPct || 0)}%` }} />
-              </div>
-            </>
-          ) : (
-            <p className="mh-muted">Лимит не задан.</p>
-          )}
-          <a href="#/traffic/bypass">Что тратит обходы</a>
-        </section>
+            ) : (
+              <p className="mh-muted">Ничего — всё работает.</p>
+            )}
+          </section>
+          <section className="vo-panel" aria-label="Как идёт трафик">
+            <div className="vn-section-head">
+              <h3>Как идёт остальной трафик</h3>
+              <a href="#/vroute" onClick={(e) => (e.preventDefault(), onNavigate("vroute"))}>
+                Маршрутизация
+              </a>
+            </div>
+            <ol className="vo-path">
+              {(proxies.AUTO?.all || []).map((name, i) => {
+                const g = proxies[name];
+                const l = leaf(name);
+                const d = l ? lastDelay(l, proxies.AUTO?.testUrl) : null;
+                const cur = usedGroups.includes(name);
+                const dead = d === 0;
+                return (
+                  <li key={name} className={cur ? "is-cur" : dead ? "is-dead" : ""}>
+                    <span className="vo-path-no">{i + 1}</span>
+                    <span className="vn-card-name">
+                      <b>{name}</b>
+                      <small>{cur && l ? `${l.name}${d && d > 0 ? ` · ${d} мс` : ""}` : dead ? "не отвечает" : g?.all ? `${g.all.length} узлов` : ""}</small>
+                    </span>
+                    {cur ? <Pill tone="ok">сейчас</Pill> : null}
+                  </li>
+                );
+              })}
+            </ol>
+            <small className="mh-muted">Следующий вариант берётся, когда предыдущий не отвечает.</small>
+          </section>
+        </aside>
       </div>
 
+      <Connectivity report={svc} onReport={setSvc} />
+
+      <Usage known={knownSites} onAdd={addSite} />
       <Modal open={editing} onClose={() => setEditing(false)} size="lg" title="Чем пользуются дома" description="Свои сервисы, скрытые и порядок карточек">
         {editing && svc ? (
           <ServicesEditor
