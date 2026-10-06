@@ -105,8 +105,10 @@ const (
 	routingCheck2        = "https://cp.cloudflare.com/generate_204"
 	routingTelegramCheck = "https://api.telegram.org/"
 	routingSubs          = "Подписки"
-	routingDNS           = "HomeNet DNS"
-	routingMarker        = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
+	// the whitelist-mode probe: a Yandex address the whitelist keeps (NPM-52)
+	routingYandex204 = "api.browser.yandex.ru/generate_204"
+	routingDNS       = "HomeNet DNS"
+	routingMarker    = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
 )
 
 func routingPath() string { return filepath.Join(coreStateDir(), "routing.json") }
@@ -290,7 +292,7 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		leafGroup("Прямые EU", s.FastMS, m{"use": base, "filter": flagsRE(s.EU), "exclude-filter": or(bypass, junk)}),
 		leafGroup("Прямые мир", s.FastMS, m{"use": base, "exclude-filter": or(bypass, junk, flagsRE(s.Never), flagsRE(s.EU))}),
 		leafGroup("Обходы", 4000, m{"use": base, "filter": bypass, "exclude-filter": junk}),
-		leafGroup("RU", 3000, m{"use": base, "filter": flag("RU"), "exclude-filter": or(bypass, junk), "url": ruURL, "expected-status": "200"}),
+		leafGroup("RU", 3000, m{"use": base, "filter": flag("RU"), "exclude-filter": or(bypass, junk), "url": ruURL, "expected-status": "200-399"}),
 	)
 	if junk == "" {
 		delete(head[2], "exclude-filter")
@@ -602,6 +604,8 @@ network-key: uplink
 confirmations: 2
 concurrency: 4
 direct-allowed:
+  - url: https://api.browser.yandex.ru/generate_204
+    expected-status: "204"
   - url: https://ya.ru
     expected-status: 200-399
 direct-global:
@@ -670,6 +674,7 @@ func tuneProviders(providers *yaml.Node, base string) {
 		if name != base {
 			continue
 		}
+		yandexWhitelistProbe(mapGet(mapGet(p, "health-check"), "adaptive"))
 		if hc := mapGet(p, "health-check"); hc != nil && hc.Kind == yaml.MappingNode {
 			var iv int
 			if n := mapGet(hc, "interval"); n == nil || n.Decode(&iv) != nil || iv < routingProviderInterval {
@@ -677,6 +682,26 @@ func tuneProviders(providers *yaml.Node, base string) {
 			}
 		}
 	}
+}
+
+// yandexWhitelistProbe puts Yandex's generate_204 first among the probes that
+// tell the whitelist mode (NPM-52): one request, no redirect, no page; ya.ru
+// and whatever else is there stay as fallbacks (any one answering is enough).
+func yandexWhitelistProbe(adaptive *yaml.Node) {
+	if adaptive == nil || adaptive.Kind != yaml.MappingNode {
+		return
+	}
+	list := mapGet(adaptive, "direct-allowed")
+	if list == nil || list.Kind != yaml.SequenceNode {
+		return
+	}
+	for _, it := range list.Content {
+		if strings.Contains(scalar(mapGet(it, "url")), routingYandex204) {
+			return
+		}
+	}
+	probe := orderedNode(m{"url": "https://" + routingYandex204, "expected-status": "204"})
+	list.Content = append([]*yaml.Node{probe}, list.Content...)
 }
 
 // buildRouting returns config.yaml with the routing block regenerated.

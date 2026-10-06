@@ -540,3 +540,44 @@ func TestBuildRoutingMissingBase(t *testing.T) {
 		t.Errorf("missing base error = %v", err)
 	}
 }
+
+func TestYandexWhitelistProbeFirst(t *testing.T) {
+	cfg := []byte(`proxy-providers:
+  ROUTER:
+    type: http
+    url: https://example.test/sub
+    path: ./proxy-providers/router.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 900
+      adaptive:
+        enable: true
+        direct-allowed:
+          - url: https://ya.ru
+            expected-status: 200-399
+proxy-groups: []
+rules: []
+`)
+	s := defaultRouting()
+	s.Base = "ROUTER"
+	out, err := buildRouting(cfg, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(out)
+	y, ya := strings.Index(text, routingYandex204), strings.Index(text, "https://ya.ru")
+	if y < 0 || ya < 0 || y > ya {
+		t.Fatalf("Yandex 204 is not the first whitelist probe:\n%s", text)
+	}
+	again, err := buildRouting(out, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(again), routingYandex204) != strings.Count(text, routingYandex204) {
+		t.Fatal("the probe was added twice")
+	}
+	if !strings.Contains(text, "expected-status: 200-399") {
+		t.Fatal("RU group still wants 200 only")
+	}
+}

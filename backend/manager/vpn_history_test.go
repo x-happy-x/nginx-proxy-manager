@@ -91,3 +91,10 @@ func TestHealthRecordsSubscriptionsWithoutAdaptive(t *testing.T) {
 		t.Fatal("a group's own list recorded as a subscription")
 	}
 }
+
+func TestTraceField(t *testing.T) {
+	body := "fl=1\nip=203.0.113.7\nts=1\nloc=LT\n"
+	if traceField(body, "loc") != "LT" || traceField(body, "ip") != "203.0.113.7" || traceField(body, "colo") != "" {
+		t.Fatal("trace fields")
+	}
+}

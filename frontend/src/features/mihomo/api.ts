@@ -267,7 +267,11 @@ export type NodeMeta = { provider: string; type: string; server: string; port?: 
 export type ServiceDef = { id: string; name: string; what: string; url?: string; group: string; kind?: string };
 /** The list people edit (NPM-49): own services, hidden built-ins, the order. */
 export type ServiceConfig = { custom: ServiceDef[]; hidden: string[]; order: string[] };
-export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[] };
+/** A connectivity page opened straight through the uplink and through mihomo (NPM-52). */
+export type ProbeResult = { t: number; ok: boolean; ms: number; status?: number; error?: string };
+export type ProbeWay = { history: ProbeResult[]; loc?: string; ip?: string; path?: string[] };
+export type ProbeState = { id: string; name: string; what: string; url: string; region: "ru" | "world"; status: number; trace?: boolean; direct: ProbeWay; mihomo: ProbeWay };
+export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[]; probes?: ProbeState[] };
 
 export type InstallPlan = {
   asset: string;

@@ -402,7 +402,10 @@ func adaptiveHealthCheck() map[string]any {
 		"interval": 60, "timeout": 5000, "lazy": false,
 		"adaptive": map[string]any{
 			"enable": true, "network-key": "home-uplink", "confirmations": 2, "concurrency": 4,
-			"direct-allowed": []any{map[string]any{"url": "https://ya.ru", "expected-status": "200-399"}},
+			"direct-allowed": []any{
+				map[string]any{"url": "https://api.browser.yandex.ru/generate_204", "expected-status": "204"},
+				map[string]any{"url": "https://ya.ru", "expected-status": "200-399"},
+			},
 			"direct-global": []any{
 				map[string]any{"url": "https://www.gstatic.com/generate_204", "expected-status": "204"},
 				map[string]any{"url": "https://cp.cloudflare.com/generate_204", "expected-status": "204"},

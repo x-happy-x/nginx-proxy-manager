@@ -11,6 +11,7 @@ import { lastDelay } from "./shared";
 import { ServicesEditor } from "./ServicesEditor";
 import { Usage } from "./Usage";
 import { DayChart } from "./VpnDay";
+import { Connectivity } from "./Connectivity";
 
 /*
  * VPN → «Сейчас» (NPM-47): does the internet work, and do the services people
@@ -380,6 +381,8 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           </div>
         ) : null}
       </section>
+
+      <Connectivity report={svc} onReport={setSvc} />
 
       <DayChart proxies={proxies} main={day} />
 

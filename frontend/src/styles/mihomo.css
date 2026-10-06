@@ -2760,3 +2760,27 @@ button.vr-gchip { cursor: pointer; }
   .vc-x { padding-left: 48px; }
   .vr-rule-hits { width: 60px; }
 }
+
+/* NPM-52: «Связь» */
+.cn-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.cn-sum { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); min-width: 0; }
+.cn-sum > span { display: grid; gap: 2px; min-width: 0; }
+.cn-sum small { font-size: 12px; color: var(--text-3); }
+.cn-sum b { font-size: 15px; }
+.cn-sum > span > span { font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
+.cn-sum .vn-dot { margin-top: 5px; }
+.cn-table { display: grid; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+.cn-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.cn-row:first-child { border-top: 0; }
+.cn-head { font-size: 12px; color: var(--text-3); padding-block: 8px; background: var(--surface-2); }
+.cn-name { display: grid; gap: 2px; min-width: 0; }
+.cn-name small { color: var(--text-3); font-size: 12px; }
+.cn-tag { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-border); }
+.cn-cell { display: grid; gap: 6px; min-width: 0; }
+.cn-cell .vn-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cn-bars { height: 14px; }
+@media (max-width: 720px) {
+  .cn-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .cn-name { grid-column: 1 / -1; }
+  .cn-head span:first-child { display: none; }
+}
