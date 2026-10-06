@@ -12,6 +12,9 @@ type Period = "24h" | "7d" | "30d";
 type Metric = "count" | "bytes";
 type Row = { key: string; count: number; bytes: number };
 
+/** A device's connections to its own network, the router and DNS servers. */
+const OTHER = "локальная сеть и DNS";
+
 const PERIODS: Array<[Period, string]> = [
   ["24h", "Сутки"],
   ["7d", "7 дней"],
@@ -61,30 +64,56 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
   const val = (r: Row) => (metric === "count" ? r.count : r.bytes);
   const fmt = (n: number) => (metric === "count" ? `${number(n)}` : bytes(n));
 
-  const pairs = useMemo(
+  // every site × device pair, the local and DNS ones too: a device's total is
+  // the sum of its pairs, so the two columns add up once one is picked
+  const allPairs = useMemo(
     () =>
-      (rep?.dims.site_device || [])
-        .map((r) => {
-          const i = r.key.lastIndexOf("|");
-          return { site: r.key.slice(0, i), device: r.key.slice(i + 1), count: r.count, bytes: r.up + r.down };
-        })
-        .filter((p) => !isNoise(p.site)),
+      (rep?.dims.site_device || []).map((r) => {
+        const i = r.key.lastIndexOf("|");
+        return { site: r.key.slice(0, i), device: r.key.slice(i + 1), count: r.count, bytes: r.up + r.down };
+      }),
     [rep],
   );
-  const hasPairs = pairs.length > 0;
+  const hasPairs = allPairs.length > 0;
+  const picked = !!(site || device) && hasPairs;
+  const sum = (list: typeof allPairs, keyOf: (p: (typeof allPairs)[number]) => string) => {
+    const m = new Map<string, Row>();
+    list.forEach((p) => {
+      const k = keyOf(p);
+      const r = m.get(k) || { key: k, count: 0, bytes: 0 };
+      r.count += p.count;
+      r.bytes += p.bytes;
+      m.set(k, r);
+    });
+    return [...m.values()];
+  };
 
   const sites: Row[] = useMemo(() => {
-    if (device && hasPairs) {
-      const m = new Map<string, Row>();
-      pairs.filter((p) => p.device === device).forEach((p) => m.set(p.site, { key: p.site, count: p.count, bytes: p.bytes }));
-      return [...m.values()];
+    if (picked) {
+      const mine = device ? allPairs.filter((p) => p.device === device) : allPairs;
+      const rows = sum(
+        mine.filter((p) => !isNoise(p.site)),
+        (p) => p.site,
+      );
+      const other = mine.filter((p) => isNoise(p.site));
+      if (device && other.length) rows.push({ key: OTHER, count: other.reduce((a, p) => a + p.count, 0), bytes: other.reduce((a, p) => a + p.bytes, 0) });
+      return rows;
     }
     return (rep?.dims.site || []).filter((r) => !isNoise(r.key)).map((r) => ({ key: r.key, count: r.count, bytes: r.up + r.down }));
-  }, [rep, pairs, device, hasPairs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rep, allPairs, device, picked]);
   const devs: Row[] = useMemo(() => {
-    if (site && hasPairs) return pairs.filter((p) => p.site === site).map((p) => ({ key: p.device, count: p.count, bytes: p.bytes }));
+    if (picked)
+      return sum(
+        site ? allPairs.filter((p) => p.site === site) : allPairs,
+        (p) => p.device,
+      ).filter((r) => !r.key.startsWith("fe80") && r.key !== "127.0.0.1");
     return (rep?.dims.device || []).filter((r) => !r.key.startsWith("fe80") && r.key !== "127.0.0.1").map((r) => ({ key: r.key, count: r.count, bytes: r.up + r.down }));
-  }, [rep, pairs, site, hasPairs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rep, allPairs, site, picked]);
+  const pairsSince = rep?.dims_since?.site_device || 0;
+  const periodStart = rep ? Date.now() / 1000 - { "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400 }[period] : 0;
+  const partial = picked && pairsSince > periodStart + 3600;
 
   const sortedSites = [...sites].sort((a, b) => val(b) - val(a));
   const sortedDevs = [...devs].sort((a, b) => val(b) - val(a));
@@ -117,7 +146,13 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
         </div>
       </div>
       {err ? <p className="vn-err">{err}</p> : null}
-      {(site || device) && !hasPairs ? <p className="mh-muted">Связь «сайт — устройство» копится с этого обновления: через несколько часов здесь появится, кто что открывает.</p> : null}
+      {(site || device) && !hasPairs ? <p className="mh-muted">Связь «сайт — устройство» ещё не накоплена за этот период.</p> : null}
+      {partial ? (
+        <p className="mh-muted">
+          Кто что открывает, HomeNet считает с {new Date(pairsSince * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}: пока выбран сайт или
+          устройство, обе колонки показывают это время, а не весь период.
+        </p>
+      ) : null}
       <div className="vu-grid">
         <div className="vu-col">
           <div className="vu-col-head">
@@ -130,14 +165,18 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
           </div>
           {shownSites.map((r) => (
             <div key={r.key} className={`vu-row${site === r.key ? " is-on" : ""}`}>
-              <button className="vu-main" aria-pressed={site === r.key} onClick={() => setSite(site === r.key ? "" : r.key)}>
+              <button className="vu-main" aria-pressed={site === r.key} disabled={r.key === OTHER} onClick={() => setSite(site === r.key ? "" : r.key)}>
                 <span className="vu-name">{r.key}</span>
                 <span className="vu-bar">
                   <i style={{ width: `${(val(r) / maxSite) * 100}%` }} />
                 </span>
                 <span className="vu-val">{fmt(val(r))}</span>
               </button>
-              {isIP(r.key) ? (
+              {r.key === OTHER ? (
+                <span className="vu-known" title="Роутер, устройства дома и DNS-серверы">
+                  не сайты
+                </span>
+              ) : isIP(r.key) ? (
                 <span className="vu-known" title="Адрес без имени: проверять как сервис нечего">
                   IP-адрес
                 </span>
