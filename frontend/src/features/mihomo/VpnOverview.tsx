@@ -5,7 +5,6 @@ import { Modal } from "../../components/ui/Modal";
 import { errText, number } from "../../lib/format";
 import { core, mihomo, type HealthPoint, type MProvider, type MProxy, type ServiceState, type ServicesReport } from "./api";
 import { useMihomo } from "./context";
-import { HealthHistory } from "./HealthHistory";
 import { useTailscaleIssues } from "./Extras";
 import { useBypassStatus } from "./BypassTraffic";
 import { lastDelay } from "./shared";
@@ -75,7 +74,6 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   const [proxies, setProxies] = useState<Record<string, MProxy>>({});
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [day, setDay] = useState<HealthPoint[]>([]);
-  const [main, setMain] = useState("");
   const [svc, setSvc] = useState<ServicesReport | null>(null);
   const [filter, setFilter] = useState<"all" | "bad" | "bypass">("all");
   const [open, setOpen] = useState<string>("");
@@ -93,7 +91,6 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
     void core
       .health("", "24h")
       .then((r) => {
-        setMain(r.provider);
         setDay(r.series);
       })
       .catch(() => undefined);
@@ -126,13 +123,15 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   // channel mode now and since when (by minute), the day strip by quarter-hour
   const modes = day.map(modeOf);
   const strip = useMemo(() => {
-    const out: Array<{ t: number; mode: Mode }> = [];
-    const step = Math.max(1, Math.ceil(day.length / 96));
-    for (let i = 0; i < day.length; i += step) {
-      const chunk = day.slice(i, i + step).map(modeOf);
-      const worst: Mode = chunk.includes("offline") ? "offline" : chunk.includes("whitelist") ? "whitelist" : chunk.includes("normal") ? "normal" : "unknown";
-      out.push({ t: day[i].t, mode: worst });
-    }
+    const out: Array<{ t: number; end: number; mode: Mode; n: number }> = [];
+    day.forEach((p) => {
+      const mode = modeOf(p);
+      const last = out[out.length - 1];
+      if (last && last.mode === mode) {
+        last.n++;
+        last.end = p.t;
+      } else out.push({ t: p.t, end: p.t, mode, n: 1 });
+    });
     return out;
   }, [day]);
   const mode: Mode = modes.length ? modes[modes.length - 1] : "unknown";
@@ -322,7 +321,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
             </div>
             <div className="vn-strip-cells">
               {strip.map((p) => (
-                <i key={p.t} className={`vn-m-${p.mode}`} title={`${hhmm(p.t)} · ${MODE_TEXT[p.mode]}`} />
+                <i key={p.t} className={`vn-m-${p.mode}`} style={{ width: `${(p.n / day.length) * 100}%` }} title={`${hhmm(p.t)}–${hhmm(p.end)} · ${MODE_TEXT[p.mode]}`} />
               ))}
             </div>
             <div className="vn-strip-axis">
@@ -442,8 +441,6 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           <a href="#/traffic/bypass">Что тратит обходы</a>
         </section>
       </div>
-
-      {main ? <HealthHistory provider={main} /> : null}
 
       <Modal open={!!current} onClose={() => setOpen("")} variant="drawer" size="md" title={current?.name || ""} description={current ? `${current.what}${current.url ? ` · ${current.url}` : ""}` : ""}>
         {current ? <ServiceDetail s={current} slow={slow} busy={busy === current.id} onCheck={() => void check(current.id)} onNodes={() => onNavigate("proxies")} /> : null}
