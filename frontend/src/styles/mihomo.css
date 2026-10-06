@@ -2573,3 +2573,41 @@ button.yt-badge {
 .ck-sub-grid { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
 .ck-silent { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin-top: 10px; font-size: 13px; }
 .ck-silent > span { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+
+/* ---------- «Что открывают чаще» и редактор списка (NPM-49) ---------- */
+.vu { display: grid; gap: 10px; }
+.vu h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.vu h3 span { color: var(--text-3); font-weight: 400; }
+.vu-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.vu-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+.vu-col { display: grid; gap: 2px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.vu-col-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 6px 8px; min-height: 30px; }
+.vu-col-head b { font-size: 13.5px; overflow-wrap: anywhere; }
+.vu-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; border-radius: 6px; }
+.vu-row.is-on { background: var(--accent-soft); }
+.vu-main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 6px; min-width: 0; }
+.vu-main:hover { background: var(--surface-2); }
+.vu-row.is-on .vu-main:hover { background: transparent; }
+.vu-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vu-name small { color: var(--text-3); font-size: 11.5px; }
+.vu-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.vu-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.vu-val { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+.vu-add { white-space: nowrap; }
+.vu-known { font-size: 12px; color: var(--text-3); padding-right: 6px; white-space: nowrap; }
+.se { display: grid; gap: 14px; }
+.se-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.se-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.se-item.is-off { opacity: .6; }
+.se-move { display: flex; flex-direction: column; }
+.se-up { display: inline-flex; transform: rotate(180deg); }
+.se-name { display: flex; flex-direction: column; min-width: 0; }
+.se-name small { color: var(--text-3); font-size: 12.5px; }
+.se-own { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px; min-width: 0; }
+.se-own input, .se-add input { min-width: 0; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 13px; }
+.se-add { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 8px; align-items: center; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 8px; }
+.se-foot { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 900px) {
+  .vu-grid { grid-template-columns: minmax(0, 1fr); }
+  .se-own, .se-add { grid-template-columns: minmax(0, 1fr); }
+}

@@ -8,6 +8,8 @@ import { useMihomo } from "./context";
 import { useTailscaleIssues } from "./Extras";
 import { useBypassStatus } from "./BypassTraffic";
 import { lastDelay } from "./shared";
+import { ServicesEditor } from "./ServicesEditor";
+import { Usage } from "./Usage";
 
 /*
  * VPN → «Сейчас» (NPM-47): does the internet work, and do the services people
@@ -77,6 +79,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   const [svc, setSvc] = useState<ServicesReport | null>(null);
   const [filter, setFilter] = useState<"all" | "bad" | "bypass">("all");
   const [open, setOpen] = useState<string>("");
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
 
@@ -253,6 +256,25 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
       ),
     });
 
+  const knownSites = useMemo(() => {
+    const out = new Set<string>();
+    (svc?.catalog || []).forEach((d) => {
+      if (!d.url) return;
+      try {
+        const host = new URL(d.url).hostname;
+        out.add(host);
+        out.add(host.split(".").slice(-2).join("."));
+      } catch {
+        /* a broken address is shown as is */
+      }
+    });
+    return out;
+  }, [svc]);
+  const addSite = async (site: string) => {
+    if (!svc) return;
+    const cfg = svc.config;
+    setSvc(await core.saveServicesConfig({ ...cfg, custom: [...cfg.custom, { id: "", name: site, what: "добавлен из «Что открывают чаще»", url: `https://${site}/`, group: "" }] }));
+  };
   const viaBypass = (s: ServiceState) => (s.path || []).some((n) => n === "Обходы" || n === "Каскад" || /обход/i.test(n));
   const shown = list.filter((s) => (filter === "bad" ? tones[s.id]?.tone === "bad" : filter === "bypass" ? viaBypass(s) : true));
   const current = list.find((s) => s.id === open);
@@ -357,6 +379,9 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
             Чем пользуются дома <span>· проверка раз в 2 минуты через те же правила, что у устройств</span>
           </h3>
           <div className="vn-chips" role="group" aria-label="Фильтр">
+            <button className="vn-chip" onClick={() => setEditing(true)} disabled={!svc}>
+              <Icon name="edit" size={13} /> Настроить список
+            </button>
             <button className={`vn-chip${filter === "all" ? " is-on" : ""}`} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
               Все {list.length}
             </button>
@@ -393,6 +418,8 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           {!list.length ? <p className="mh-muted">Первая проверка сервисов пройдёт через минуту после запуска HomeNet.</p> : null}
         </div>
       </section>
+
+      <Usage known={knownSites} onAdd={addSite} />
 
       <div className="vn-row">
         <section className="vn-flow" aria-label="Как идёт трафик">
@@ -442,6 +469,19 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
         </section>
       </div>
 
+      <Modal open={editing} onClose={() => setEditing(false)} size="lg" title="Чем пользуются дома" description="Свои сервисы, скрытые и порядок карточек">
+        {editing && svc ? (
+          <ServicesEditor
+            catalog={svc.catalog}
+            config={svc.config}
+            onCancel={() => setEditing(false)}
+            onSave={async (c) => {
+              setSvc(await core.saveServicesConfig(c));
+              setEditing(false);
+            }}
+          />
+        ) : null}
+      </Modal>
       <Modal open={!!current} onClose={() => setOpen("")} variant="drawer" size="md" title={current?.name || ""} description={current ? `${current.what}${current.url ? ` · ${current.url}` : ""}` : ""}>
         {current ? <ServiceDetail s={current} slow={slow} busy={busy === current.id} onCheck={() => void check(current.id)} onNodes={() => onNavigate("proxies")} /> : null}
       </Modal>

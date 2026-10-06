@@ -679,6 +679,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.handleBypassLimit(w, r)
 	case "/api/core/services/check":
 		a.handleServices(w, r)
+	case "/api/core/services/config":
+		a.handleServicesConfig(w, r)
 	case "/api/core/config/check", "/api/core/config/apply":
 		a.handleCoreConfigWrite(w, r, r.URL.Path == "/api/core/config/apply")
 	case "/api/core/routing/check", "/api/core/routing/apply":

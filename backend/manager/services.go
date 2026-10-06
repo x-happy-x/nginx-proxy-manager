@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -73,16 +75,119 @@ var defaultServices = []serviceDef{
 	{ID: "games", Name: "Nulls и игры", What: "Brawl Stars, Roblox", URL: "https://nulls.gg/", Group: "Игры"},
 }
 
-// serviceList: the addresses that must always open (Keycloak, Headscale…)
-// go right after ИИ, each with its own group.
-func serviceList() []serviceDef {
+// serviceConfig: the list people edit (NPM-49) — their own services, the
+// built-in ones they hid and the order. Kept on the router, one for all devices.
+type serviceConfig struct {
+	Custom []serviceDef `json:"custom"`
+	Hidden []string     `json:"hidden"`
+	Order  []string     `json:"order"`
+}
+
+func serviceConfigPath() string { return filepath.Join(coreStateDir(), "services-config.json") }
+
+func loadServiceConfig() serviceConfig {
+	c := serviceConfig{Custom: []serviceDef{}, Hidden: []string{}, Order: []string{}}
+	if body, err := os.ReadFile(serviceConfigPath()); err == nil {
+		_ = json.Unmarshal(body, &c)
+	}
+	return c
+}
+
+// normalize checks what a person typed and gives own services stable ids.
+func (c *serviceConfig) normalize() error {
+	if len(c.Custom) > 40 {
+		return errors.New("своих сервисов — не больше 40")
+	}
+	seen := map[string]bool{}
+	for i := range c.Custom {
+		d := &c.Custom[i]
+		d.Name, d.What, d.URL = strings.TrimSpace(d.Name), strings.TrimSpace(d.What), strings.TrimSpace(d.URL)
+		if !strings.Contains(d.URL, "://") && d.URL != "" {
+			d.URL = "https://" + d.URL
+		}
+		switch {
+		case d.Name == "" || len([]rune(d.Name)) > 40:
+			return fmt.Errorf("сервис %d: нужно название до 40 символов", i+1)
+		case len([]rune(d.What)) > 80:
+			return fmt.Errorf("«%s»: подпись до 80 символов", d.Name)
+		case !httpURL(d.URL):
+			return fmt.Errorf("«%s»: адрес проверки — сайт вида example.org или https-адрес", d.Name)
+		}
+		if !strings.HasPrefix(d.ID, "custom-") {
+			sum := sha256.Sum256([]byte(d.URL + "|" + d.Name))
+			d.ID = "custom-" + hex.EncodeToString(sum[:6])
+		}
+		for seen[d.ID] {
+			d.ID += "x"
+		}
+		seen[d.ID] = true
+		d.Group, d.Kind = "", ""
+	}
+	clean := func(in []string) []string {
+		out := []string{}
+		for _, id := range in {
+			if id = strings.TrimSpace(id); id != "" && len(id) <= 80 && len(out) < 200 {
+				out = append(out, id)
+			}
+		}
+		return out
+	}
+	c.Hidden, c.Order = clean(c.Hidden), clean(c.Order)
+	return nil
+}
+
+func saveServiceConfig(c serviceConfig) error {
+	if err := os.MkdirAll(coreStateDir(), 0o755); err != nil {
+		return err
+	}
+	body, _ := json.MarshalIndent(c, "", "  ")
+	tmp := serviceConfigPath() + ".tmp"
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, serviceConfigPath())
+}
+
+// serviceCatalog: every service the list can show — built-in, the addresses
+// that must always open (Keycloak, Headscale…) right after ИИ, then own ones.
+func serviceCatalog(c serviceConfig) []serviceDef {
 	out := []serviceDef{defaultServices[0]}
 	if s, ok := loadRouting(); ok {
 		for _, a := range s.Access {
 			out = append(out, serviceDef{ID: "access-" + a.Host, Name: a.Name, What: a.Host, URL: a.URL, Group: a.Name})
 		}
 	}
-	return append(out, defaultServices[1:]...)
+	out = append(out, defaultServices[1:]...)
+	return append(out, c.Custom...)
+}
+
+// serviceList: the catalog without the hidden ones, in the chosen order;
+// services the order does not name keep their place after it.
+func serviceList() []serviceDef {
+	c := loadServiceConfig()
+	hidden := map[string]bool{}
+	for _, id := range c.Hidden {
+		hidden[id] = true
+	}
+	all := serviceCatalog(c)
+	byID := map[string]serviceDef{}
+	for _, d := range all {
+		byID[d.ID] = d
+	}
+	out := []serviceDef{}
+	placed := map[string]bool{}
+	for _, id := range c.Order {
+		if d, ok := byID[id]; ok && !hidden[id] && !placed[id] {
+			out = append(out, d)
+			placed[id] = true
+		}
+	}
+	for _, d := range all {
+		if !hidden[d.ID] && !placed[d.ID] {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 type serviceChecker struct {
@@ -144,6 +249,7 @@ func (c *serviceChecker) checkAll(only string) {
 	}
 	var wg sync.WaitGroup
 	results := make([]serviceResult, len(list))
+	routes := make([][]string, len(list))
 	for i, def := range list {
 		if only != "" && def.ID != only {
 			continue
@@ -151,7 +257,7 @@ func (c *serviceChecker) checkAll(only string) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = checkService(def)
+			results[i], routes[i] = checkService(def)
 		}()
 	}
 	wg.Wait()
@@ -178,7 +284,15 @@ func (c *serviceChecker) checkAll(only string) {
 		if len(st.History) > serviceKeep {
 			st.History = st.History[len(st.History)-serviceKeep:]
 		}
-		st.Path = groupPath(def.Group, proxies)
+		// the chain mihomo really used for this check; the configured group
+		// only when the connection was not found
+		if len(routes[i]) > 0 {
+			st.Path = routes[i]
+		} else if def.Group != "" {
+			st.Path = groupPath(def.Group, proxies)
+		} else {
+			st.Path = nil
+		}
 	}
 	for id := range c.states {
 		if !known[id] {
@@ -243,10 +357,11 @@ func (c *serviceChecker) snapshot() (int64, []serviceState) {
 	return c.checked, out
 }
 
-func checkService(def serviceDef) serviceResult {
+func checkService(def serviceDef) (serviceResult, []string) {
 	start := time.Now()
 	res := serviceResult{T: start.Unix()}
 	var err error
+	var route []string
 	if def.Kind == "dns" {
 		var ips []string
 		ips, _, err = mihomoResolve("www.example.com")
@@ -254,21 +369,33 @@ func checkService(def serviceDef) serviceResult {
 			err = errors.New("DNS mihomo не вернул адрес")
 		}
 	} else {
-		err = serviceGET(def.URL)
+		route, err = serviceGET(def.URL)
 	}
 	res.MS = time.Since(start).Milliseconds()
 	if err != nil {
 		res.Error = serviceError(err)
-		return res
+		return res, route
 	}
 	res.OK = true
-	return res
+	return res, route
 }
 
-func serviceGET(raw string) error {
+// serviceGET opens the address through mihomo and, while the connection is
+// open, asks mihomo which rule and chain it took (outermost group first).
+func serviceGET(raw string) ([]string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	var routeMu sync.Mutex
+	var route []string
+	lookup := func(conn net.Conn) {
+		if local, ok := conn.LocalAddr().(*net.TCPAddr); ok {
+			_, chain := mihomoConnectionRoute(u.Hostname(), local.Port)
+			routeMu.Lock()
+			route = chain
+			routeMu.Unlock()
+		}
 	}
 	port := 443
 	if u.Scheme == "http" {
@@ -279,7 +406,11 @@ func serviceGET(raw string) error {
 	}
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return socksDial(u.Hostname(), port, serviceTimeout)
+			conn, err := socksDial(u.Hostname(), port, serviceTimeout)
+			if err == nil {
+				go lookup(conn)
+			}
+			return conn, err
 		},
 		TLSClientConfig:       &tls.Config{ServerName: u.Hostname()},
 		TLSHandshakeTimeout:   serviceTimeout,
@@ -291,19 +422,24 @@ func serviceGET(raw string) error {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "HomeNet-Service-Check/1")
 	resp, err := client.Do(req)
+	routeOf := func() []string {
+		routeMu.Lock()
+		defer routeMu.Unlock()
+		return route
+	}
 	if err != nil {
-		return err
+		return routeOf(), err
 	}
 	_, _ = io.CopyN(io.Discard, resp.Body, 4096)
 	resp.Body.Close()
 	if resp.StatusCode >= 500 {
-		return fmt.Errorf("сервер ответил %d", resp.StatusCode)
+		return routeOf(), fmt.Errorf("сервер ответил %d", resp.StatusCode)
 	}
-	return nil
+	return routeOf(), nil
 }
 
 // serviceError: the reason in plain words, without addresses or secrets.
@@ -336,5 +472,33 @@ func (a *app) handleServices(w http.ResponseWriter, r *http.Request) {
 		services.checkAll(id)
 	}
 	checked, list := services.snapshot()
-	a.writeJSON(w, http.StatusOK, response{"ok": true, "checked": checked, "interval": int(serviceInterval.Seconds()), "slow_ms": serviceSlowMS, "services": list})
+	cfg := loadServiceConfig()
+	a.writeJSON(w, http.StatusOK, response{"ok": true, "checked": checked, "interval": int(serviceInterval.Seconds()), "slow_ms": serviceSlowMS, "services": list,
+		"config": cfg, "catalog": serviceCatalog(cfg)})
+}
+
+// handleServicesConfig saves the list people edited and checks new services
+// at once, so their cards are not empty for two minutes.
+func (a *app) handleServicesConfig(w http.ResponseWriter, r *http.Request) {
+	var c serviceConfig
+	if !a.decodeJSON(w, r, &c) {
+		return
+	}
+	if err := c.normalize(); err != nil {
+		a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": err.Error()})
+		return
+	}
+	if err := saveServiceConfig(c); err != nil {
+		a.writeJSON(w, http.StatusInternalServerError, response{"ok": false, "error": err.Error()})
+		return
+	}
+	if services != nil {
+		_, list := services.snapshot()
+		for _, s := range list {
+			if len(s.History) == 0 {
+				services.checkAll(s.ID)
+			}
+		}
+	}
+	a.handleServices(w, &http.Request{Method: http.MethodGet, URL: r.URL})
 }
