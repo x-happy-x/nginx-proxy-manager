@@ -58,7 +58,8 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
 
   const nameOf = useMemo(() => {
     const m = new Map(devices.map((d) => [d.ip, d.name || d.hostname || d.ip]));
-    return (ip: string) => m.get(ip) || ip;
+    // no source address: the router's own requests (mihomo, checks, updates)
+    return (ip: string) => (ip ? m.get(ip) || ip : "роутер и mihomo");
   }, [devices]);
 
   const val = (r: Row) => (metric === "count" ? r.count : r.bytes);

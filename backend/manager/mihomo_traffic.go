@@ -470,6 +470,24 @@ func (t *trafficCollector) report(period string, now time.Time) map[string]any {
 			}
 		}
 	}
+	// day buckets only know the day: a dimension that started within the hour
+	// buckets' reach gets the hour it started
+	if len(t.st.DimHours) > 0 {
+		first := t.st.DimHours[0].T
+		hourSince := map[string]int64{}
+		for _, b := range t.st.DimHours {
+			for dim := range b.Dims {
+				if v, ok := hourSince[dim]; !ok || b.T < v {
+					hourSince[dim] = b.T
+				}
+			}
+		}
+		for dim, v := range hourSince {
+			if v > first && v > dimSince[dim] {
+				dimSince[dim] = v
+			}
+		}
+	}
 	dims := map[string][]dimRow{}
 	for dim, m := range sums {
 		rows := make([]dimRow, 0, len(m))
