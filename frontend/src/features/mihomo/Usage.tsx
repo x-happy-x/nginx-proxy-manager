@@ -18,8 +18,12 @@ const PERIODS: Array<[Period, string]> = [
   ["30d", "30 дней"],
 ];
 
-// addresses that are not sites people open: the router, local networks, DNS
-const isNoise = (site: string) => !site || site === "—" || /^(10|127|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(site) || /^(fe80|ff0|224\.|239\.)/.test(site) || /\.local$/.test(site);
+// addresses that are not sites people open: the router, local networks and
+// the public DNS servers devices ask (their queries are answered by mihomo)
+const RESOLVERS = new Set(["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9", "77.88.8.8", "77.88.8.1", "77.88.8.2", "77.88.8.88", "208.67.222.222", "208.67.220.220", "dns.google", "one.one", "cloudflare-dns.com"]);
+const isNoise = (site: string) =>
+  !site || site === "—" || RESOLVERS.has(site) || /^(10|127|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(site) || /^(fe80|ff0|224\.|239\.)/.test(site) || /\.local$/.test(site);
+const isIP = (site: string) => /^\d+\.\d+\.\d+\.\d+$/.test(site) || site.includes(":");
 
 export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: string) => Promise<void> }) {
   const [period, setPeriod] = useState<Period>("7d");
@@ -133,7 +137,11 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
                 </span>
                 <span className="vu-val">{fmt(val(r))}</span>
               </button>
-              {known.has(r.key) ? (
+              {isIP(r.key) ? (
+                <span className="vu-known" title="Адрес без имени: проверять как сервис нечего">
+                  IP-адрес
+                </span>
+              ) : known.has(r.key) ? (
                 <span className="vu-known" title="Уже проверяется на «Сейчас»">
                   в сервисах
                 </span>
