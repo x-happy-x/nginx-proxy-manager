@@ -194,6 +194,7 @@ type serviceChecker struct {
 	mu      sync.Mutex
 	path    string
 	states  map[string]*serviceState
+	probes  map[string]*probeState
 	checked int64
 	running bool
 }
@@ -222,9 +223,10 @@ func newServiceChecker(path string) *serviceChecker {
 		var saved struct {
 			Checked int64                    `json:"checked"`
 			States  map[string]*serviceState `json:"states"`
+			Probes  map[string]*probeState   `json:"probes"`
 		}
 		if json.Unmarshal(body, &saved) == nil && saved.States != nil {
-			c.states, c.checked = saved.States, saved.Checked
+			c.states, c.checked, c.probes = saved.States, saved.Checked, saved.Probes
 		}
 	}
 	return c
@@ -232,6 +234,13 @@ func newServiceChecker(path string) *serviceChecker {
 
 // checkAll checks every service, or only the one with the id given.
 func (c *serviceChecker) checkAll(only string) {
+	if only == "probes" {
+		c.checkProbes()
+		c.mu.Lock()
+		c.saveLocked()
+		c.mu.Unlock()
+		return
+	}
 	c.mu.Lock()
 	if c.running && only == "" {
 		c.mu.Unlock()
@@ -239,6 +248,15 @@ func (c *serviceChecker) checkAll(only string) {
 	}
 	c.running = only == "" || c.running
 	c.mu.Unlock()
+	// the connectivity pages go along with a full round (NPM-52)
+	var probesDone sync.WaitGroup
+	if only == "" {
+		probesDone.Add(1)
+		go func() {
+			defer probesDone.Done()
+			c.checkProbes()
+		}()
+	}
 	list := serviceList()
 	var proxies map[string]proxyNow
 	var body struct {
@@ -261,6 +279,7 @@ func (c *serviceChecker) checkAll(only string) {
 		}()
 	}
 	wg.Wait()
+	probesDone.Wait()
 	now := time.Now().Unix()
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -328,7 +347,8 @@ func (c *serviceChecker) saveLocked() {
 	body, err := json.Marshal(struct {
 		Checked int64                    `json:"checked"`
 		States  map[string]*serviceState `json:"states"`
-	}{c.checked, c.states})
+		Probes  map[string]*probeState   `json:"probes,omitempty"`
+	}{c.checked, c.states, c.probes})
 	if err != nil {
 		return
 	}
@@ -474,7 +494,7 @@ func (a *app) handleServices(w http.ResponseWriter, r *http.Request) {
 	checked, list := services.snapshot()
 	cfg := loadServiceConfig()
 	a.writeJSON(w, http.StatusOK, response{"ok": true, "checked": checked, "interval": int(serviceInterval.Seconds()), "slow_ms": serviceSlowMS, "services": list,
-		"config": cfg, "catalog": serviceCatalog(cfg)})
+		"config": cfg, "catalog": serviceCatalog(cfg), "probes": services.probeSnapshot()})
 }
 
 // handleServicesConfig saves the list people edited and checks new services
