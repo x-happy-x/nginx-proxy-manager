@@ -36,6 +36,49 @@ func TestServiceError(t *testing.T) {
 	}
 }
 
+// NPM-49: own services, hidden built-ins and the order.
+func TestServiceConfigListOrderAndHidden(t *testing.T) {
+	t.Setenv("MIHOMO_STATE_DIR", t.TempDir())
+	c := serviceConfig{
+		Custom: []serviceDef{{Name: "Госуслуги", What: "госуслуги", URL: "gosuslugi.ru", Group: "ignored"}},
+		Hidden: []string{"tiktok"},
+		Order:  []string{"telegram", "", "ai"},
+	}
+	if err := c.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	own := c.Custom[0]
+	if !strings.HasPrefix(own.ID, "custom-") || own.URL != "https://gosuslugi.ru" || own.Group != "" {
+		t.Fatalf("own service = %+v", own)
+	}
+	again := c
+	again.Custom = append([]serviceDef(nil), c.Custom...)
+	if err := again.normalize(); err != nil || again.Custom[0].ID != own.ID {
+		t.Fatalf("id changed on a second save: %v %s", err, again.Custom[0].ID)
+	}
+	if err := saveServiceConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	list := serviceList()
+	ids := []string{}
+	for _, d := range list {
+		ids = append(ids, d.ID)
+	}
+	joined := strings.Join(ids, ",")
+	if !strings.HasPrefix(joined, "telegram,ai,") || strings.Contains(joined, "tiktok") || ids[len(ids)-1] != own.ID {
+		t.Errorf("list = %s", joined)
+	}
+	for _, bad := range []serviceConfig{
+		{Custom: []serviceDef{{Name: "", URL: "x.org"}}},
+		{Custom: []serviceDef{{Name: "Сайт", URL: "ftp://x.org"}}},
+		{Custom: []serviceDef{{Name: strings.Repeat("я", 41), URL: "x.org"}}},
+	} {
+		if err := bad.normalize(); err == nil {
+			t.Errorf("accepted %+v", bad.Custom[0])
+		}
+	}
+}
+
 func TestServiceCheckerKeepsAnHourAndSurvivesRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "services.json")
 	c := newServiceChecker(path)

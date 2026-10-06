@@ -187,11 +187,13 @@ func siteOf(host string) string {
 
 func dimKeys(c mihomoConn, cls routeClassifier) map[string]string {
 	keys := map[string]string{
-		"device":   c.Metadata.SourceIP,
-		"site":     siteOf(connHost(c)),
-		"process":  c.Metadata.Process,
-		"outbound": "",
-		"group":    "",
+		"device": c.Metadata.SourceIP,
+		"site":   siteOf(connHost(c)),
+		// which device opens which site, for «что открывают чаще» (NPM-49)
+		"site_device": siteOf(connHost(c)) + "|" + c.Metadata.SourceIP,
+		"process":     c.Metadata.Process,
+		"outbound":    "",
+		"group":       "",
 	}
 	if n := len(c.Chains); n > 0 {
 		keys["outbound"] = c.Chains[0]

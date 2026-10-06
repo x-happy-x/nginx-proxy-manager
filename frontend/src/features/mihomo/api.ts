@@ -252,7 +252,10 @@ export type ServiceState = {
 /** Where a node connects, from the subscription files (NPM-48). */
 export type NodeMeta = { provider: string; type: string; server: string; port?: number; sni?: string; network?: string };
 
-export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[] };
+export type ServiceDef = { id: string; name: string; what: string; url?: string; group: string; kind?: string };
+/** The list people edit (NPM-49): own services, hidden built-ins, the order. */
+export type ServiceConfig = { custom: ServiceDef[]; hidden: string[]; order: string[] };
+export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[] };
 
 export type InstallPlan = {
   asset: string;
@@ -378,6 +381,7 @@ export const core = {
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   services: () => call<ServicesReport>("/api/core/services"),
   nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
+  saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
