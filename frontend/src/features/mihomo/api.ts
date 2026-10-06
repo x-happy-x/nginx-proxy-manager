@@ -236,6 +236,21 @@ export type HealthPoint = {
   stable_whitelist: number;
 };
 
+/** A service checked every two minutes through mihomo (NPM-47). */
+export type ServiceState = {
+  id: string;
+  name: string;
+  what: string;
+  url?: string;
+  group: string;
+  kind?: string;
+  history: Array<{ t: number; ok: boolean; ms: number; error?: string }>;
+  /** the group's choice down to the node: [Telegram, Обходы, 🇫🇲 ОБХОД №10-1] */
+  path?: string[];
+};
+
+export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[] };
+
 export type InstallPlan = {
   asset: string;
   release_base: string;
@@ -358,6 +373,8 @@ export const core = {
   health: (provider: string, period: string) =>
     call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
+  services: () => call<ServicesReport>("/api/core/services"),
+  checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>
