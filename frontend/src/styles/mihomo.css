@@ -2784,3 +2784,11 @@ button.vr-gchip { cursor: pointer; }
   .cn-name { grid-column: 1 / -1; }
   .cn-head span:first-child { display: none; }
 }
+
+/* NPM-53: the core's direct probes under «Канал провайдера» */
+.vn-probes { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 4px; }
+.vn-probe { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vn-probe i { font-style: normal; font-weight: 700; }
+.vn-probe.is-ok { color: var(--success); background: var(--success-soft); border-color: var(--success-border); }
+.vn-probe.is-bad { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-border); }
+.vn-probes small { flex-basis: 100%; color: var(--text-3); font-size: 11.5px; }

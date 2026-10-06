@@ -30,6 +30,16 @@ function modeOf(p: HealthPoint): Mode {
   return p.offline === m ? "offline" : p.whitelist === m ? "whitelist" : "normal";
 }
 
+const FAIL_TEXT: Record<string, string> = { silent: "тишина", reset: "сброс", tls: "ошибка TLS", http: "чужой ответ", body: "чужая страница" };
+function probeName(url: string) {
+  try {
+    const h = new URL(url).hostname;
+    return h.includes("yandex") ? "Яндекс" : h === "ya.ru" ? "ya.ru" : h.includes("gstatic") ? "gstatic" : h.includes("cloudflare") ? "Cloudflare" : h.includes("google") ? "Google" : h;
+  } catch {
+    return url;
+  }
+}
+
 export const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const ago = (sec: number) => (sec < 90 ? "только что" : sec < 3600 ? `${Math.round(sec / 60)} мин` : `${Math.floor(sec / 3600)} ч ${Math.round((sec % 3600) / 60)} мин`);
 
@@ -143,6 +153,16 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   let since = day.length ? day[day.length - 1].t : 0;
   for (let i = modes.length - 1; i >= 0 && modes[i] === mode; i--) since = day[i].t;
   const lastPoint = day[day.length - 1];
+  // the core's own direct probes that decide the mode (NPM-53): Yandex from
+  // the whitelist, Google and Cloudflare from outside it
+  const mainAdaptive = Object.values(providers)
+    .filter((p) => p.adaptive)
+    .sort((a, b) => b.proxies.length - a.proxies.length)[0]?.adaptive;
+  const directProbes = [
+    ...(mainAdaptive?.directAllowed || []).map((p) => ({ ...p, allowed: true })),
+    ...(mainAdaptive?.directGlobal || []).map((p) => ({ ...p, allowed: false })),
+  ];
+  const probedAt = mainAdaptive?.checkedAt ? new Date(mainAdaptive.checkedAt).getTime() / 1000 : 0;
 
   // VPN: what AUTO uses now. A node known only to its provider may be absent
   // from the map: then its name is all there is.
@@ -315,6 +335,17 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
             <span>
               <b>Канал провайдера</b>
               <small>{mode === "whitelist" ? "напрямую — только белый список" : mode === "normal" ? "без ограничений" : mode === "offline" ? "нет связи" : "режим ещё определяется"}</small>
+              {directProbes.length ? (
+                <span className="vn-probes" aria-label="Прямые проверки ядра">
+                  {directProbes.map((p) => (
+                    <span key={p.url} className={`vn-probe ${p.ok ? "is-ok" : "is-bad"}`} title={`${p.url} · ${p.allowed ? "из белого списка" : "зарубежный"}${p.error ? ` · ${p.error}` : ""}`}>
+                      <i aria-hidden="true">{p.ok ? "✓" : "×"}</i>
+                      {probeName(p.url)} {p.ok ? `${p.ms} мс` : FAIL_TEXT[p.fail || ""] || "нет ответа"}
+                    </span>
+                  ))}
+                  {probedAt ? <small>напрямую, проверено в {hhmm(probedAt)}</small> : null}
+                </span>
+              ) : null}
             </span>
             <Pill tone={mode === "normal" ? "ok" : mode === "whitelist" ? "warn" : mode === "offline" ? "bad" : "idle"}>{MODE_TEXT[mode]}</Pill>
           </div>
