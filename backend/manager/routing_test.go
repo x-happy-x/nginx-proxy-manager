@@ -450,6 +450,8 @@ func TestRoutingLive(t *testing.T) {
 	if b := os.Getenv("ROUTING_BASE"); b != "" {
 		s.Base = b
 	}
+	// ROUTING_CORE=<core version> as the handler reads it (fork 7: AI by country)
+	s.coreExitCountries = forkAtLeast(os.Getenv("ROUTING_CORE"), 7)
 	if err := s.normalize(); err != nil {
 		t.Fatal(err)
 	}
