@@ -29,8 +29,8 @@ import (
 const (
 	serviceInterval = 2 * time.Minute
 	serviceTimeout  = 8 * time.Second
-	serviceKeep     = 30 // two-minute results: one hour
-	serviceSlowMS   = 1000
+	serviceKeep     = 30   // two-minute results: one hour
+	serviceSlowMS   = 2500 // a full HTTPS request through a bypass node takes about a second
 )
 
 type serviceDef struct {
