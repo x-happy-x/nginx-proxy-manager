@@ -441,6 +441,9 @@ func (t *trafficCollector) report(period string, now time.Time) map[string]any {
 		buckets = t.st.DimDays
 	}
 	sums := map[string]map[string]*dimStat{}
+	// when each dimension starts within the period: a newer one (site_device,
+	// NPM-49) covers only part of it, and the console says so
+	dimSince := map[string]int64{}
 	for _, b := range buckets {
 		if b.T < from-int64(time.Hour/time.Second) && span <= 24*time.Hour {
 			continue
@@ -449,6 +452,9 @@ func (t *trafficCollector) report(period string, now time.Time) map[string]any {
 			continue
 		}
 		for dim, m := range b.Dims {
+			if t, ok := dimSince[dim]; !ok || b.T < t {
+				dimSince[dim] = b.T
+			}
 			if sums[dim] == nil {
 				sums[dim] = map[string]*dimStat{}
 			}
@@ -484,7 +490,7 @@ func (t *trafficCollector) report(period string, now time.Time) map[string]any {
 	}
 	return map[string]any{
 		"period": period, "resolution": resolution, "since": t.st.Since,
-		"up": up, "down": down, "series": series, "dims": dims, "closed": closed,
+		"up": up, "down": down, "series": series, "dims": dims, "dims_since": dimSince, "closed": closed,
 		"poll_seconds": int(trafficPoll / time.Second),
 	}
 }

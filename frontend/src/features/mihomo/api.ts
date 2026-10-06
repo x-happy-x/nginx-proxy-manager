@@ -212,6 +212,8 @@ export type TrafficReport = {
   down: number;
   series: Array<{ t: number; up: number; down: number; conns: number }>;
   dims: Record<string, Array<{ key: string; up: number; down: number; count: number }>>;
+  /** when each dimension starts within the period (unix seconds) */
+  dims_since?: Record<string, number>;
   closed: Array<{ host: string; source: string; process?: string; rule: string; chains: string[]; up: number; down: number; start: string; end: number; network: string }>;
 };
 
