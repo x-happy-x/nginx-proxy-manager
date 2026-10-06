@@ -2396,7 +2396,7 @@ button.yt-badge {
 .vn-dot.vn-warn { background: var(--vn-warn); }
 .vn-dot.vn-bad { background: var(--vn-bad); }
 
-.vn-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); border-radius: 12px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+.vn-hero { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); border-radius: 12px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
 .vn-hero-ok { border-color: var(--success-border); }
 .vn-hero-warn { border-color: var(--warning-border); }
 .vn-hero-bad { border-color: var(--danger-border); }
@@ -2425,8 +2425,8 @@ button.yt-badge {
 .vn-legend { display: flex; gap: 14px; flex-wrap: wrap; }
 .vn-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .vn-sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-.vn-strip-cells { display: flex; gap: 1px; height: 16px; }
-.vn-strip-cells > i { flex: 1 1 0; border-radius: 2px; min-width: 1px; }
+.vn-strip-cells { display: flex; gap: 1px; height: 16px; min-width: 0; }
+.vn-strip-cells > i { flex: 1 1 0; border-radius: 1px; min-width: 0; }
 .vn-m-normal { background: var(--vn-ok-bar); }
 .vn-m-whitelist { background: var(--vn-warn-bar); }
 .vn-m-offline { background: var(--danger); }
@@ -2497,7 +2497,9 @@ button.yt-badge {
 .vn-events time { color: var(--text-3); font-variant-numeric: tabular-nums; margin-right: 10px; }
 
 @media (max-width: 900px) {
-  .vn-hero { grid-template-columns: 1fr; }
+  .vn-hero { grid-template-columns: minmax(0, 1fr); }
+  .vn-hero > .vn-hero-main, .vn-hero > .vn-layers { padding: 16px; }
+  .vn-hero-ic { width: 40px; height: 40px; }
   .vn-hero-text h2 { font-size: 21px; }
   .vn-issue { grid-template-columns: 12px minmax(0, 1fr); }
   .vn-issue > :last-child { grid-column: 2; justify-self: start; }

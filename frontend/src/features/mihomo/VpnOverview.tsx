@@ -123,22 +123,42 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   const working = list.filter((s) => tones[s.id]?.tone === "ok" || tones[s.id]?.tone === "warn").length;
   const down = list.filter((s) => tones[s.id]?.tone === "bad");
 
-  // channel mode now and since when
+  // channel mode now and since when (by minute), the day strip by quarter-hour
   const modes = day.map(modeOf);
+  const strip = useMemo(() => {
+    const out: Array<{ t: number; mode: Mode }> = [];
+    const step = Math.max(1, Math.ceil(day.length / 96));
+    for (let i = 0; i < day.length; i += step) {
+      const chunk = day.slice(i, i + step).map(modeOf);
+      const worst: Mode = chunk.includes("offline") ? "offline" : chunk.includes("whitelist") ? "whitelist" : chunk.includes("normal") ? "normal" : "unknown";
+      out.push({ t: day[i].t, mode: worst });
+    }
+    return out;
+  }, [day]);
   const mode: Mode = modes.length ? modes[modes.length - 1] : "unknown";
   let since = day.length ? day[day.length - 1].t : 0;
   for (let i = modes.length - 1; i >= 0 && modes[i] === mode; i--) since = day[i].t;
   const lastPoint = day[day.length - 1];
 
-  // VPN: what AUTO uses now
-  const leaf = (name: string) => {
+  // VPN: what AUTO uses now. A node known only to its provider may be absent
+  // from the map: then its name is all there is.
+  const leaf = (name: string): MProxy | undefined => {
     let cur = proxies[name];
-    for (let i = 0; cur && cur.now && i < 10; i++) cur = proxies[cur.now];
+    for (let i = 0; cur && cur.now && i < 10; i++) {
+      const next: MProxy | undefined = proxies[cur.now];
+      if (!next) return { name: cur.now } as MProxy;
+      cur = next;
+    }
     return cur;
   };
   const autoLeaf = leaf("AUTO");
   const autoDelay = autoLeaf ? lastDelay(autoLeaf, proxies.AUTO?.testUrl) : null;
-  const vpnOK = !!autoLeaf && autoLeaf.name !== "COMPATIBLE" && (autoDelay ?? 1) > 0;
+  // The services are the real evidence: one that opens through a node proves
+  // the VPN works; without them, the last check of AUTO's node decides.
+  const throughNode = list.filter((s) => s.kind !== "dns" && leafName(s.path) && leafName(s.path) !== "DIRECT" && s.history.length);
+  const vpnOK = throughNode.length
+    ? throughNode.some((s) => s.history[s.history.length - 1].ok)
+    : !!autoLeaf && autoLeaf.name !== "COMPATIBLE" && (autoDelay ?? 1) > 0;
   const usedGroups = [proxies.AUTO?.now, proxies.AUTO?.now ? proxies[proxies.AUTO.now]?.now : ""].filter(Boolean) as string[];
 
   // the whole picture in one line
@@ -297,8 +317,8 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
               </span>
             </div>
             <div className="vn-strip-cells">
-              {day.map((p, i) => (
-                <i key={p.t} className={`vn-m-${modes[i]}`} title={`${hhmm(p.t)} · ${MODE_TEXT[modes[i]]}`} />
+              {strip.map((p) => (
+                <i key={p.t} className={`vn-m-${p.mode}`} title={`${hhmm(p.t)} · ${MODE_TEXT[p.mode]}`} />
               ))}
             </div>
             <div className="vn-strip-axis">
