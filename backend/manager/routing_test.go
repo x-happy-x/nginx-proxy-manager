@@ -227,6 +227,60 @@ func equalAny(v any, want ...string) bool {
 	return true
 }
 
+// NPM-50: passive check on the groups of nodes only; AI by exit country with
+// fork 7 and no provider copy; off — as before.
+func TestBuildRoutingStage2(t *testing.T) {
+	s := defaultRouting()
+	s.Access = []accessCheck{{Name: "Login", Host: "login.example.org", URL: "https://login.example.org/"}}
+	s.coreExitCountries = true
+	out, err := buildRouting([]byte(routingFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := routingDoc(t, out)
+	for _, name := range []string{"Прямые EU", "Обходы", "RU", "Каскад", "ИИ прямые", "ИИ обходы", "Login"} {
+		if groupByName(v, name)["passive-check"] != true {
+			t.Errorf("%s without passive-check", name)
+		}
+	}
+	for _, name := range []string{"AUTO", "ИИ", "РФ", "Telegram", "Игры", "Подписки"} {
+		if _, ok := groupByName(v, name)["passive-check"]; ok {
+			t.Errorf("group of groups %s got passive-check", name)
+		}
+	}
+	ai := groupByName(v, "ИИ обходы")
+	if !equalAny(ai["use"], "ROUTER") || ai["exit-countries"] == nil {
+		t.Errorf("ИИ обходы = %v", ai)
+	}
+	if cs, _ := ai["exit-countries"].([]any); len(cs) == 0 || cs[0] == "EU" {
+		t.Errorf("exit-countries = %v", ai["exit-countries"])
+	}
+	if _, ok := v["proxy-providers"].(map[string]any)["AI"]; ok {
+		t.Error("AI provider copy kept with exit countries")
+	}
+	// passive off, older core: as before
+	s.PassiveCheck, s.coreExitCountries = false, false
+	old, err := buildRouting(out, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = routingDoc(t, old)
+	if _, ok := groupByName(v, "Обходы")["passive-check"]; ok {
+		t.Error("passive-check without the setting")
+	}
+	if !equalAny(groupByName(v, "ИИ обходы")["use"], "AI") {
+		t.Errorf("old core: ИИ обходы = %v", groupByName(v, "ИИ обходы"))
+	}
+	if _, ok := v["proxy-providers"].(map[string]any)["AI"]; !ok {
+		t.Error("old core: AI provider missing")
+	}
+	for in, want := range map[string]bool{"v1.19.32-fork.7": true, "v1.19.32-fork.12-local": true, "v1.19.32-fork.6": false, "v1.19.32": false, "": false} {
+		if forkAtLeast(in, 7) != want {
+			t.Errorf("forkAtLeast(%q, 7) != %v", in, want)
+		}
+	}
+}
+
 // NPM-46: the dns outbound comes first in proxies, once, and goes with the
 // interception off; the user's proxies stay.
 func TestBuildRoutingDNSIntercept(t *testing.T) {

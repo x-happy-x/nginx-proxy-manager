@@ -16,12 +16,22 @@ type State = "ok" | "slow" | "silent" | "unknown";
 
 const SLOW_MS = 800;
 
-function nodeState(p: MProvider, x: MProxy): { state: State; delay: number | null; note: string } {
+const FAIL: Record<string, string> = {
+  silent: "молчит — похоже на отсев по IP",
+  reset: "сброс соединения — похоже на отсев по SNI",
+  tls: "ошибка TLS",
+  http: "сайт ответил не тем",
+  body: "ответ неполный",
+};
+
+function nodeState(p: MProvider, x: MProxy): { state: State; delay: number | null; note: string; country?: string } {
   const a = p.adaptive?.results?.[x.name];
   const d = lastDelay(x, p.testUrl);
   if (a && !a.skipped) {
-    if (!a.available) return { state: "silent", delay: d, note: "не прошёл проверку подписки" };
-    return { state: d != null && d > SLOW_MS ? "slow" : "ok", delay: d, note: d ? `${d} мс` : "прошёл проверку" };
+    const country = a.country || (a.probes || []).find((pr) => pr.country)?.country;
+    const fail = (a.probes || []).find((pr) => !pr.ok && pr.fail)?.fail;
+    if (!a.available) return { state: "silent", delay: d, note: fail ? FAIL[fail] || fail : "не прошёл проверку подписки", country };
+    return { state: d != null && d > SLOW_MS ? "slow" : "ok", delay: d, note: d ? `${d} мс` : "прошёл проверку", country };
   }
   if (d == null) return { state: "unknown", delay: null, note: "не проверялся" };
   if (d <= 0) return { state: "silent", delay: d, note: "нет ответа" };
@@ -122,6 +132,7 @@ export function Servers({ providers, prefs }: { providers: MProvider[]; prefs: N
                       <span className="mono">{n.sni || n.x.name}</span>
                       <small>
                         {n.sni ? `${n.x.name} · ` : ""}
+                        {n.st.country ? `выход ${n.st.country} · ` : ""}
                         {n.st.note}
                       </small>
                     </span>
