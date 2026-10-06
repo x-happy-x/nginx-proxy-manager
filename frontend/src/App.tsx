@@ -229,7 +229,7 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
     const onHashChange = () => {
       setPage(pageFromHash(window.location.hash));
       setNavOpen(false);
-      window.scrollTo({ top: 0 });
+      document.getElementById("main-scroll")?.scrollTo({ top: 0 });
     };
     window.addEventListener("hashchange", onHashChange);
     if (!window.location.hash) window.history.replaceState(null, "", `#/${page}`);
@@ -258,7 +258,7 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
     setNavOpen(false);
     const hash = `#/${next}`;
     if (window.location.hash !== hash) window.history.pushState(null, "", hash);
-    window.scrollTo({ top: 0 });
+    document.getElementById("main-scroll")?.scrollTo({ top: 0 });
   };
 
   const notify = useCallback((toast: Omit<Toast, "id">) => {
@@ -635,6 +635,7 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
           busy={busy}
           extra={<TopbarCore page={page} />}
         />
+        <div className="main-scroll" id="main-scroll">
         <main className="page" id="main">
           <SectionTabs page={page} onNavigate={navigate} onOperations={() => setOpsOpen(true)} unsaved={{ servers: docDirty, advanced: docDirty, certs: docDirty, dns: dnsDirty, coreconfig: coreDirty }} />
           {page === "overview" ? <Overview doc={doc} status={status} onNavigate={navigate} /> : null}
@@ -876,6 +877,7 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
           <span>HomeNet Proxy Manager · локальная сеть</span>
           <span>Сохранение черновика не перезапускает прокси</span>
         </footer>
+        </div>
       </div>
 
       <Toasts items={toasts} onDismiss={dismissToast} />

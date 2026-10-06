@@ -435,7 +435,7 @@
   display: grid;
   gap: 12px;
   padding: 14px 16px 16px;
-  scroll-margin-top: calc(var(--topbar-height) + 12px);
+  scroll-margin-top: 12px;
 }
 
 .net-detail-head {

@@ -520,6 +520,27 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
             })}
             {!list.length ? <p className="mh-muted">Первая проверка сервисов пройдёт через минуту после запуска HomeNet.</p> : null}
           </div>
+          <div className="vo-route" aria-label="Как идёт остальной трафик">
+            <span className="vo-tile-title">Остальной трафик</span>
+            <ol className="vo-path">
+              {(proxies.AUTO?.all || []).map((name, i) => {
+                const l = leaf(name);
+                const d = l ? lastDelay(l, proxies.AUTO?.testUrl) : null;
+                const cur = usedGroups.includes(name);
+                const dead = d === 0;
+                return (
+                  <li key={name} className={cur ? "is-cur" : dead ? "is-dead" : ""} title={cur && l ? `${l.name}${d && d > 0 ? ` · ${d} мс` : ""}` : dead ? "не отвечает" : ""}>
+                    <span className="vo-path-no">{i + 1}</span>
+                    <b>{name}</b>
+                    <small>{cur && l ? (d && d > 0 ? `${d} мс` : "сейчас") : dead ? "не отвечает" : "запас"}</small>
+                  </li>
+                );
+              })}
+            </ol>
+            <a href="#/vroute" onClick={(e) => (e.preventDefault(), onNavigate("vroute"))}>
+              Маршрутизация →
+            </a>
+          </div>
         </section>
 
         <aside className="vo-side">
@@ -541,34 +562,6 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
             ) : (
               <p className="mh-muted">Ничего — всё работает.</p>
             )}
-          </section>
-          <section className="vo-panel" aria-label="Как идёт трафик">
-            <div className="vn-section-head">
-              <h3>Как идёт остальной трафик</h3>
-              <a href="#/vroute" onClick={(e) => (e.preventDefault(), onNavigate("vroute"))}>
-                Маршрутизация
-              </a>
-            </div>
-            <ol className="vo-path">
-              {(proxies.AUTO?.all || []).map((name, i) => {
-                const g = proxies[name];
-                const l = leaf(name);
-                const d = l ? lastDelay(l, proxies.AUTO?.testUrl) : null;
-                const cur = usedGroups.includes(name);
-                const dead = d === 0;
-                return (
-                  <li key={name} className={cur ? "is-cur" : dead ? "is-dead" : ""}>
-                    <span className="vo-path-no">{i + 1}</span>
-                    <span className="vn-card-name">
-                      <b>{name}</b>
-                      <small>{cur && l ? `${l.name}${d && d > 0 ? ` · ${d} мс` : ""}` : dead ? "не отвечает" : g?.all ? `${g.all.length} узлов` : ""}</small>
-                    </span>
-                    {cur ? <Pill tone="ok">сейчас</Pill> : null}
-                  </li>
-                );
-              })}
-            </ol>
-            <small className="mh-muted">Следующий вариант берётся, когда предыдущий не отвечает.</small>
           </section>
         </aside>
       </div>

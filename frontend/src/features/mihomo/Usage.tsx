@@ -155,7 +155,7 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
         </p>
       ) : null}
       <div className="vu-grid">
-        <div className="vu-col">
+        <div className="vu-col vu-col-sites">
           <div className="vu-col-head">
             <b>{device ? `Сайты · ${nameOf(device)}` : "Сайты"}</b>
             {device ? (
@@ -222,7 +222,7 @@ export function Usage({ known, onAdd }: { known: Set<string>; onAdd: (site: stri
               </button>
             ) : null}
           </div>
-          {sortedDevs.slice(0, 20).map((r) => (
+          {sortedDevs.slice(0, more ? 60 : 15).map((r) => (
             <div key={r.key} className={`vu-row${device === r.key ? " is-on" : ""}`}>
               <button className="vu-main" aria-pressed={device === r.key} onClick={() => setDevice(device === r.key ? "" : r.key)}>
                 <span className="vu-name">

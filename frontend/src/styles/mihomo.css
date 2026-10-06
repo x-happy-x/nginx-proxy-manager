@@ -2579,11 +2579,14 @@ button.yt-badge {
 .vu h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .vu h3 span { color: var(--text-3); font-weight: 400; }
 .vu-controls { display: flex; flex-wrap: wrap; gap: 8px; }
-.vu-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+.vu-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
 .vu-col { display: grid; gap: 2px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
 .vu-col-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 6px 8px; min-height: 30px; }
 .vu-col-head b { font-size: 13.5px; overflow-wrap: anywhere; }
 .vu-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; border-radius: 6px; }
+.vu-col-sites .vu-row { grid-template-columns: minmax(0, 1fr) 112px; }
+.vu-col-sites .vu-row > :last-child { justify-self: end; }
+.vu-col { align-content: start; }
 .vu-row.is-on { background: var(--accent-soft); }
 .vu-main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 6px; min-width: 0; }
 .vu-main:hover { background: var(--surface-2); }
@@ -2592,7 +2595,7 @@ button.yt-badge {
 .vu-name small { color: var(--text-3); font-size: 11.5px; }
 .vu-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
 .vu-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
-.vu-val { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+.vu-val { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
 .vu-add { white-space: nowrap; }
 .vu-known { font-size: 12px; color: var(--text-3); padding-right: 6px; white-space: nowrap; }
 .se { display: grid; gap: 14px; }
@@ -2670,7 +2673,7 @@ button.yt-badge {
 
 .vs-layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .vs-grid { flex: 999 1 520px; min-width: 0; }
-.vs-panel { flex: 1 1 360px; min-width: 0; display: grid; gap: 14px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); position: sticky; top: calc(var(--topbar-height) + 12px); }
+.vs-panel { flex: 1 1 360px; min-width: 0; display: grid; gap: 14px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); position: sticky; top: 12px; }
 .vs-panel-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
 .vs-panel-head .vn-card-name { flex: 1; min-width: 0; }
 .vs-panel-head .vn-card-name b { font-size: 17px; }
@@ -2861,3 +2864,20 @@ button.vr-gchip { cursor: pointer; }
   .vo-hero-actions { width: 100%; }
   .vo-hero-actions .btn { flex: 1 1 0; justify-content: center; }
 }
+
+/* NPM-55: columns of one height; the path of the rest of the traffic as a row */
+.vo-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); align-items: stretch; }
+.vo-side { display: flex; flex-direction: column; }
+.vo-side > .vo-panel { flex: 1; align-content: start; }
+.vo-main { align-content: start; }
+.vo-route { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.vo-route .vo-path { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.vo-route .vo-path li { padding: 5px 10px; gap: 6px; }
+.vo-route .vo-path li b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.vo-route .vo-path li small { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.vo-route .vo-path-no { width: auto; }
+.vo-route > a { font-size: 13px; white-space: nowrap; }
+@media (max-width: 900px) { .vo-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* NPM-55: the top bar speed keeps its width, the mode chip does not jump */
+.mh-topspeed .up, .mh-topspeed .down { display: inline-block; min-width: 12.5ch; font-variant-numeric: tabular-nums; white-space: nowrap; }
