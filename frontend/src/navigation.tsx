@@ -31,6 +31,9 @@ export type PageKey =
   | "dns"
   // vpn
   | "vpn"
+  | "vpnsvc"
+  | "subs"
+  | "vroute"
   | "why"
   | "proxies"
   | "checks"
@@ -91,9 +94,12 @@ export const NAV: NavItem[] = [
   { id: "scan", section: "network", tab: "Автопроверка", title: "Автопроверка", description: "Регулярная проверка списка сайтов.", icon: "clock" },
 
   { id: "vpn", section: "vpn", tab: "Сейчас", title: "VPN", description: "Работает ли интернет и сервисы, которыми пользуются дома.", icon: "shield" },
+  { id: "vpnsvc", section: "vpn", tab: "Сервисы", title: "Сервисы", description: "Что открывается дома: каждый сервис, его путь и последний час проверок.", icon: "apps" },
   { id: "why", section: "vpn", tab: "Почему не открывается", title: "Почему не открывается", description: "Путь запроса по шагам: правило, узел, соединение, ответ сайта — и где он обрывается.", icon: "search" },
   { id: "proxies", section: "vpn", tab: "Узлы", title: "Узлы и группы", description: "Выбор узла в группе, проверка задержки, подписки, Tailscale, OLCRTC.", icon: "layers" },
-  { id: "checks", section: "vpn", tab: "Подписки", title: "Проверка подписок", description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.", icon: "test" },
+  { id: "subs", section: "vpn", tab: "Подписки", title: "Подписки", description: "Узлы каждой подписки, трафик и срок, обновления и страны выхода.", icon: "download" },
+  { id: "vroute", section: "vpn", tab: "Маршрутизация", title: "Маршрутизация", description: "Куда пойдёт адрес, доли групп, правила по порядку и выбор внутри группы.", icon: "route" },
+  { id: "checks", section: "vpn", tab: "Проверки", title: "Проверка узлов", description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.", icon: "test" },
   { id: "connections", section: "vpn", tab: "Соединения", title: "Соединения", description: "Живые соединения через mihomo: устройство, правило, цепочка, скорость.", icon: "globe" },
   { id: "traffic", section: "vpn", tab: "Трафик", title: "Трафик", description: "Скорость, учёт за период, топология и история соединений.", icon: "activity" },
   { id: "rules", section: "vpn", tab: "Правила", title: "Правила", description: "Правила ядра со счётчиками срабатываний и наборы правил.", icon: "list" },

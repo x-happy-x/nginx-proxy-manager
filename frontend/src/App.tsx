@@ -86,6 +86,9 @@ import { Config as CoreConfigPage } from "./features/mihomo/Config";
 import { Core } from "./features/mihomo/Core";
 import { VpnOverview } from "./features/mihomo/VpnOverview";
 import { Why } from "./features/mihomo/Why";
+import { VpnServices } from "./features/mihomo/VpnServices";
+import { Subscriptions } from "./features/mihomo/Subscriptions";
+import { VpnRoute } from "./features/mihomo/VpnRoute";
 import { MODE_LABEL, useMihomo } from "./features/mihomo/context";
 import { Overview } from "./pages/Overview";
 import { Releases } from "./pages/Releases";
@@ -637,6 +640,9 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
           {page === "overview" ? <Overview doc={doc} status={status} onNavigate={navigate} /> : null}
           {page === "stats" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
           {page === "vpn" ? <CoreGate><VpnOverview onNavigate={navigate} /></CoreGate> : null}
+          {page === "vpnsvc" ? <CoreGate><VpnServices onNavigate={navigate} /></CoreGate> : null}
+          {page === "subs" ? <CoreGate><Subscriptions /></CoreGate> : null}
+          {page === "vroute" ? <CoreGate><VpnRoute onNavigate={navigate} /></CoreGate> : null}
           {page === "why" ? <CoreGate><Why onNodes={() => navigate("proxies")} /></CoreGate> : null}
           {page === "releases" ? <Releases /> : null}
           {page === "apps" ? <Launcher doc={doc} /> : null}

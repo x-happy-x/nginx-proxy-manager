@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Segmented } from "../../components/ui/controls";
-import { timeTicks } from "../../components/charts/smooth";
-import { TimeAxis } from "../../components/charts/TimeChart";
-import { bytes, dateTime, errText } from "../../lib/format";
+import { bytes, errText } from "../../lib/format";
 import { core, mihomo, type BypassReport, type RoutePoint, type TrafficReport } from "./api";
 import { useMihomo } from "./context";
+import { ChartTip, VpnChart, dm, hh } from "./VpnCharts";
 
 /*
  * «Трафик → Через обходы» (NPM-36): how much went through bypass nodes
@@ -76,6 +75,7 @@ export function BypassTraffic() {
   const [rep, setRep] = useState<BypassReport | null>(null);
   const [dims, setDims] = useState<TrafficReport["dims"] | null>(null);
   const [error, setError] = useState("");
+  const [sel, setSel] = useState(-1);
 
   const load = useCallback(async () => {
     try {
@@ -108,7 +108,8 @@ export function BypassTraffic() {
       return byT.get(t) || { t, direct: 0, proxy: 0, bypass: 0, chain: 0 };
     });
   }, [rep, period]);
-  const peak = useMemo(() => Math.max(1, ...slots.map(sum)), [slots]);
+  const si = sel < 0 || sel >= slots.length ? slots.length - 1 : sel;
+  const step = period === "30d" ? 86400 : 3600;
   const top = (dims?.bypass_use || []).slice(0, 8).map((r) => {
     const [ip, site, group] = r.key.split("|");
     return { ip, site, group, value: r.up + r.down };
@@ -187,23 +188,25 @@ export function BypassTraffic() {
               ))}
             </div>
             {slots.length ? (
-              <div>
-                <div className="bt-bars" role="img" aria-label="Трафик по способу выхода">
-                  {slots.map((p) => {
-                    const s = sum(p);
-                    return (
-                      <div
-                        key={p.t}
-                        className="bt-bar"
-                        style={{ height: `${Math.max(s ? 2 : 0, (s / peak) * 100)}%` }}
-                        title={`${dateTime(new Date(p.t * 1000).toISOString())}: ${KINDS.map(([k, label]) => `${label} ${bytes(p[k])}`).join(" · ")}`}
-                      >
-                        {KINDS.map(([k, , color]) => (s ? <span key={k} style={{ height: `${(p[k] / s) * 100}%`, background: color }} /> : null))}
-                      </div>
-                    );
-                  })}
-                </div>
-                <TimeAxis ticks={timeTicks(slots.map((p) => p.t))} />
+              <div className="stack-sm">
+                <VpnChart
+                  times={slots.map((p) => p.t)}
+                  kind="bars"
+                  height={200}
+                  series={KINDS.map(([k, label, color]) => ({ key: k, label, color, values: slots.map((p) => p[k]) }))}
+                  format={(v) => bytes(v)}
+                  selected={si}
+                  onSelect={setSel}
+                  label="Трафик по способу выхода"
+                  xLabel={(t, k) => (step === 86400 ? (k % 5 === 4 ? dm(t) : "") : k % 3 === 0 ? hh(t) : "")}
+                  slotLabel={(t) => (step === 86400 ? dm(t) : hh(t))}
+                />
+                {slots[si] ? (
+                  <ChartTip
+                    title={step === 86400 ? new Date(slots[si].t * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short" }) : `${hh(slots[si].t)}–${si === slots.length - 1 ? "сейчас" : hh(slots[si].t + 3600)}`}
+                    rows={[...KINDS.map(([k, label, color]) => ({ color, label, value: bytes(slots[si][k]) })), { color: "var(--text)", label: "всего", value: bytes(sum(slots[si])) }]}
+                  />
+                ) : null}
               </div>
             ) : (
               <p className="mh-muted">Данных за период пока нет.</p>

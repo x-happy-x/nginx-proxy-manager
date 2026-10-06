@@ -10,6 +10,7 @@ import { useBypassStatus } from "./BypassTraffic";
 import { lastDelay } from "./shared";
 import { ServicesEditor } from "./ServicesEditor";
 import { Usage } from "./Usage";
+import { DayChart } from "./VpnDay";
 
 /*
  * VPN → «Сейчас» (NPM-47): does the internet work, and do the services people
@@ -17,7 +18,7 @@ import { Usage } from "./Usage";
  * pages. Design: https://claude.ai/artifact/5YUqVHy44gRdfhKD2MSxWz
  */
 
-type Tone = "ok" | "warn" | "bad" | "idle";
+export type Tone = "ok" | "warn" | "bad" | "idle";
 type Mode = "normal" | "whitelist" | "offline" | "unknown";
 
 const MODE_TEXT: Record<Mode, string> = { normal: "обычный", whitelist: "белый список", offline: "без интернета", unknown: "не определён" };
@@ -28,11 +29,11 @@ function modeOf(p: HealthPoint): Mode {
   return p.offline === m ? "offline" : p.whitelist === m ? "whitelist" : "normal";
 }
 
-const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+export const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const ago = (sec: number) => (sec < 90 ? "только что" : sec < 3600 ? `${Math.round(sec / 60)} мин` : `${Math.floor(sec / 3600)} ч ${Math.round((sec % 3600) / 60)} мин`);
 
 /** Service state from its last results: a single miss is «медленно», two in a row «не открывается». */
-function serviceTone(s: ServiceState, slow: number): { tone: Tone; text: string; downFor: number } {
+export function serviceTone(s: ServiceState, slow: number): { tone: Tone; text: string; downFor: number } {
   const h = s.history;
   if (!h.length) return { tone: "idle", text: "проверяется", downFor: 0 };
   const last = h[h.length - 1];
@@ -43,8 +44,8 @@ function serviceTone(s: ServiceState, slow: number): { tone: Tone; text: string;
   return { tone: "ok", text: "открывается", downFor: 0 };
 }
 
-const leafName = (path?: string[]) => (path && path.length ? path[path.length - 1] : "");
-function pathText(s: ServiceState) {
+export const leafName = (path?: string[]) => (path && path.length ? path[path.length - 1] : "");
+export function pathText(s: ServiceState) {
   const p = s.path || [];
   const leaf = leafName(p);
   if (s.kind === "dns") return "DNS роутера, без узлов";
@@ -53,11 +54,11 @@ function pathText(s: ServiceState) {
   return p.length > 2 ? `${p[p.length - 2]} → ${leaf}` : leaf;
 }
 
-function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
+export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`vn-pill vn-${tone}`}>{children}</span>;
 }
 
-function Bars({ s, slow }: { s: ServiceState; slow: number }) {
+export function Bars({ s, slow }: { s: ServiceState; slow: number }) {
   const cells = Array.from({ length: 30 }, (_, i) => s.history[s.history.length - 30 + i]);
   return (
     <span className="vn-bars" aria-label="Последний час">
@@ -77,8 +78,8 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [day, setDay] = useState<HealthPoint[]>([]);
   const [svc, setSvc] = useState<ServicesReport | null>(null);
-  const [filter, setFilter] = useState<"all" | "bad" | "bypass">("all");
   const [open, setOpen] = useState<string>("");
+  const [seg, setSeg] = useState(-1);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -275,8 +276,13 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
     const cfg = svc.config;
     setSvc(await core.saveServicesConfig({ ...cfg, custom: [...cfg.custom, { id: "", name: site, what: "добавлен из «Что открывают чаще»", url: `https://${site}/`, group: "" }] }));
   };
-  const viaBypass = (s: ServiceState) => (s.path || []).some((n) => n === "Обходы" || n === "Каскад" || /обход/i.test(n));
-  const shown = list.filter((s) => (filter === "bad" ? tones[s.id]?.tone === "bad" : filter === "bypass" ? viaBypass(s) : true));
+  // the home page shows what is broken first, then the list's own order
+  const rank: Record<Tone, number> = { bad: 0, warn: 1, idle: 2, ok: 3 };
+  const shown = list
+    .map((s, k) => ({ s, k }))
+    .sort((a, b) => rank[tones[a.s.id]?.tone || "idle"] - rank[tones[b.s.id]?.tone || "idle"] || a.k - b.k)
+    .slice(0, 8)
+    .map((x) => x.s);
   const current = list.find((s) => s.id === open);
 
   return (
@@ -342,10 +348,30 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
               </span>
             </div>
             <div className="vn-strip-cells">
-              {strip.map((p) => (
-                <i key={p.t} className={`vn-m-${p.mode}`} style={{ width: `${(p.n / day.length) * 100}%` }} title={`${hhmm(p.t)}–${hhmm(p.end)} · ${MODE_TEXT[p.mode]}`} />
+              {strip.map((p, k) => (
+                <button
+                  key={p.t}
+                  type="button"
+                  className={`vn-m-${p.mode}${k === seg ? " is-sel" : ""}`}
+                  style={{ width: `${(p.n / day.length) * 100}%` }}
+                  aria-pressed={k === seg}
+                  aria-label={`${hhmm(p.t)}–${hhmm(p.end)}, ${MODE_TEXT[p.mode]}`}
+                  onClick={() => setSeg(k === seg ? -1 : k)}
+                />
               ))}
             </div>
+            {strip[seg] ? (
+              <div className="vn-strip-sel">
+                <b>
+                  {hhmm(strip[seg].t)}–{seg === strip.length - 1 ? "сейчас" : hhmm(strip[seg].end + 60)}
+                </b>
+                <Pill tone={strip[seg].mode === "normal" ? "ok" : strip[seg].mode === "whitelist" ? "warn" : strip[seg].mode === "offline" ? "bad" : "idle"}>{MODE_TEXT[strip[seg].mode]}</Pill>
+                <span>
+                  {ago(strip[seg].n * 60)}
+                  {strip[seg].mode === "whitelist" ? " — прямые узлы молчали, работали обходы" : strip[seg].mode === "offline" ? " — канала не было" : ""}
+                </span>
+              </div>
+            ) : null}
             <div className="vn-strip-axis">
               <span>{hhmm(day[0].t)}</span>
               <span>{hhmm(day[Math.floor(day.length / 2)].t)}</span>
@@ -354,6 +380,8 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           </div>
         ) : null}
       </section>
+
+      <DayChart proxies={proxies} main={day} />
 
       {issues.length ? (
         <section aria-label="Требует внимания" className="vn-section">
@@ -378,19 +406,13 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           <h3>
             Чем пользуются дома <span>· проверка раз в 2 минуты через те же правила, что у устройств</span>
           </h3>
-          <div className="vn-chips" role="group" aria-label="Фильтр">
+          <div className="vn-chips">
             <button className="vn-chip" onClick={() => setEditing(true)} disabled={!svc}>
               <Icon name="edit" size={13} /> Настроить список
             </button>
-            <button className={`vn-chip${filter === "all" ? " is-on" : ""}`} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
-              Все {list.length}
-            </button>
-            <button className={`vn-chip${filter === "bad" ? " is-on" : ""}`} aria-pressed={filter === "bad"} onClick={() => setFilter("bad")}>
-              Не открываются {down.length}
-            </button>
-            <button className={`vn-chip${filter === "bypass" ? " is-on" : ""}`} aria-pressed={filter === "bypass"} onClick={() => setFilter("bypass")}>
-              Через обходы {list.filter(viaBypass).length}
-            </button>
+            <a className="vn-chip" href="#/vpnsvc" onClick={(e) => (e.preventDefault(), onNavigate("vpnsvc"))}>
+              Все {list.length} сервисов →
+            </a>
           </div>
         </div>
         <div className="vn-grid">
@@ -489,7 +511,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   );
 }
 
-function ServiceDetail({ s, slow, busy, onCheck, onNodes }: { s: ServiceState; slow: number; busy: boolean; onCheck: () => void; onNodes: () => void }) {
+export function ServiceDetail({ s, slow, busy, onCheck, onNodes }: { s: ServiceState; slow: number; busy: boolean; onCheck: () => void; onNodes: () => void }) {
   const t = serviceTone(s, slow);
   const last = s.history[s.history.length - 1];
   const okShare = s.history.length ? Math.round((s.history.filter((r) => r.ok).length / s.history.length) * 100) : 0;

@@ -47,11 +47,10 @@ type adaptiveSnapshot struct {
 }
 
 type providerSnapshot struct {
-	Proxies []struct {
-		Name  string `json:"name"`
-		Alive bool   `json:"alive"`
-	} `json:"proxies"`
-	Adaptive *adaptiveSnapshot `json:"adaptive"`
+	Proxies     []proxySnapshot   `json:"proxies"`
+	Adaptive    *adaptiveSnapshot `json:"adaptive"`
+	VehicleType string            `json:"vehicleType"`
+	UpdatedAt   string            `json:"updatedAt"`
 }
 
 // working counts nodes the fork admits now: `available` when the core reports
@@ -81,6 +80,28 @@ func stableCount(a *adaptiveSnapshot, mode string) int {
 		}
 	}
 	return n
+}
+
+// aliveSnapshot stands in for the adaptive report of a provider without one
+// (a cascade subscription): its nodes alive by the core's own health check,
+// the mode unknown (NPM-51).
+func aliveSnapshot(p providerSnapshot) *adaptiveSnapshot {
+	ok := true
+	a := &adaptiveSnapshot{Results: map[string]struct {
+		OK        bool   `json:"ok"`
+		Available *bool  `json:"available"`
+		Skipped   string `json:"skipped"`
+	}{}}
+	for _, x := range p.Proxies {
+		if x.Alive {
+			a.Results[x.Name] = struct {
+				OK        bool   `json:"ok"`
+				Available *bool  `json:"available"`
+				Skipped   string `json:"skipped"`
+			}{OK: true, Available: &ok}
+		}
+	}
+	return a
 }
 
 func addHealth(list []healthPoint, start int64, p providerSnapshot, keep int) []healthPoint {
@@ -125,7 +146,11 @@ func (t *trafficCollector) observeHealth(now time.Time, providers map[string]pro
 	hour := now.Truncate(time.Hour).Unix()
 	for name, p := range providers {
 		if p.Adaptive == nil {
-			continue
+			// subscriptions only: Compatible providers are the groups' own lists
+			if p.VehicleType != "HTTP" && p.VehicleType != "File" {
+				continue
+			}
+			p.Adaptive = aliveSnapshot(p)
 		}
 		h := t.st.Health[name]
 		if h == nil {

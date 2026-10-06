@@ -213,12 +213,19 @@ export type TrafficReport = {
   poll_seconds: number;
   up: number;
   down: number;
-  series: Array<{ t: number; up: number; down: number; conns: number }>;
+  /** closed: TCP connections closed in the slot; empty: of them, never answered (NPM-51) */
+  series: Array<{ t: number; up: number; down: number; conns: number; closed?: number; empty?: number }>;
   dims: Record<string, Array<{ key: string; up: number; down: number; count: number }>>;
   /** when each dimension starts within the period (unix seconds) */
   dims_since?: Record<string, number>;
   closed: Array<{ host: string; source: string; process?: string; rule: string; chains: string[]; up: number; down: number; start: string; end: number; network: string }>;
 };
+
+/** Delay of the node a group used, by minute or hour (NPM-51); ms 0 — every check failed. */
+export type GroupLatency = { t: number; ms: number; fail: number; n: number; node?: string };
+/** A subscription update seen by the router; via — the path of the download when it was seen as it happened. */
+export type ProviderUpdate = { t: number; updated_at: string; total: number; alive: number; added: number; via?: string };
+export type GroupsReport = { period: string; resolution: number; groups: Record<string, GroupLatency[]>; provider_log: Record<string, ProviderUpdate[]> };
 
 export type RoutePoint = { t: number; direct: number; proxy: number; bypass: number; chain: number };
 export type BypassReport = {
@@ -384,6 +391,7 @@ export const core = {
   health: (provider: string, period: string) =>
     call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
+  groups: (period: "24h" | "7d") => call<GroupsReport>(`/api/core/groups?period=${period}`),
   services: () => call<ServicesReport>("/api/core/services"),
   nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
   saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
