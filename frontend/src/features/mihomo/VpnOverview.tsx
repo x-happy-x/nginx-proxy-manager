@@ -182,7 +182,11 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
       tone: "bad",
       title: `${s.name} не открывается ${ago(tones[s.id].downFor)}`,
       sub: `${pathText(s)} · ${s.history[s.history.length - 1]?.error || "нет ответа"}`,
-      action: (
+      action: s.url ? (
+        <a className="btn btn-sm" href={`#/why/${new URL(s.url).hostname}`}>
+          Почему не открывается
+        </a>
+      ) : (
         <button className="btn btn-sm" onClick={() => setOpen(s.id)}>
           Подробнее
         </button>
@@ -493,9 +497,16 @@ function ServiceDetail({ s, slow, busy, onCheck, onNodes }: { s: ServiceState; s
           </ol>
         )}
         {s.kind !== "dns" ? (
-          <button className="btn btn-sm" onClick={onNodes}>
-            Узлы и ручной выбор
-          </button>
+          <span className="vn-actions">
+            {s.url ? (
+              <a className="btn btn-sm" href={`#/why/${new URL(s.url).hostname}`}>
+                Почему не открывается
+              </a>
+            ) : null}
+            <button className="btn btn-sm" onClick={onNodes}>
+              Узлы и ручной выбор
+            </button>
+          </span>
         ) : null}
       </section>
       <section>

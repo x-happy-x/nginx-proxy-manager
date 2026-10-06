@@ -138,16 +138,37 @@ export function dotOfDelay(key: string, name: string, d: number | null): Dot {
   return { key, tone: delayTone(d), title: `${name}: ${d == null ? "не проверялся" : d <= 0 ? "нет ответа" : `${d} мс`}` };
 }
 
-/** Collapsed view: one square per node, the whole strip toggles the list. */
-export function HealthDots({ dots, open, onToggle, label }: { dots: Dot[]; open: boolean; onToggle: () => void; label: string }) {
+/**
+ * Collapsed view: one square per node, the whole strip toggles the list.
+ * With «Скрыть молчащие» the silent ones go from the strip too and are only
+ * counted (NPM-48); `silent` says which tones count as silent.
+ */
+export function HealthDots({
+  dots,
+  open,
+  onToggle,
+  label,
+  hideDead = false,
+  silent = ["bad"],
+}: {
+  dots: Dot[];
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  hideDead?: boolean;
+  silent?: Dot["tone"][];
+}) {
   const MAX = 1200;
+  const shown = hideDead ? dots.filter((d) => !silent.includes(d.tone)) : dots;
+  const hidden = dots.length - shown.length;
   return (
     <button type="button" className="mh-health" aria-expanded={open} aria-label={open ? "Свернуть" : `Показать: ${label}`} onClick={onToggle}>
       <span className="mh-health-dots">
-        {dots.slice(0, MAX).map((d) => (
+        {shown.slice(0, MAX).map((d) => (
           <i key={d.key} className={`is-${d.tone}`} title={d.title} />
         ))}
-        {dots.length > MAX ? <span className="mh-health-more">+{dots.length - MAX}</span> : null}
+        {shown.length > MAX ? <span className="mh-health-more">+{shown.length - MAX}</span> : null}
+        {hidden ? <span className="mh-health-more">{shown.length ? `+${hidden} молчат` : `все ${hidden} молчат`}</span> : null}
       </span>
       <span className="mh-health-toggle">
         {open ? "Свернуть" : label}
@@ -236,10 +257,10 @@ export function NodeControls({ prefs, delayLabel = "По задержке", chil
         ]}
       />
       <NodeViewSwitch value={prefs.view} onChange={prefs.setView} />
-      <label className="mh-check">
-        <input type="checkbox" checked={prefs.hideDead} onChange={(e) => prefs.setHideDead(e.target.checked)} />
-        Скрыть недоступные
-      </label>
+      <button type="button" className={`vn-chip mh-hide-chip${prefs.hideDead ? " is-on" : ""}`} aria-pressed={prefs.hideDead} onClick={() => prefs.setHideDead(!prefs.hideDead)}>
+        {prefs.hideDead ? <Icon name="check" size={13} /> : null}
+        Скрыть молчащие
+      </button>
       {end}
     </div>
   );

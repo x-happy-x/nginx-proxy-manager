@@ -297,6 +297,8 @@ function TailscaleCard({ name, prefs }: { name: string; prefs: NodePrefs }) {
             dots={[...peers]
               .sort((a, b) => Number(b.online) - Number(a.online))
               .map((p) => ({ key: p.id, tone: p.online ? "good" : "none", title: `${peerName(p)}: ${p.online ? "в сети" : p.lastSeen ? `был ${dateTime(p.lastSeen)}` : "не в сети"}` }))}
+            hideDead={hideDead}
+            silent={["none"]}
             open={devOpen}
             onToggle={() => setDevOpen(!devOpen)}
             label={`Устройства (${number(peers.length)})`}

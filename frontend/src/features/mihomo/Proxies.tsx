@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Servers } from "./Servers";
 import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Alert, EmptyState, SearchInput, Segmented } from "../../components/ui/controls";
@@ -9,7 +10,7 @@ import { Delay, TabCount, Tabs, lastDelay } from "./shared";
 import { HealthDots, Masonry, NodeControls, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
 import { OlcrtcTab, TailscaleTab } from "./Extras";
 
-type Tab = "groups" | "providers" | "tailscale" | "olcrtc";
+type Tab = "groups" | "servers" | "providers" | "tailscale" | "olcrtc";
 const GROUP_TYPES = new Set(["Selector", "URLTest", "Fallback", "LoadBalance", "Smart", "Relay"]);
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
 const COLLAPSE_KEY = "homenet.mihomo.collapsed";
@@ -156,6 +157,7 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
   const olcCount = olcProviders.reduce((n, p) => n + p.proxies.filter(isOlc).length, 0) + olcStandalone.length;
   const tabs: Array<[Tab, React.ReactNode]> = [
     ["groups", <>Группы <TabCount n={groups.length} /></>],
+    ["servers", <>По серверам</>],
     ["providers", <>Провайдеры <TabCount n={providerList.length} /></>],
   ];
   if (tsNodes.length) tabs.push(["tailscale", <>Tailscale <TabCount n={tsNodes.length} /></>]);
@@ -219,6 +221,7 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
                   open={!collapsed[g.name]}
                   onToggle={() => toggle(g.name)}
                   nodes={visibleNodes(g)}
+                  hideDead={hideDead}
                   proxies={proxies}
                   delayOf={delayOf}
                   testing={testing}
@@ -234,6 +237,11 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
               В config.yaml нет proxy-groups. Добавьте группу в «Конфигурации».
             </EmptyState>
           )}
+        </>
+      ) : shownTab === "servers" ? (
+        <>
+          <NodeControls prefs={prefs} />
+          <Servers providers={providerList} prefs={prefs} />
         </>
       ) : shownTab === "tailscale" ? (
         <TailscaleTab nodes={tsNodes} prefs={prefs} />
@@ -274,6 +282,7 @@ function GroupCard({
   onTestNode,
   onSelect,
   onUnfix,
+  hideDead = false,
 }: {
   g: MProxy;
   view: NodeView;
@@ -287,6 +296,7 @@ function GroupCard({
   onTestNode: (name: string) => void;
   onSelect: (name: string) => void;
   onUnfix: () => void;
+  hideDead?: boolean;
 }) {
   const selectable = g.type !== "LoadBalance";
   return (
@@ -339,7 +349,7 @@ function GroupCard({
           })}
         />
       ) : (
-        <HealthDots dots={(g.all || []).map((n) => dotOfDelay(n, n, delayOf(n, g.testUrl)))} open={false} onToggle={onToggle} label={`Узлы (${(g.all || []).length})`} />
+        <HealthDots dots={(g.all || []).map((n) => dotOfDelay(n, n, delayOf(n, g.testUrl)))} hideDead={hideDead} open={false} onToggle={onToggle} label={`Узлы (${(g.all || []).length})`} />
       )}
     </section>
   );
@@ -492,7 +502,7 @@ function ProviderCard({ p, prefs, onReload, onChecks }: { p: MProvider; prefs: N
           if (a && !a.skipped && !a.available) return { ...d, tone: "bad" as const, title: `${x.name}: не прошёл проверку подписки` };
           if (a?.skipped) return { ...d, tone: "none" as const, title: `${x.name}: ждёт базовую проверку` };
           return d;
-        })} open={open} onToggle={() => setOpen(!open)} label={`Узлы (${p.proxies.length})`} />
+        })} hideDead={hideDead} open={open} onToggle={() => setOpen(!open)} label={`Узлы (${p.proxies.length})`} />
       {open ? (
         <NodeTiles
           view={view}

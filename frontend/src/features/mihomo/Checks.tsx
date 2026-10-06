@@ -136,6 +136,97 @@ function lastProbe(h: AdaptiveHealth, name: string) {
   return { r, probes, failed, ms, bytes: probes.reduce((s, p) => s + (p.bytes || 0), 0) };
 }
 
+const agoText = (sec: number) =>
+  sec < 3600 ? `${Math.max(1, Math.round(sec / 60))} мин` : sec < 2 * 86400 ? `${Math.round(sec / 3600)} ч` : `${Math.round(sec / 86400)} дн.`;
+
+/** The subscriptions themselves: when they updated and a button to update (NPM-48). */
+function Subscriptions({ list, onUpdate }: { list: MProvider[]; onUpdate: (name: string) => Promise<void> }) {
+  const [busy, setBusy] = useState("");
+  const subs = list.filter((p) => p.vehicleType === "HTTP");
+  if (!subs.length) return null;
+  return (
+    <section className="ck-subs" aria-label="Подписки">
+      {subs.map((p) => {
+        const age = p.updatedAt ? (Date.now() - new Date(p.updatedAt).getTime()) / 1000 : 0;
+        const stale = age > 3 * 3600;
+        const i = p.subscriptionInfo;
+        const used = i ? (i.Download || 0) + (i.Upload || 0) : 0;
+        return (
+          <div key={p.name} className={`ck-sub${stale ? " is-stale" : ""}`}>
+            <div className="ck-sub-head">
+              <b>
+                {p.name} <span className="mh-muted">· {number(p.proxies.length)} узлов</span>
+              </b>
+              <span className={`vn-pill vn-${stale ? "warn" : "ok"}`}>{p.updatedAt ? (stale ? `не обновлялась ${agoText(age)}` : `обновлена ${agoText(age)} назад`) : "не обновлялась"}</span>
+            </div>
+            <div className="ck-sub-grid">
+              <span className="mh-muted">Трафик</span>
+              <span>{i?.Total ? `${bytes(used)} из ${bytes(i.Total)}` : used ? `${bytes(used)}, без лимита` : "без лимита"}</span>
+              <span className="mh-muted">Истекает</span>
+              <span>{i?.Expire ? `${new Date(i.Expire * 1000).toLocaleDateString("ru-RU")} · через ${Math.max(0, Math.round((i.Expire * 1000 - Date.now()) / 86400000))} дн.` : "без срока"}</span>
+              <span className="mh-muted">Скачивание</span>
+              <span>через группу «Подписки»: напрямую, а если закрыто — через обходы</span>
+            </div>
+            <div>
+              <button
+                className="btn btn-sm"
+                disabled={busy === p.name}
+                onClick={async () => {
+                  setBusy(p.name);
+                  await onUpdate(p.name);
+                  setBusy("");
+                }}
+              >
+                {busy === p.name ? "Обновляю…" : "Обновить сейчас"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/** Nodes that have not answered for a day: the subscription still lists them (NPM-48). */
+function LongSilent({ h }: { h: AdaptiveHealth }) {
+  const [open, setOpen] = useState(false);
+  const day = 86400 * 1000;
+  const byName = new Map<string, AdaptiveNode>();
+  [...(h.rankings.normal || []), ...(h.rankings.whitelist || [])].forEach((r) => {
+    const prev = byName.get(r.name);
+    if (!prev || new Date(r.record.lastOk).getTime() > new Date(prev.record.lastOk).getTime()) byName.set(r.name, r);
+  });
+  const now = Date.now();
+  const silent = [...byName.values()]
+    .filter((r) => r.record.checks > 0 && now - new Date(r.record.lastOk).getTime() > day)
+    .map((r) => ({ name: r.name, since: r.record.lastOk.startsWith("0001") ? 0 : new Date(r.record.lastOk).getTime() }))
+    .sort((a, b) => a.since - b.since);
+  if (!silent.length) return null;
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h2 className="card-title">Молчат дольше суток · {number(silent.length)}</h2>
+        <button className="btn btn-sm" onClick={() => setOpen(!open)}>
+          {open ? "Свернуть" : "Показать"}
+        </button>
+      </div>
+      <div className="card-body">
+        <p className="mh-muted">Подписка всё ещё отдаёт эти узлы, но ни одна проверка не прошла больше суток. В AUTO они не участвуют: группы выбирают только допущенные узлы.</p>
+        {open ? (
+          <div className="ck-silent">
+            {silent.map((s) => (
+              <span key={s.name}>
+                <span className="truncate">{s.name}</span>
+                <span className="mh-muted">{s.since ? `молчит ${agoText((now - s.since) / 1000)}` : "ни разу не ответил"}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function Checks({ onConfig }: { onConfig: () => void }) {
   const { act } = useMihomo();
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
@@ -228,6 +319,13 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
         }
       />
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
+      <Subscriptions
+        list={list}
+        onUpdate={async (name) => {
+          await act(`Подписка ${name}`, () => mihomo.updateProvider(name), "Обновлена");
+          await load();
+        }}
+      />
       {!h ? (
         <EmptyState
           icon="activity"
@@ -299,6 +397,7 @@ export function Checks({ onConfig }: { onConfig: () => void }) {
             </Alert>
           ) : null}
           {h.persistenceError ? <Alert tone="warning" title="История проверок не сохраняется">{h.persistenceError}</Alert> : null}
+          <LongSilent h={h} />
           <Tabs<View>
             label="Рейтинг"
             value={activeView}

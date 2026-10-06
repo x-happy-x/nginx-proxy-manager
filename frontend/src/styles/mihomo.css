@@ -2504,3 +2504,72 @@ button.yt-badge {
   .vn-issue { grid-template-columns: 12px minmax(0, 1fr); }
   .vn-issue > :last-child { grid-column: 2; justify-self: start; }
 }
+
+/* ---------- VPN «Почему не открывается» (NPM-48) ---------- */
+.vn-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.vw-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vw-form input { flex: 1 1 280px; min-width: 0; min-height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+.vw-form .vn-chips { flex-basis: 100%; }
+.vw-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.vw-steps { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.vw-step { display: grid; grid-template-columns: 26px 150px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.vw-step:last-child { border-bottom: 0; }
+.vw-step.is-fail { background: var(--danger-soft); }
+.vw-step.is-skip .vw-value { color: var(--text-3); }
+.vw-no { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--surface-3); color: var(--text-2); }
+.vw-step.is-fail .vw-no { background: var(--danger); color: #fff; }
+.vw-label { color: var(--text-3); }
+.vw-value { min-width: 0; overflow-wrap: anywhere; }
+.vw-value em { color: var(--text-3); font-style: normal; }
+.vw-side { display: grid; gap: 12px; }
+.vw-verdict { display: grid; gap: 6px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); font-size: 13.5px; }
+.vw-verdict b { font-size: 15px; }
+.vw-verdict small { color: var(--text-2); }
+.vw-alts { display: grid; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.vw-alt-list { display: grid; gap: 6px; }
+.vw-alt { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.vw-alt em { color: var(--accent-text); font-style: normal; }
+.vw-ok { color: var(--success); font-weight: 600; white-space: nowrap; }
+.vw-bad { color: var(--danger); font-weight: 600; white-space: nowrap; }
+@media (max-width: 900px) {
+  .vw-grid { grid-template-columns: minmax(0, 1fr); }
+  .vw-step { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .vw-label { grid-column: 2; }
+  .vw-value { grid-column: 2; }
+  .vw-step > :last-child { grid-column: 3; grid-row: 1; }
+  .vw-alt { grid-template-columns: minmax(0, 1fr) auto; }
+  .vw-alt > button { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* ---------- VPN «Узлы» по серверам (NPM-48) ---------- */
+.mh-hide-chip { display: inline-flex; align-items: center; gap: 6px; }
+.vs-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--text-3); align-items: center; }
+.vs-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.vs-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--border-strong); }
+.vs-dot.vs-ok { background: var(--success); }
+.vs-dot.vs-slow { background: var(--warning); }
+.vs-dot.vs-silent { background: var(--border-strong); }
+.vs-list { display: grid; gap: 10px; }
+.vs-server { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.vs-server.is-bad { border-color: var(--danger-border); }
+.vs-server > header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.vs-title { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; min-width: 0; }
+.vs-title b { font-weight: 500; overflow-wrap: anywhere; }
+.vs-title small { color: var(--text-3); font-size: 12.5px; }
+.vs-nodes { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; align-items: center; }
+.vs-node { display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); min-width: 0; max-width: 100%; }
+.vs-node > span { display: flex; flex-direction: column; min-width: 0; }
+.vs-node .mono { font-size: 12.5px; overflow-wrap: anywhere; }
+.vs-node small { color: var(--text-3); font-size: 11.5px; overflow-wrap: anywhere; }
+.vs-node.vs-silent { opacity: .7; }
+.vs-more { font-size: 12.5px; }
+.vs-show { justify-self: start; }
+
+/* ---------- VPN «Подписки»: сами подписки и долго молчащие узлы (NPM-48) ---------- */
+.ck-subs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+.ck-sub { display: grid; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.ck-sub.is-stale { border-color: var(--warning-border); }
+.ck-sub-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.ck-sub-grid { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.ck-silent { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin-top: 10px; font-size: 13px; }
+.ck-silent > span { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }

@@ -249,6 +249,9 @@ export type ServiceState = {
   path?: string[];
 };
 
+/** Where a node connects, from the subscription files (NPM-48). */
+export type NodeMeta = { provider: string; type: string; server: string; port?: number; sni?: string; network?: string };
+
 export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[] };
 
 export type InstallPlan = {
@@ -374,6 +377,7 @@ export const core = {
     call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   services: () => call<ServicesReport>("/api/core/services"),
+  nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),

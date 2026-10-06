@@ -31,6 +31,7 @@ export type PageKey =
   | "dns"
   // vpn
   | "vpn"
+  | "why"
   | "proxies"
   | "checks"
   | "connections"
@@ -89,7 +90,8 @@ export const NAV: NavItem[] = [
   { id: "analyzer", section: "network", tab: "Анализатор", title: "Анализатор", description: "Почему сайт не открывается: напрямую, через mihomo и MikroTik.", icon: "search" },
   { id: "scan", section: "network", tab: "Автопроверка", title: "Автопроверка", description: "Регулярная проверка списка сайтов.", icon: "clock" },
 
-  { id: "vpn", section: "vpn", tab: "Сводка", title: "VPN", description: "Режим сети, рабочие узлы, подписки и трафик.", icon: "shield" },
+  { id: "vpn", section: "vpn", tab: "Сейчас", title: "VPN", description: "Работает ли интернет и сервисы, которыми пользуются дома.", icon: "shield" },
+  { id: "why", section: "vpn", tab: "Почему не открывается", title: "Почему не открывается", description: "Путь запроса по шагам: правило, узел, соединение, ответ сайта — и где он обрывается.", icon: "search" },
   { id: "proxies", section: "vpn", tab: "Узлы", title: "Узлы и группы", description: "Выбор узла в группе, проверка задержки, подписки, Tailscale, OLCRTC.", icon: "layers" },
   { id: "checks", section: "vpn", tab: "Подписки", title: "Проверка подписок", description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.", icon: "test" },
   { id: "connections", section: "vpn", tab: "Соединения", title: "Соединения", description: "Живые соединения через mihomo: устройство, правило, цепочка, скорость.", icon: "globe" },
