@@ -96,7 +96,7 @@ export function VpnServices({ onNavigate }: { onNavigate: (p: PageKey) => void }
                   <span className="vn-mono" aria-hidden="true">
                     {s.name.slice(0, 2)}
                   </span>
-                  <span className="vn-card-name">
+                  <span className="vn-card-name" title={`${s.name} — ${pathText(s)}`}>
                     <b>{s.name}</b>
                     <small className="truncate">{pathText(s)}</small>
                   </span>

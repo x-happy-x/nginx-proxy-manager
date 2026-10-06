@@ -457,7 +457,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
               <button key={s.id} className={`vn-card${t.tone === "bad" ? " is-bad" : ""}`} onClick={() => setOpen(s.id)}>
                 <span className="vn-card-top">
                   <span className="vn-mono" aria-hidden="true">{s.name.slice(0, 2)}</span>
-                  <span className="vn-card-name">
+                  <span className="vn-card-name" title={`${s.name} — ${s.what}`}>
                     <b>{s.name}</b>
                     <small>{s.what}</small>
                   </span>
