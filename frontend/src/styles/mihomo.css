@@ -2792,3 +2792,10 @@ button.vr-gchip { cursor: pointer; }
 .vn-probe.is-ok { color: var(--success); background: var(--success-soft); border-color: var(--success-border); }
 .vn-probe.is-bad { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-border); }
 .vn-probes small { flex-basis: 100%; color: var(--text-3); font-size: 11.5px; }
+
+/* NPM-53: chips and cards keep one line; long text ends with an ellipsis */
+.vn-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+.vn-card-name b, .vn-card-name small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-panel-head .vn-card-name b, .vs-panel-head .vn-card-name small { white-space: normal; }
+.vn-card-top .vn-pill { flex: none; }
+.vn-card-foot > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
