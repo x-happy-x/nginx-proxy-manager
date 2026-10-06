@@ -2564,3 +2564,12 @@ button.yt-badge {
 .vs-node.vs-silent { opacity: .7; }
 .vs-more { font-size: 12.5px; }
 .vs-show { justify-self: start; }
+
+/* ---------- VPN «Подписки»: сами подписки и долго молчащие узлы (NPM-48) ---------- */
+.ck-subs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+.ck-sub { display: grid; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.ck-sub.is-stale { border-color: var(--warning-border); }
+.ck-sub-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.ck-sub-grid { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.ck-silent { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin-top: 10px; font-size: 13px; }
+.ck-silent > span { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
