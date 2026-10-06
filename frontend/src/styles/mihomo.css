@@ -2504,3 +2504,39 @@ button.yt-badge {
   .vn-issue { grid-template-columns: 12px minmax(0, 1fr); }
   .vn-issue > :last-child { grid-column: 2; justify-self: start; }
 }
+
+/* ---------- VPN «Почему не открывается» (NPM-48) ---------- */
+.vn-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.vw-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vw-form input { flex: 1 1 280px; min-width: 0; min-height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+.vw-form .vn-chips { flex-basis: 100%; }
+.vw-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.vw-steps { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.vw-step { display: grid; grid-template-columns: 26px 150px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.vw-step:last-child { border-bottom: 0; }
+.vw-step.is-fail { background: var(--danger-soft); }
+.vw-step.is-skip .vw-value { color: var(--text-3); }
+.vw-no { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--surface-3); color: var(--text-2); }
+.vw-step.is-fail .vw-no { background: var(--danger); color: #fff; }
+.vw-label { color: var(--text-3); }
+.vw-value { min-width: 0; overflow-wrap: anywhere; }
+.vw-value em { color: var(--text-3); font-style: normal; }
+.vw-side { display: grid; gap: 12px; }
+.vw-verdict { display: grid; gap: 6px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); font-size: 13.5px; }
+.vw-verdict b { font-size: 15px; }
+.vw-verdict small { color: var(--text-2); }
+.vw-alts { display: grid; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.vw-alt-list { display: grid; gap: 6px; }
+.vw-alt { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.vw-alt em { color: var(--accent-text); font-style: normal; }
+.vw-ok { color: var(--success); font-weight: 600; white-space: nowrap; }
+.vw-bad { color: var(--danger); font-weight: 600; white-space: nowrap; }
+@media (max-width: 900px) {
+  .vw-grid { grid-template-columns: minmax(0, 1fr); }
+  .vw-step { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .vw-label { grid-column: 2; }
+  .vw-value { grid-column: 2; }
+  .vw-step > :last-child { grid-column: 3; grid-row: 1; }
+  .vw-alt { grid-template-columns: minmax(0, 1fr) auto; }
+  .vw-alt > button { grid-column: 1 / -1; justify-self: start; }
+}
