@@ -38,6 +38,10 @@ type trafficPoint struct {
 	Up    int64 `json:"up"`
 	Down  int64 `json:"down"`
 	Conns int   `json:"conns"` // peak open connections in the bucket
+	// TCP connections that closed in the bucket, and those of them that never
+	// got a byte back: a node that accepts and stays silent (NPM-51)
+	Closed int `json:"closed,omitempty"`
+	Empty  int `json:"empty,omitempty"`
 }
 
 type dimStat struct {
@@ -73,6 +77,9 @@ type trafficState struct {
 	Closed   []closedConn   `json:"closed"`
 	// Adaptive health per provider (NPM-29).
 	Health map[string]*providerHealth `json:"health,omitempty"`
+	// delay of each group's node by minute and hour, subscription updates (NPM-51)
+	Groups  map[string]*groupHistory `json:"groups,omitempty"`
+	ProvLog map[string][]provUpdate  `json:"prov_log,omitempty"`
 }
 
 type liveConn struct {
@@ -150,7 +157,14 @@ func (a *app) startMihomoTraffic() {
 					Providers map[string]providerSnapshot `json:"providers"`
 				}
 				if err := mihomoGet("/providers/proxies", &body); err == nil {
-					traffic.observeHealth(time.Now(), body.Providers)
+					now := time.Now()
+					traffic.observeHealth(now, body.Providers)
+					var px struct {
+						Proxies map[string]proxySnapshot `json:"proxies"`
+					}
+					if err := mihomoGet("/proxies", &px); err == nil {
+						traffic.observeGroups(now, px.Proxies, body.Providers)
+					}
 				}
 				traffic.save()
 			}
@@ -332,11 +346,18 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 		}
 		seen[c.ID] = liveConn{up: c.Upload, down: c.Download, c: c}
 	}
+	closedN, emptyN := 0, 0
 	for id, old := range t.live {
 		if _, ok := seen[id]; ok {
 			continue
 		}
 		c := old.c
+		if strings.EqualFold(c.Metadata.Network, "tcp") {
+			closedN++
+			if old.down == 0 && old.up > 0 {
+				emptyN++
+			}
+		}
 		rule := c.Rule
 		if c.RulePayload != "" {
 			rule += " " + c.RulePayload
@@ -345,6 +366,14 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 			Host: connHost(c), Source: c.Metadata.SourceIP, Process: c.Metadata.Process, Rule: rule,
 			Chains: c.Chains, Up: old.up, Down: old.down, Start: c.Start, End: now.Unix(), Network: c.Metadata.Network,
 		})
+	}
+	if closedN > 0 {
+		for _, list := range [][]trafficPoint{t.st.Minutes, t.st.Hours} {
+			if n := len(list); n > 0 {
+				list[n-1].Closed += closedN
+				list[n-1].Empty += emptyN
+			}
+		}
 	}
 	if n := len(t.st.Closed); n > closedKeep {
 		t.st.Closed = t.st.Closed[n-closedKeep:]

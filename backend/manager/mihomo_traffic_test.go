@@ -101,10 +101,7 @@ func TestHealthHistoryModesAndWorking(t *testing.T) {
 		}{}}}
 		for i, a := range avail {
 			name := string(rune('a' + i))
-			p.Proxies = append(p.Proxies, struct {
-				Name  string `json:"name"`
-				Alive bool   `json:"alive"`
-			}{Name: name})
+			p.Proxies = append(p.Proxies, proxySnapshot{Name: name})
 			r := p.Adaptive.Results[name]
 			r.Available = a
 			p.Adaptive.Results[name] = r

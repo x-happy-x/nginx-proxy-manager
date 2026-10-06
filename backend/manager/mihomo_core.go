@@ -625,6 +625,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "plan": installPlan(r.URL.Query().Get("xkeen") == "1")})
 	case "/api/core/health":
 		a.handleCoreHealth(w, r)
+	case "/api/core/groups":
+		a.handleCoreGroups(w, r)
 	case "/api/core/traffic":
 		a.handleCoreTraffic(w, r)
 	case "/api/core/traffic/bypass":
