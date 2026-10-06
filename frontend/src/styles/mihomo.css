@@ -2799,3 +2799,65 @@ button.vr-gchip { cursor: pointer; }
 .vs-panel-head .vn-card-name b, .vs-panel-head .vn-card-name small { white-space: normal; }
 .vn-card-top .vn-pill { flex: none; }
 .vn-card-foot > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* NPM-54: «Сейчас» as in the design — the hero, tiles, the mode strip, two columns */
+.vo-hero { display: grid; gap: 22px; padding: 26px 28px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); min-width: 0; }
+.vo-hero-top { display: flex; flex-wrap: wrap; gap: 18px 24px; align-items: flex-start; justify-content: space-between; }
+.vo-hero-text { display: grid; gap: 8px; flex: 1 1 420px; min-width: 0; }
+.vo-eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-2); }
+.vo-pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--text-3); flex: none; }
+.vo-ok .vo-eyebrow { color: var(--success); } .vo-ok .vo-pulse { background: var(--success); box-shadow: 0 0 0 5px var(--success-soft); }
+.vo-warn .vo-eyebrow { color: var(--warning); } .vo-warn .vo-pulse { background: var(--warning); box-shadow: 0 0 0 5px var(--warning-soft); }
+.vo-bad .vo-eyebrow { color: var(--danger); } .vo-bad .vo-pulse { background: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+.vo-hero h2 { margin: 0; font-size: 34px; line-height: 1.12; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.vo-hero p { margin: 0; font-size: 16px; color: var(--text-2); max-width: 72ch; }
+.vo-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vo-hero-actions .btn { white-space: nowrap; }
+.vo-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.vo-tile { display: grid; gap: 8px; align-content: start; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.vo-tile:hover { border-color: var(--border-strong); }
+.vo-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.vo-tile-title { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.vo-tile-value { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.vo-tile-value b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vo-tile-value span { color: var(--text-3); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vo-tile-bar { display: flex; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.vo-fill { height: 100%; border-radius: 999px; background: var(--text-3); }
+.vo-fill-ok { background: var(--success); } .vo-fill-warn { background: var(--warning); } .vo-fill-bad { background: var(--danger); }
+.vo-tile-note { font-size: 13px; color: var(--text-2); min-width: 0; overflow-wrap: anywhere; }
+.vo-tile-note .vn-probes { margin-top: 0; }
+.vo-strip { display: grid; gap: 8px; }
+.vo-strip-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: baseline; }
+.vo-strip-head .vn-legend { font-size: 12.5px; color: var(--text-2); }
+.vo-segs { display: flex; gap: 3px; height: 30px; min-width: 0; }
+.vo-segs > button { flex: 1 1 0; min-width: 5px; border: 0; padding: 0; border-radius: 7px; cursor: pointer; }
+.vo-segs > button:hover { filter: brightness(1.1); }
+.vo-segs > button.is-sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+.vo-segs > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.vo-axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vo-strip-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); font-size: 13.5px; color: var(--text-2); }
+.vo-strip-sel b { color: var(--text); font-variant-numeric: tabular-nums; }
+.vo-cols { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.vo-main { flex: 999 1 560px; min-width: 0; }
+.vo-side { flex: 1 1 340px; min-width: 0; display: grid; gap: 16px; }
+.vo-panel { display: grid; gap: 12px; padding: 18px 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); min-width: 0; }
+.vo-panel h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.vo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.vo-grid .vn-card { background: var(--surface-2); }
+.vo-issues { display: grid; gap: 10px; }
+.vo-issue { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); min-width: 0; }
+.vo-issue .vn-dot { margin-top: 6px; flex: none; }
+.vo-issue > span { display: grid; gap: 4px; min-width: 0; }
+.vo-issue small { color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+.vo-issue-act { margin-top: 4px; }
+.vo-path { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vo-path li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); min-width: 0; }
+.vo-path li.is-cur { border-color: var(--success-border); background: var(--success-soft); }
+.vo-path li.is-dead { opacity: .6; }
+.vo-path-no { width: 20px; flex: none; text-align: right; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .vo-hero { padding: 18px 16px; }
+  .vo-hero h2 { font-size: 26px; }
+  .vo-hero-actions { width: 100%; }
+  .vo-hero-actions .btn { flex: 1 1 0; justify-content: center; }
+}
