@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -51,6 +52,12 @@ type routingSettings struct {
 	// answer from mihomo's own DNS instead of a trip through a node: a dead
 	// node no longer takes the whole internet of such a device (NPM-46).
 	DNSIntercept bool `json:"dns_intercept"`
+	// Passive check of the fork (MIHOMO-8) on the groups of nodes: a node
+	// through which connections get no answer sits out, a sign-in group takes
+	// only nodes that passed its own check. Off — the core behaves as before.
+	PassiveCheck bool `json:"passive_check"`
+	// set by the handler, not saved: the core takes exit-countries (fork 7+)
+	coreExitCountries bool
 }
 
 type accessCheck struct {
@@ -75,6 +82,7 @@ func defaultRouting() routingSettings {
 		BaseAdaptive: true,
 		Telegram:     true,
 		DNSIntercept: true,
+		PassiveCheck: true,
 		Cascade:      true,
 		AIServiceOK:  true,
 	}
@@ -300,9 +308,28 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	// direct server drops out when that node does not answer.
 	head = append(head,
 		pathGroup("AUTO", append([]any{"Прямые EU", "Прямые мир", "Обходы"}, cascade...), m{"health-check-urls": []any{routingCheck2}}),
-		leafGroup("ИИ прямые", 5000, m{"use": []any{routingAIProvider}, "exclude-filter": bypass}),
-		leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}, "filter": bypass}),
 	)
+	if s.aiByCountry() {
+		// the base subscription's own nodes, by the exit country its adaptive
+		// check saw: no copy of the provider, no second check (MIHOMO-8)
+		countries := []any{}
+		for _, c := range s.AI {
+			if c != "EU" {
+				countries = append(countries, c)
+			}
+		}
+		direct := leafGroup("ИИ прямые", 5000, m{"use": base, "exclude-filter": or(bypass, junk), "exit-countries": countries})
+		viaBypass := leafGroup("ИИ обходы", 5000, m{"use": base, "filter": bypass, "exit-countries": countries})
+		if junk != "" {
+			viaBypass["exclude-filter"] = junk
+		}
+		head = append(head, direct, viaBypass)
+	} else {
+		head = append(head,
+			leafGroup("ИИ прямые", 5000, m{"use": []any{routingAIProvider}, "exclude-filter": bypass}),
+			leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}, "filter": bypass}),
+		)
+	}
 	all := []any{"AUTO", "Прямые EU", "Прямые мир", "Обходы", "RU"}
 	if s.Cascade {
 		all = append(all, "Каскад")
@@ -365,8 +392,43 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		}
 		tail = append(tail, g)
 	}
+	// passive check on the groups whose members are nodes, never on groups
+	// of groups: those would sit out a whole group for one node
+	if s.PassiveCheck {
+		nodeGroups := map[string]bool{"Прямые EU": true, "Прямые мир": true, "Обходы": true, "RU": true, "Каскад": true, "ИИ прямые": true, "ИИ обходы": true}
+		for _, a := range s.Access {
+			nodeGroups[a.Name] = true
+		}
+		for _, list := range [][]m{head, tail} {
+			for _, g := range list {
+				if name, _ := g["name"].(string); nodeGroups[name] {
+					g["passive-check"] = true
+				}
+			}
+		}
+	}
 	_ = between
 	return head, tail
+}
+
+// aiByCountry: AI groups pick by exit country instead of a provider copy
+// when the core can and the service check is on (buildRouting also needs the
+// base subscription's adaptive check, the source of the country).
+func (s routingSettings) aiByCountry() bool { return s.coreExitCountries && s.AIServiceOK }
+
+// forkAtLeast: the core is the x-happy-x fork of at least this release.
+func forkAtLeast(version string, n int) bool {
+	i := strings.Index(version, "-fork.")
+	if i < 0 {
+		return false
+	}
+	rest := version[i+len("-fork."):]
+	j := 0
+	for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+		j++
+	}
+	v, err := strconv.Atoi(rest[:j])
+	return err == nil && v >= n
 }
 
 func toAny(in []string) []any {
@@ -378,7 +440,7 @@ func toAny(in []string) []any {
 }
 
 // Key order for generated mappings, so the YAML reads like a hand-written one.
-var routingKeyOrder = []string{"name", "type", "proxies", "use", "filter", "exclude-filter", "url", "health-check-urls", "expected-status", "interval", "timeout", "max-failed-times", "lazy"}
+var routingKeyOrder = []string{"name", "type", "proxies", "use", "filter", "exclude-filter", "exit-countries", "url", "health-check-urls", "expected-status", "interval", "timeout", "max-failed-times", "passive-check", "lazy"}
 
 func orderedNode(v any) *yaml.Node {
 	switch t := v.(type) {
@@ -656,11 +718,19 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			parent.Content = append(parent.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
 		}
 	}
-	aiNode, err := providerNode(base, routingAIProvider, s)
-	if err != nil {
-		return nil, err
+	// the country comes from the base subscription's adaptive trace
+	if mapGet(mapGet(base, "health-check"), "adaptive") == nil {
+		s.coreExitCountries = false
 	}
-	setKey(providers, routingAIProvider, aiNode)
+	if s.aiByCountry() {
+		setKey(providers, routingAIProvider, nil)
+	} else {
+		aiNode, err := providerNode(base, routingAIProvider, s)
+		if err != nil {
+			return nil, err
+		}
+		setKey(providers, routingAIProvider, aiNode)
+	}
 	if s.Cascade {
 		chain, err := providerNode(base, routingChainProvider, s)
 		if err != nil {
@@ -910,6 +980,8 @@ func (a *app) handleRoutingWrite(w http.ResponseWriter, r *http.Request, apply b
 		a.writeJSON(w, http.StatusConflict, response{"ok": false, "error": "config.yaml изменился с момента загрузки; обновите страницу и повторите", "sha": configSHA(original)})
 		return
 	}
+	// AI by exit country needs fork 7 (MIHOMO-8); an older core keeps the copy
+	req.Settings.coreExitCountries = forkAtLeast(readCoreStatus().Version, 7)
 	candidate, err := buildRouting(original, req.Settings)
 	if err != nil {
 		a.writeJSON(w, http.StatusUnprocessableEntity, response{"ok": false, "error": err.Error()})

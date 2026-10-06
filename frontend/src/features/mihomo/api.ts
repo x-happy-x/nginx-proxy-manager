@@ -20,7 +20,8 @@ export type MProxy = {
   "provider-name"?: string;
 };
 
-export type AdaptiveProbe = { url: string; ok: boolean; status?: number; bytes: number; ms: number; stage: string; error?: string };
+/** fail and country: fork 7 (MIHOMO-8) — silent | reset | tls | http | body; loc of a Cloudflare trace. */
+export type AdaptiveProbe = { url: string; ok: boolean; status?: number; bytes: number; ms: number; stage: string; error?: string; fail?: string; country?: string };
 export type NetMode = "normal" | "whitelist" | "offline" | "unknown";
 export type AdaptiveNode = {
   name: string;
@@ -30,7 +31,7 @@ export type AdaptiveNode = {
   record: { ok: number; fail: number; avgMs: number; lastMs: number; checks: number; lastOk: string; lastCheck: string };
 };
 /** skipped: "dependency-not-ready" when the base provider has not admitted the same connection (MIHOMO-6). */
-export type AdaptiveResult = { mode: string; at: string; ok: boolean; available?: boolean; consecutiveSuccesses?: number; consecutiveFailures?: number; skipped?: string; probes: AdaptiveProbe[] | null };
+export type AdaptiveResult = { mode: string; at: string; ok: boolean; available?: boolean; consecutiveSuccesses?: number; consecutiveFailures?: number; skipped?: string; probes: AdaptiveProbe[] | null; country?: string };
 export type AdaptiveHealth = {
   mode: NetMode;
   observed: NetMode;
@@ -185,6 +186,8 @@ export type RoutingSettings = {
   telegram: boolean;
   /** DNS queries of devices to public resolvers answered by mihomo's DNS (NPM-46). */
   dns_intercept: boolean;
+  /** passive check of the fork on the groups of nodes (NPM-50) */
+  passive_check: boolean;
   cascade: boolean;
   ai_service_check: boolean;
 };
