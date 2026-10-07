@@ -3154,3 +3154,15 @@ button.vr-gchip { cursor: pointer; }
   .ol-row2 { grid-template-columns: minmax(0, 1fr); }
   .ol-fix, .ol-tries, .ol-step > .ol-code { margin-left: 0; }
 }
+
+/* NPM-56: OLCRTC modes — for the whitelist or the normal uplink */
+.ol-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.ol-mode { display: grid; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); color: inherit; font: inherit; cursor: pointer; }
+.ol-mode small { color: var(--text-2); font-size: 12.5px; }
+.ol-mode.is-on { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border); background: var(--accent-soft); }
+.ol-channel { margin: 0; font-size: 13px; color: var(--text-2); padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.ol-channel.is-wl { background: var(--warning-soft); }
+.ol-state { display: grid; gap: 3px; justify-items: start; min-width: 0; }
+.ol-wl { font-size: 11.5px; color: var(--text-3); }
+.ol-wl.is-ok { color: var(--success); }
+.ol-wl.is-fail { color: var(--danger); }

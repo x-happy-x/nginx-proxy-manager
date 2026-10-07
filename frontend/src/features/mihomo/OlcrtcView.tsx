@@ -80,7 +80,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   (rep?.servers || []).forEach((s) => s.variants.forEach((v) => owned.set(v.node, s.id)));
   const servers = [
     { id: NO_SERVER, name: "Без своего сервера", addr: "узлы из файла olcrtc и подписок", own: false, nodes: olcNodes.filter((n) => !owned.has(n)) },
-    ...(rep?.servers || []).map((s) => ({ id: s.id, name: s.name, addr: `${s.host}${s.port !== 22 ? `:${s.port}` : ""} · ssh ${s.user}`, own: true, nodes: s.variants.map((v) => v.node) })),
+    ...(rep?.servers || []).map((s) => ({ id: s.id, name: s.name, addr: `${s.host}${s.port !== 22 ? `:${s.port}` : ""} · ssh ${s.user}`, own: true, mode: s.mode, nodes: s.variants.map((v) => v.node) })),
   ].filter((s) => s.own || s.nodes.length);
   const cur = servers.find((s) => s.id === srv) || servers.find((s) => s.nodes.includes(rep?.selected || "")) || servers[0];
   const check = (n: string): OlcCheck | undefined => rep?.checks[n];
@@ -146,7 +146,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                     <span>
                       {ok} из {s.nodes.length} вариантов работают
                     </span>
-                    <span>{s.own ? "свой сервер" : "без сервера"}</span>
+                    <span>{s.own ? ("mode" in s && s.mode === "normal" ? "свой · обычный режим" : "свой · для белых списков") : "без сервера"}</span>
                   </span>
                 </button>
               );
@@ -193,8 +193,11 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                       <span role="cell" className="nx-hm mono">
                         {v?.transport || conf?.transport || "—"}
                       </span>
-                      <span role="cell">
+                      <span role="cell" className="ol-state">
                         <span className={`vn-pill vn-${c ? (c.ok ? "ok" : "bad") : "idle"}`}>{c ? (c.ok ? `${c.ms} мс` : "не работает") : "не проверялся"}</span>
+                        <small className={`ol-wl is-${v?.wl || "none"}`} title={v?.wl_at ? `проверено ${ago(v.wl_at)}` : undefined}>
+                          {v?.wl === "ok" ? "при белых списках работал" : v?.wl === "fail" ? "при белых списках не работал" : v ? "при белых списках ещё не проверялся" : ""}
+                        </small>
                       </span>
                       <span role="cell" className="nx-hm ol-note">
                         {c ? `${ago(c.t)}${c.error ? ` · ${c.error}` : ""}` : "—"}
@@ -280,6 +283,9 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
   const [inst, setInst] = useState<Record<string, boolean>>({});
   const [tr, setTr] = useState<Record<string, boolean>>({ datachannel: true, vp8channel: true });
   const [keep, setKeep] = useState(2);
+  const [mode2, setMode2] = useState<"whitelist" | "normal">("whitelist");
+  const wlNow = rep?.channel === "whitelist";
+  useEffect(() => setKeep(mode2 === "whitelist" && !wlNow ? 3 : 2), [mode2, wlNow]);
   const [open, setOpen] = useState<string>("");
   const [copied, setCopied] = useState("");
   const instances = rep?.instances || [];
@@ -302,6 +308,7 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
         instances: instances.filter((i) => inst[i]),
         transports: (rep?.transports || []).filter((t) => tr[t]),
         keep,
+        mode: mode2,
       },
       "setup",
     ).then(() => setForm((f) => ({ ...f, password: "" })));
@@ -374,8 +381,27 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                 <small className="mh-muted">Нужен один раз: HomeNet войдёт и положит на сервер свой ключ. Пароль нигде не сохраняется.</small>
               </label>
             )}
+            <span className="vn-eyebrow">Для какого случая</span>
+            <div className="ol-modes" role="radiogroup" aria-label="Режим">
+              <button type="button" role="radio" aria-checked={mode2 === "whitelist"} className={`ol-mode${mode2 === "whitelist" ? " is-on" : ""}`} onClick={() => setMode2("whitelist")}>
+                <b>Для белых списков</b>
+                <small>Варианты должны открываться из дома без VPN, когда провайдер пропускает только белый список. Это главный случай для OLCRTC.</small>
+              </button>
+              <button type="button" role="radio" aria-checked={mode2 === "normal"} className={`ol-mode${mode2 === "normal" ? " is-on" : ""}`} onClick={() => setMode2("normal")}>
+                <b>Обычный</b>
+                <small>Достаточно, чтобы вариант работал напрямую сейчас — когда интернет без ограничений, а режут протоколы VPN.</small>
+              </button>
+            </div>
+            <p className={`ol-channel${wlNow ? " is-wl" : ""}`}>
+              Канал сейчас: <b>{wlNow ? "белые списки" : rep?.channel === "normal" ? "без ограничений" : rep?.channel === "offline" ? "без интернета" : "не определён"}</b>.{" "}
+              {mode2 === "whitelist"
+                ? wlNow
+                  ? "Проверка честная: что заработает сейчас, работает при белых списках."
+                  : "Что варианты работают при белых списках, станет ясно, когда они включатся: роутер проверит сам и заменит нерабочие. Поэтому оставим больше вариантов."
+                : "Каждый вариант сначала открывается с роутера напрямую, без VPN."}
+            </p>
             <span className="vn-eyebrow">Варианты связи</span>
-            <small className="mh-muted">Публичные Jitsi из списка olcrtc. Выберите несколько: HomeNet попробует по очереди и оставит рабочие.</small>
+            <small className="mh-muted">Публичные Jitsi из списка olcrtc. Сначала роутер открывает площадку напрямую, без VPN; что не открылось — не пробуется. Остальные HomeNet поднимет по очереди и оставит рабочие.</small>
             <div className="ol-checks">
               {instances.map((i) => (
                 <label key={i} className="ol-check">

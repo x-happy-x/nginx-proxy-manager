@@ -63,6 +63,10 @@ type olcVariant struct {
 	// but never stops it. Key: the variant's key when not the server's one.
 	External string `json:"external,omitempty"`
 	Key      string `json:"key,omitempty"`
+	// WL: "ok" or "fail" when checked while the uplink was in the whitelist
+	// mode, empty when not checked in it yet; WLAt: when.
+	WL   string `json:"wl,omitempty"`
+	WLAt int64  `json:"wl_at,omitempty"`
 }
 
 // olcFound is an olcrtc already running on the server (olcrtc's srv.sh).
@@ -87,6 +91,7 @@ type olcServer struct {
 	HostKey  string       `json:"host_key,omitempty"`
 	Key      string       `json:"key,omitempty"` // the link's encryption key; never sent to the browser
 	Arch     string       `json:"arch,omitempty"`
+	Mode     string       `json:"mode,omitempty"` // whitelist | normal
 	Variants []olcVariant `json:"variants"`
 	Created  int64        `json:"created"`
 }
@@ -153,6 +158,7 @@ type olcState struct {
 	job   *olcJob
 	fails int // failed checks of the selected variant in a row
 	ran   bool
+	wasWL bool
 }
 
 var olc *olcState
@@ -471,7 +477,7 @@ func (o *olcState) snapshot() map[string]any {
 		job.Tries = []olcTry{}
 	}
 	return map[string]any{"auto": o.st.Auto, "servers": servers, "events": append([]olcEvent{}, o.st.Events...), "checks": checks, "job": job,
-		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports}
+		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports, "channel": olcChannelMode()}
 }
 
 func (j *olcJob) step(id string) *olcStep {
@@ -493,6 +499,7 @@ type olcSetupReq struct {
 	Instances  []string `json:"instances"`
 	Transports []string `json:"transports"`
 	Keep       int      `json:"keep"`
+	Mode       string   `json:"mode"` // whitelist | normal
 }
 
 var olcHostRe = regexp.MustCompile(`^[A-Za-z0-9.\-:\[\]]{1,253}$`)
@@ -539,6 +546,10 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 			o.st.Servers = append(o.st.Servers, srv)
 		}
 		srv.Name, srv.Host, srv.Port, srv.User = name, req.Host, req.Port, req.User
+		srv.Mode = "whitelist"
+		if req.Mode == "normal" {
+			srv.Mode = "normal"
+		}
 	}
 	j := &olcJob{ID: randHex(6), Server: srv.ID, Kind: kind, Running: true, Started: time.Now().Unix(), resume: make(chan string, 1)}
 	steps := [][2]string{{"ssh", "SSH-подключение"}, {"check", "Проверка сервера"}, {"existing", "Что уже установлено"}}
@@ -900,7 +911,15 @@ WantedBy=multi-user.target
 		if cur := olcSelected(); cur == "" || !(olc.workingNode(cur)) {
 			_ = olcSelect(best)
 		}
-		return fmt.Sprintf("рабочих вариантов %d · generate_204 через %s за %d мс", len(kept), best, results[0].MS), nil
+		note := ""
+		if srv.Mode == "whitelist" {
+			if olcChannelMode() == "whitelist" {
+				note = " · проверены при белых списках"
+			} else {
+				note = " · при белых списках проверятся сами, когда они включатся"
+			}
+		}
+		return fmt.Sprintf("рабочих вариантов %d · generate_204 через %s за %d мс%s", len(kept), best, results[0].MS, note), nil
 	})
 	o.finish(j, true, "")
 	o.event("ok", fmt.Sprintf("%s: %s, рабочих вариантов %d", srv.Name, map[string]string{"setup": "сервер настроен", "repick": "варианты подобраны заново"}[j.Kind], len(kept)))
@@ -960,8 +979,17 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 	kept := []olcVariant{}
 	_ = o.do(j, "pick", func() (string, error) {
 		// what still works stays; the dead are taken down first
+		wl := olcChannelMode() == "whitelist"
 		for _, v := range srv.Variants {
 			c := olcNodeCheck(v.Node, 15*time.Second)
+			if c.OK && wl {
+				v.WL, v.WLAt = "ok", time.Now().Unix()
+			}
+			if c.OK && srv.Mode == "whitelist" && !wl && v.WL == "fail" {
+				o.dropVariant(x, v)
+				o.logf(j, "pick", "убран "+v.Node+": при белых списках не работал")
+				continue
+			}
 			if c.OK {
 				kept = append(kept, v)
 				o.logf(j, "pick", "оставлен рабочий "+v.Node)
@@ -1014,6 +1042,10 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 }
 
 func (o *olcState) tryVariant(x *olcSSH, srv *olcServer, inst, tr string) (olcVariant, string, bool) {
+	// an alternative to the VPN must not need it: the router reaches Jitsi straight
+	if err := olcDirectReach(inst); err != nil {
+		return olcVariant{}, "не открывается из дома без VPN: " + err.Error(), false
+	}
 	room := fmt.Sprintf("https://%s/homenet-%s", inst, randHex(6))
 	short := strings.SplitN(inst, ".", 2)[0]
 	unit := fmt.Sprintf("v%s-%s", randHex(3), tr)
@@ -1045,7 +1077,46 @@ func (o *olcState) tryVariant(x *olcSSH, srv *olcServer, inst, tr string) (olcVa
 		o.dropVariant(x, v)
 		return v, "не открывается: " + c.Err, false
 	}
+	if olcChannelMode() == "whitelist" {
+		v.WL, v.WLAt = "ok", time.Now().Unix()
+		return v, fmt.Sprintf("работает при белых списках · %d мс", c.MS), true
+	}
 	return v, fmt.Sprintf("работает · %d мс", c.MS), true
+}
+
+// olcChannelMode: the uplink's mode as the fork's adaptive check sees it.
+func olcChannelMode() string {
+	var body struct {
+		Providers map[string]providerSnapshot `json:"providers"`
+	}
+	if err := mihomoGet("/providers/proxies", &body); err != nil {
+		return "unknown"
+	}
+	best, mode := -1, "unknown"
+	for _, p := range body.Providers {
+		if p.Adaptive != nil && len(p.Proxies) > best {
+			best, mode = len(p.Proxies), p.Adaptive.Mode
+		}
+	}
+	return mode
+}
+
+// olcDirectReach opens the Jitsi instance straight through the uplink,
+// past mihomo, with Yandex's DNS — the way it must work without the VPN.
+func olcDirectReach(inst string) error {
+	tr := probeTransport(dialDirect, inst)
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Get("https://" + inst + "/")
+	if err != nil {
+		return errors.New(serviceError(err))
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("площадка ответила %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (o *olcState) dropVariant(x *olcSSH, v olcVariant) {
@@ -1083,7 +1154,13 @@ func (o *olcState) autoLoop() {
 			continue
 		}
 		cur := olcSelected()
-		if n%10 == 1 {
+		wl := olcChannelMode() == "whitelist"
+		// the first minutes of a whitelist spell check every variant: that is the test that matters
+		if wl && !o.wasWL {
+			n = 0
+		}
+		o.wasWL = wl
+		if n%10 == 1 || n == 0 {
 			for _, nd := range nodes {
 				c := olcNodeCheck(nd.Name, 15*time.Second)
 				o.mu.Lock()
@@ -1095,6 +1172,9 @@ func (o *olcState) autoLoop() {
 			o.mu.Lock()
 			o.st.Checks[cur] = c
 			o.mu.Unlock()
+		}
+		if wl {
+			o.markWhitelist()
 		}
 		o.mu.Lock()
 		curOK := o.st.Checks[cur].OK
@@ -1427,4 +1507,26 @@ func (o *olcState) migrate(j *olcJob, x *olcSSH, srv *olcServer) {
 	srv.Variants = vars
 	o.saveLocked()
 	o.mu.Unlock()
+}
+
+// markWhitelist records, while the uplink is in the whitelist mode, how each
+// variant of the user's servers did in its last check.
+func (o *olcState) markWhitelist() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	now := time.Now().Unix()
+	for _, s := range o.st.Servers {
+		for i, v := range s.Variants {
+			c, ok := o.st.Checks[v.Node]
+			if !ok || now-c.T > 900 {
+				continue
+			}
+			state := "fail"
+			if c.OK {
+				state = "ok"
+			}
+			s.Variants[i].WL, s.Variants[i].WLAt = state, c.T
+		}
+	}
+	o.saveLocked()
 }
