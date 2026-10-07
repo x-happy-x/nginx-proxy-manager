@@ -193,6 +193,9 @@ export type RoutingSettings = {
   passive_check: boolean;
   cascade: boolean;
   ai_service_check: boolean;
+  /** torrents in a group of their own, switched by hand; devices send all but the web there (NPM-60) */
+  torrents?: boolean;
+  torrent_devices?: string[];
 };
 
 export type RoutingProvider = { name: string; type: string; adaptive: boolean; homenet: boolean; service?: boolean };
@@ -405,6 +408,11 @@ export const mihomo = {
 export type ExitRecord = { provider?: string; cc?: string; country?: string; city?: string; ip?: string; isp?: string; as?: string; source?: string; ms?: number; t: number; ok: boolean; err?: string; seen: number };
 export type ExitsReport = { running?: boolean; done?: number; total?: number; reason?: string; started?: number; last_full?: number; nodes: Record<string, ExitRecord> };
 
+/** Does BitTorrent get through a node: HTTP tracker, UDP tracker, DHT (NPM-60, core /torrent of MIHOMO-17). */
+export type TorrentStep = { ok: boolean; ms?: number; target?: string; error?: string };
+export type TorrentRecord = { provider?: string; udp: boolean; http: TorrentStep; udpTracker: TorrentStep; dht: TorrentStep; t: number; err?: string };
+export type TorrentsReport = { running?: boolean; done?: number; total?: number; nodes: Record<string, TorrentRecord> };
+
 export const core = {
   status: () => call<{ status: CoreStatus }>("/api/core/status").then((r) => r.status),
   devices: () => call<{ devices: CoreDevice[]; warning?: string }>("/api/core/devices"),
@@ -433,6 +441,8 @@ export const core = {
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   olcrtc: () => call<OlcReport>("/api/core/olcrtc"),
   exits: () => call<ExitsReport>("/api/core/exits"),
+  torrents: () => call<TorrentsReport>("/api/core/torrents"),
+  torrentsCheck: (body: { provider?: string; nodes?: string[] }) => call<TorrentsReport>("/api/core/torrents/check", json("POST", body)),
   exitsCheck: (body: { provider?: string; nodes?: string[] }) => call<ExitsReport>("/api/core/exits/check", json("POST", body)),
   olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove" | "tidy", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),

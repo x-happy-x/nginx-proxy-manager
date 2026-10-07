@@ -3379,3 +3379,63 @@ button.vr-gchip { cursor: pointer; }
 /* NPM-59: Tailscale exits with their country */
 .ts-exit-top .node-name { min-width: 0; flex: 1; }
 .ts-exit-cc { font-size: 13px; color: var(--text); min-width: 0; }
+
+/* ===== NPM-60: the path of a group, every member selectable ===== */
+.nx-path { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; font-size: 13px; }
+.nx-path-step { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.nx-path-sep { color: var(--text-3); }
+.nx-path-link { border: 0; background: transparent; padding: 2px 6px; margin: -2px -2px; border-radius: 6px; font: inherit; color: var(--accent-text); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; }
+.nx-path-link:hover { background: var(--accent-soft); }
+.nx-path-link.is-leaf, .nx-path-text.is-leaf { font-weight: 600; color: var(--text); }
+.nx-path-text { display: inline-flex; align-items: center; gap: 5px; }
+.nx-gcard-now .nx-path { font-size: 12.5px; flex-wrap: nowrap; }
+.nx-pan-head .nx-path { margin-top: 2px; }
+.nx-used { display: grid; gap: 6px; }
+.nx-used .nx-path { padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
+
+/* ===== NPM-60: «Торренты» ===== */
+.tr-now { display: grid; gap: 12px; padding: 16px 18px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); }
+.tr-now-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: flex-start; }
+.tr-path { font-size: 16px; }
+.tr-path .nx-path { font-size: 15px; }
+.tr-hint { font-size: 12.5px; color: var(--text-3); align-self: center; }
+.tr-rules { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+.tr-rules > span { flex: 1 1 320px; }
+.tr-off { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.tr-off > span { display: grid; gap: 4px; flex: 1 1 340px; }
+.tr-off small { color: var(--text-2); font-size: 13px; }
+.tr-devs { display: grid; gap: 10px; }
+.tr-devlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 320px; overflow: auto; }
+.tr-dev { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; cursor: pointer; min-height: 40px; }
+.tr-dev small { color: var(--text-3); font-size: 11.5px; }
+.tr-prov { flex: 0 1 200px; }
+.tr-table { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.tr-row { display: grid; grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 0.9fr)) 150px 104px; gap: 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); min-height: 44px; }
+.tr-row:hover { background: var(--surface-2); }
+.tr-row.is-now { background: var(--accent-soft); }
+.tr-head { border-top: 0; background: var(--surface-2); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); min-height: 36px; }
+.tr-node { display: grid; gap: 2px; min-width: 0; font-weight: 500; }
+.tr-node small { color: var(--text-3); font-size: 11.5px; font-weight: 400; }
+.tr-step { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.tr-step.is-ok { color: var(--success); }
+.tr-step.is-bad { color: var(--danger); }
+.tr-step.is-none { color: var(--text-3); }
+.tr-act { display: flex; justify-content: flex-end; }
+@media (max-width: 900px) {
+  .tr-row { grid-template-columns: minmax(0, 1fr) repeat(3, 64px) auto; }
+  .tr-row > :nth-child(5) { display: none; }
+  .tr-step { font-size: 0; }
+  .tr-step::first-letter { font-size: 14px; }
+}
+@media (max-width: 560px) {
+  .tr-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .tr-row > :nth-child(2), .tr-row > :nth-child(3), .tr-row > :nth-child(4) { display: none; }
+  .tr-row > :nth-child(5) { display: block; grid-column: 1; }
+  .tr-head { display: none; }
+}
+
+/* NPM-60: narrow screens — grids sized by their content pushed pages past the edge */
+.nx, .hub-main, .stat { grid-template-columns: minmax(0, 1fr); }
+.net-avail-bars { overflow: hidden; }
+.net-bar { min-width: 0; }
+@media (max-width: 640px) { .net-avail-bars { gap: 0; } }

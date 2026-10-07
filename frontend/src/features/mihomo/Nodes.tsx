@@ -108,6 +108,43 @@ export function useNodeRows(proxies: Record<string, MProxy>, providers: Record<s
   }, [proxies, providers, groups, meta]);
 }
 
+/** The chain a group goes through now: RU → ALL → Обходы → the node (NPM-60). */
+export function pathOf(name: string, proxies: Record<string, MProxy>): string[] {
+  const out = [name];
+  let cur = proxies[name];
+  for (let i = 0; cur?.now && i < 10 && !out.includes(cur.now); i++) {
+    out.push(cur.now);
+    cur = proxies[cur.now];
+  }
+  return out;
+}
+
+export function PathChain({ path, proxies, onGroup, onNode, label }: { path: string[]; proxies: Record<string, MProxy>; onGroup?: (n: string) => void; onNode?: (n: string) => void; label?: string }) {
+  return (
+    <span className="nx-path" aria-label={label || "Путь"}>
+      {path.map((n, i) => {
+        const isGroup = !!proxies[n] && GROUP_TYPES.has(proxies[n].type);
+        const text = n === "DIRECT" ? "напрямую" : n;
+        const go = isGroup ? onGroup : n !== "DIRECT" && n !== "REJECT" ? onNode : undefined;
+        return (
+          <span key={`${n}-${i}`} className="nx-path-step">
+            {i ? <span className="nx-path-sep" aria-hidden="true">›</span> : null}
+            {go ? (
+              <button type="button" className={`nx-path-link${isGroup ? "" : " is-leaf"}`} onClick={() => go(n)} title={isGroup ? `Группа ${n}` : `Узел ${n}`}>
+                <FlagText text={text} />
+              </button>
+            ) : (
+              <span className={`nx-path-text${isGroup ? "" : " is-leaf"}`}>
+                <FlagText text={text} />
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function Pill({ state }: { state: NodeState }) {
   return <span className={`nx-pill nx-${state}`}>{ST_TEXT[state]}</span>;
 }
@@ -317,7 +354,9 @@ export function Nodes({
                       {members.length > 120 ? <small>+{members.length - 120}</small> : null}
                     </span>
                     <span className="nx-gcard-now">
-                      <span className="truncate">сейчас {l === "DIRECT" ? "напрямую" : l}</span>
+                      <span className="truncate">
+                        <PathChain path={pathOf(g.name, proxies).slice(1)} proxies={proxies} />
+                      </span>
                       <span className="mono">{ms(rows.get(l)?.delay ?? lastDelay(proxies[l], g.testUrl))}</span>
                     </span>
                   </button>
@@ -431,6 +470,9 @@ export function Nodes({
           {selNode ? (
             <NodePanel
               r={selNode}
+              proxies={proxies}
+              usedBy={groups.filter((g) => pathOf(g.name, proxies).slice(-1)[0] === selNode.name).map((g) => g.name)}
+              onGroup={(n) => setSel({ kind: "group", name: n })}
               groups={(member.get(selNode.name) || []).map((n) => proxies[n]).filter(Boolean)}
               busy={busy}
               onTest={() => void testNode(selNode.name)}
@@ -444,6 +486,8 @@ export function Nodes({
           ) : selGroup ? (
             <GroupPanel
               g={selGroup}
+              proxies={proxies}
+              onGroup={(n) => setSel({ kind: "group", name: n })}
               rows={rows}
               stateOf={stateOf}
               leaf={leaf(selGroup.name)}
@@ -467,6 +511,8 @@ export function Nodes({
 
 function GroupPanel({
   g,
+  proxies,
+  onGroup,
   rows,
   stateOf,
   leaf,
@@ -480,6 +526,8 @@ function GroupPanel({
   onAll,
 }: {
   g: MProxy;
+  proxies: Record<string, MProxy>;
+  onGroup: (n: string) => void;
   rows: Map<string, NodeRow>;
   stateOf: (n: string) => NodeState;
   leaf: string;
@@ -495,16 +543,30 @@ function GroupPanel({
   const all = g.all || [];
   const count = (s: NodeState[]) => all.filter((n) => s.includes(stateOf(n))).length;
   const pinnable = g.type === "Selector" || g.type === "Fallback" || g.type === "URLTest";
-  const top = all
-    .filter((n) => ["ok", "slow"].includes(stateOf(n)))
-    .sort((a, b) => (delayOf(a) || 9e9) - (delayOf(b) || 9e9))
-    .slice(0, 8);
+  // a Selector is chosen by hand in its own order; the automatic ones are
+  // pinned, the working and fast first (NPM-60: every member, not 8 fast ones)
+  const manual = g.type === "Selector";
+  const [mq, setMq] = useState("");
+  const [more, setMore] = useState(false);
+  const isGroup = (n: string) => !!proxies[n] && GROUP_TYPES.has(proxies[n].type);
+  const order: Record<NodeState, number> = { ok: 0, slow: 1, none: 2, out: 3, reset: 4, silent: 5 };
+  const sorted = manual
+    ? [...all].sort((a, b) => Number(isGroup(b) || b === "DIRECT") - Number(isGroup(a) || a === "DIRECT"))
+    : [...all].sort((a, b) => order[stateOf(a)] - order[stateOf(b)] || (delayOf(a) || 9e9) - (delayOf(b) || 9e9));
+  const mquery = mq.trim().toLowerCase();
+  const members = sorted.filter((n) => !mquery || n.toLowerCase().includes(mquery));
+  const shown = more || mquery ? members : members.slice(0, 15);
+  const chosen = manual ? g.now : g.fixed;
+  useEffect(() => {
+    setMq("");
+    setMore(false);
+  }, [g.name]);
   return (
     <div className="nx-pan">
       <div className="nx-pan-head">
         <span className="vn-eyebrow">Группа · {TYPE_LABEL[g.type] || g.type}</span>
         <b>{g.name}</b>
-        <small>сейчас {leaf === "DIRECT" ? "напрямую" : <FlagText text={leaf} />}</small>
+        <PathChain path={pathOf(g.name, proxies)} proxies={proxies} onGroup={onGroup} onNode={onOpen} label="Путь группы сейчас" />
       </div>
       <div className="nx-stats">
         <div>
@@ -531,34 +593,48 @@ function GroupPanel({
           </button>
         </div>
       ) : null}
-      <span className="vn-eyebrow">{pinnable ? "Быстрые — нажмите, чтобы закрепить" : "Быстрые"}</span>
+      <span className="vn-eyebrow">{manual ? "Участники — выберите, куда пойдёт трафик" : pinnable ? "Участники — закрепите, чтобы группа не переключалась сама" : "Участники"}</span>
+      {all.length > 15 ? (
+        <>
+          <label className="sr-only" htmlFor="nx-mq">
+            Найти в группе
+          </label>
+          <input id="nx-mq" className="input input-sm" placeholder={`Найти среди ${all.length}`} value={mq} onChange={(e) => setMq(e.target.value)} />
+        </>
+      ) : null}
       <div className="nx-top">
-        {top.map((n) => {
-          const fixed = g.fixed === n;
+        {shown.map((n) => {
+          const on = chosen === n;
+          const grp = isGroup(n);
           const sub = leafOf(n);
           return (
-            <div key={n} className={`nx-top-row${fixed ? " is-fixed" : ""}${g.now === n ? " is-now" : ""}`}>
-              <button type="button" className="nx-top-name" onClick={() => onOpen(sub || n)} title="Подробнее об узле">
+            <div key={n} className={`nx-top-row${on ? " is-fixed" : ""}${g.now === n ? " is-now" : ""}`}>
+              <button type="button" className="nx-top-name" onClick={() => (grp ? onGroup(n) : onOpen(n))} title={grp ? "Открыть группу" : "Подробнее об узле"}>
                 <i className={`nx-dot nx-${stateOf(n)}`} />
                 <span className="truncate">
-                  <FlagText text={n} />
-                  {sub ? <small className="nx-sub"> · {sub === "DIRECT" ? "напрямую" : <FlagText text={sub} />}</small> : null}
+                  {n === "DIRECT" ? "напрямую" : <FlagText text={n} />}
+                  {grp ? <small className="nx-sub"> · группа{sub ? <> · сейчас {sub === "DIRECT" ? "напрямую" : <FlagText text={sub} />}</> : null}</small> : null}
                 </span>
                 <span className="mono">{ms(delayOf(n))}</span>
               </button>
-              {pinnable && !fixed ? (
+              {pinnable && !on ? (
                 <button type="button" className="btn btn-sm" disabled={busy === `pin:${n}`} onClick={() => onPin(n)}>
-                  Закрепить
+                  {manual ? "Выбрать" : "Закрепить"}
                 </button>
-              ) : fixed ? (
-                <span className="vn-pill vn-ok">закреплён</span>
+              ) : on ? (
+                <span className="vn-pill vn-ok">{manual ? "выбран" : "закреплён"}</span>
               ) : null}
             </div>
           );
         })}
-        {!top.length ? <p className="mh-muted">Живых узлов в группе сейчас нет.</p> : null}
+        {!members.length ? <p className="mh-muted">{mquery ? "Не нашлось." : "В группе нет участников."}</p> : null}
       </div>
-      <small className="mh-muted">{g.fixed ? "Закрепление снимется само, если узел перестанет отвечать." : "Без закрепления группа сама берёт подходящий узел."}</small>
+      {members.length > shown.length ? (
+        <button type="button" className="btn btn-sm" onClick={() => setMore(true)}>
+          Показать все {members.length}
+        </button>
+      ) : null}
+      <small className="mh-muted">{manual ? "Ручная группа: трафик идёт через выбранного участника, пока не выберете другого." : g.fixed ? "Закрепление снимется само, если узел перестанет отвечать." : "Без закрепления группа сама берёт подходящий узел."}</small>
       <div className="nx-actions">
         <button type="button" className="btn btn-sm" disabled={busy === `g:${g.name}`} onClick={onTest}>
           <Icon name="bolt" size={13} /> {busy === `g:${g.name}` ? "Проверяю…" : "Проверить группу"}
@@ -572,6 +648,9 @@ function GroupPanel({
 }
 
 function NodePanel({
+  proxies,
+  usedBy,
+  onGroup,
   r,
   groups,
   busy,
@@ -580,6 +659,9 @@ function NodePanel({
   onServer,
   onClose,
 }: {
+  proxies: Record<string, MProxy>;
+  usedBy: string[];
+  onGroup: (n: string) => void;
   r: NodeRow;
   groups: MProxy[];
   busy: string;
@@ -642,6 +724,16 @@ function NodePanel({
           </button>
         ) : null}
       </div>
+      {usedBy.length ? (
+        <>
+          <span className="vn-eyebrow">Через этот узел идут сейчас</span>
+          <div className="nx-used">
+            {usedBy.map((gname) => (
+              <PathChain key={gname} path={pathOf(gname, proxies)} proxies={proxies} onGroup={onGroup} />
+            ))}
+          </div>
+        </>
+      ) : null}
       {pinnable.length ? (
         <>
           <span className="vn-eyebrow">Закрепить в группе</span>

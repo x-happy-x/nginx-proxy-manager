@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -580,4 +581,56 @@ rules: []
 	if !strings.Contains(text, "expected-status: 200-399") {
 		t.Fatal("RU group still wants 200 only")
 	}
+}
+
+func TestRoutingTorrents(t *testing.T) {
+	s := defaultRouting()
+	s.Torrents = true
+	s.TorrentDevices = []string{" 192.168.1.50 ", "192.168.1.50"}
+	if err := s.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.TorrentDevices) != 1 || s.TorrentDevices[0] != "192.168.1.50" {
+		t.Fatalf("devices: %v", s.TorrentDevices)
+	}
+	out, err := buildRouting([]byte(routingFixture), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// built twice: the rules are not doubled
+	out, err = buildRouting(out, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := routingDoc(t, out)
+	g := groupByName(v, routingTorrents)
+	if g["type"] != "select" || !strings.HasPrefix(fmt.Sprint(g["proxies"]), "[DIRECT Обходы AUTO") {
+		t.Fatalf("group: %v", g)
+	}
+	rules := strings.Join(toStrings(v["rules"]), "\n")
+	for _, want := range torrentRules(s.TorrentDevices) {
+		if strings.Count(rules, want) != 1 {
+			t.Errorf("rule %q: %d times", want, strings.Count(rules, want))
+		}
+	}
+	bad := s
+	bad.TorrentDevices = []string{"8.8.8.8"}
+	if bad.normalize() == nil {
+		t.Fatal("a public address must not pass as a download device")
+	}
+	off := defaultRouting()
+	out, _ = buildRouting(out, off)
+	if strings.Contains(string(out), routingTorrents) {
+		t.Fatal("turned off: the group and its rules must go")
+	}
+}
+
+func toStrings(v any) []string {
+	out := []string{}
+	if list, ok := v.([]any); ok {
+		for _, x := range list {
+			out = append(out, fmt.Sprint(x))
+		}
+	}
+	return out
 }

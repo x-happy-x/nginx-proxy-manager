@@ -41,6 +41,7 @@ func main() {
 	a.startServiceChecks()
 	a.startOlcrtc()
 	a.startExits()
+	a.startTorrents()
 
 	a.startMaintenance()
 	host, port := a.readUIBind()
