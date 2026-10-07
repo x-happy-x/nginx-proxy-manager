@@ -187,6 +187,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                         </span>
                         <small className="mono truncate" title={n}>
                           {host(v?.room || conf?.["room-id"]) || n}
+                          {v?.external ? ` · контейнер srv.sh ${v.external}` : ""}
                         </small>
                       </span>
                       <span role="cell" className="nx-hm mono">
@@ -436,16 +437,35 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                       </button>
                       {job.waiting === s.id ? (
                         <div className="ol-fix">
-                          <span>{s.id === "swap" ? "Создать файл подкачки 4 ГБ, включить и прописать в /etc/fstab — так советуют авторы olcrtc для серверов с малой памятью." : "Шаг ждёт решения."}</span>
+                          <span>
+                            {s.fix === "migrate"
+                              ? "Уже работающий olcrtc запущен из /tmp: после очистки /tmp он не поднимется. HomeNet может перенести его в свою службу — та же комната и ключ, узел на роутере менять не нужно."
+                              : s.id === "swap"
+                                ? "Создать файл подкачки 4 ГБ, включить и прописать в /etc/fstab — так советуют авторы olcrtc для серверов с малой памятью."
+                                : "Шаг ждёт решения."}
+                          </span>
                           <button type="button" className="btn btn-sm btn-primary" disabled={busy === "resume"} onClick={() => void act("resume", { action: "fix" }, "resume")}>
                             {s.fix_label || "Исправить"}
                           </button>
                           <button type="button" className="btn btn-sm" disabled={busy === "resume"} onClick={() => void act("resume", { action: "skip" }, "resume")}>
-                            Продолжить без этого
+                            {s.fix === "migrate" ? "Оставить как есть" : "Продолжить без этого"}
                           </button>
                           <button type="button" className="btn btn-sm" disabled={busy === "resume"} onClick={() => void act("resume", { action: "cancel" }, "resume")}>
                             Отменить
                           </button>
+                        </div>
+                      ) : null}
+                      {s.id === "existing" && (job.found || []).length ? (
+                        <div className="ol-tries">
+                          {(job.found || []).map((f) => (
+                            <div key={f.container}>
+                              <i className={`nx-dot ${f.status === "running" ? "nx-ok" : "nx-silent"}`} />
+                              <span className="mono truncate">
+                                {f.container} · {host(f.room)} · {f.transport}
+                              </span>
+                              <small>{f.node ? `узел «${f.node}»` : "узла на роутере нет — добавим"}{f.in_tmp ? " · в /tmp" : ""}</small>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                       {s.id === "pick" && (job.tries || []).length && (s.status !== "wait" || open === s.id) ? (
