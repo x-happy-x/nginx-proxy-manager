@@ -236,6 +236,7 @@ export function Nodes({
   }, [list]);
 
   const openNode = (name: string) => setSel({ kind: "node", name });
+  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
 
   return (
     <div className="nx">
@@ -259,7 +260,7 @@ export function Nodes({
         </button>
       </div>
       <div className="nx-filters">
-        <div className="vn-chips" role="group" aria-label="Группа">
+        <div className="vn-chips nx-chiprow" role="group" aria-label="Группа">
           <button type="button" className={`vn-chip${!grp ? " is-on" : ""}`} aria-pressed={!grp} onClick={() => setGrp("")}>
             Все <span className="vs-count">{number(rows.size)}</span>
           </button>
@@ -401,13 +402,18 @@ export function Nodes({
                       <span className={`nx-pill ${bad === 0 ? "nx-ok" : bad < nodes.length ? "nx-slow" : "nx-silent"}`}>{bad === 0 ? "все отвечают" : bad < nodes.length ? `${bad} из ${nodes.length} молчат` : "весь сервер молчит"}</span>
                     </header>
                     <div className="nx-server-nodes">
-                      {nodes.map((r) => (
+                      {(unfolded[key] ? nodes : nodes.slice(0, 12)).map((r) => (
                         <button key={r.name} type="button" className={`vn-chip nx-schip${selNode?.name === r.name ? " is-on" : ""}`} onClick={() => openNode(r.name)}>
                           <i className={`nx-dot nx-${r.state}`} />
                           {r.name}
                           <span className="vs-count">{r.delay && r.delay > 0 ? ms(r.delay) : ""}</span>
                         </button>
                       ))}
+                      {nodes.length > 12 ? (
+                        <button type="button" className="vn-chip" onClick={() => setUnfolded((u) => ({ ...u, [key]: !u[key] }))}>
+                          {unfolded[key] ? "Свернуть" : `ещё ${nodes.length - 12}`}
+                        </button>
+                      ) : null}
                     </div>
                   </section>
                 );
@@ -437,6 +443,8 @@ export function Nodes({
               rows={rows}
               stateOf={stateOf}
               leaf={leaf(selGroup.name)}
+              delayOf={(n) => rows.get(n)?.delay ?? rows.get(leaf(n))?.delay ?? lastDelay(proxies[leaf(n)])}
+              leafOf={(n) => (proxies[n] && GROUP_TYPES.has(proxies[n].type) ? leaf(n) : "")}
               busy={busy}
               onPin={(n) => void pin(selGroup.name, n)}
               onUnpin={() => void unpin(selGroup.name)}
@@ -458,6 +466,8 @@ function GroupPanel({
   rows,
   stateOf,
   leaf,
+  delayOf,
+  leafOf,
   busy,
   onPin,
   onUnpin,
@@ -469,6 +479,8 @@ function GroupPanel({
   rows: Map<string, NodeRow>;
   stateOf: (n: string) => NodeState;
   leaf: string;
+  delayOf: (n: string) => number | null;
+  leafOf: (n: string) => string;
   busy: string;
   onPin: (n: string) => void;
   onUnpin: () => void;
@@ -481,7 +493,7 @@ function GroupPanel({
   const pinnable = g.type === "Selector" || g.type === "Fallback" || g.type === "URLTest";
   const top = all
     .filter((n) => ["ok", "slow"].includes(stateOf(n)))
-    .sort((a, b) => (rows.get(a)?.delay || 9e9) - (rows.get(b)?.delay || 9e9))
+    .sort((a, b) => (delayOf(a) || 9e9) - (delayOf(b) || 9e9))
     .slice(0, 8);
   return (
     <div className="nx-pan">
@@ -518,14 +530,17 @@ function GroupPanel({
       <span className="vn-eyebrow">{pinnable ? "Быстрые — нажмите, чтобы закрепить" : "Быстрые"}</span>
       <div className="nx-top">
         {top.map((n) => {
-          const r = rows.get(n);
           const fixed = g.fixed === n;
+          const sub = leafOf(n);
           return (
             <div key={n} className={`nx-top-row${fixed ? " is-fixed" : ""}${g.now === n ? " is-now" : ""}`}>
-              <button type="button" className="nx-top-name" onClick={() => onOpen(n)} title="Подробнее об узле">
+              <button type="button" className="nx-top-name" onClick={() => onOpen(sub || n)} title="Подробнее об узле">
                 <i className={`nx-dot nx-${stateOf(n)}`} />
-                <span className="truncate">{n}</span>
-                <span className="mono">{ms(r?.delay ?? null)}</span>
+                <span className="truncate">
+                  {n}
+                  {sub ? <small className="nx-sub"> · {sub === "DIRECT" ? "напрямую" : sub}</small> : null}
+                </span>
+                <span className="mono">{ms(delayOf(n))}</span>
               </button>
               {pinnable && !fixed ? (
                 <button type="button" className="btn btn-sm" disabled={busy === `pin:${n}`} onClick={() => onPin(n)}>

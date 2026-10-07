@@ -2983,3 +2983,37 @@ button.vr-gchip { cursor: pointer; }
   .nx-groups { grid-template-columns: minmax(0, 1fr); }
   .nx-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
+
+/* NPM-56: «Подписки» — views, the table and the tabs of one subscription */
+.su-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.su-toolbar-gap { flex: 1; }
+.su-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.su-split { display: flex; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.su-split span { background: var(--success); border-radius: 999px; }
+.su-table { display: grid; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+.su-trow { display: grid; grid-template-columns: minmax(0, 1.8fr) 100px 90px 110px 110px 150px; gap: 12px; align-items: center; padding: 10px 14px; border: 0; border-top: 1px solid var(--border); background: transparent; color: inherit; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; width: 100%; min-height: 48px; }
+.su-trow:hover { background: var(--surface-2); }
+.su-trow.is-sel { background: var(--accent-soft); }
+.su-thead { border-top: 0; cursor: default; background: var(--surface-2); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); min-height: 0; }
+.su-thead:hover { background: var(--surface-2); }
+.su-tname { display: grid; min-width: 0; }
+.su-tname small { color: var(--text-3); font-size: 12px; }
+.su-detail { display: grid; gap: 14px; padding: 18px 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); position: static; flex: none; }
+.su-detail-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+.su-detail-head .vn-card-name b { font-size: 19px; }
+.su-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.su-tabs button { min-height: 40px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.su-tabs button.is-on { color: var(--text); border-bottom-color: var(--accent); }
+.su-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.su-wide { grid-column: 1 / -1; }
+.su-field { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); min-width: 0; }
+.su-inline { display: flex; gap: 8px; min-width: 0; }
+.su-inline input { flex: 1; min-width: 0; }
+.su-ok { margin: 0; color: var(--success); }
+.nx-sub { color: var(--text-3); font-size: 12px; }
+@media (max-width: 760px) {
+  .su-trow { grid-template-columns: minmax(0, 1fr) 80px 110px; }
+  .nx-chiprow { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; max-width: 100%; }
+  .nx-filters { display: grid; }
+  .su-inline { flex-wrap: wrap; }
+}
