@@ -83,7 +83,7 @@ func startScanner() {
 			scan.lastRun = r.History[len(r.History)-1].At
 		}
 	}
-	go scan.loop()
+	managedGo(scan.loop)
 }
 
 func (s *scanner) loop() {
@@ -101,6 +101,8 @@ func (s *scanner) loop() {
 			s.runAll()
 		}
 		select {
+		case <-workerContext.Done():
+			return
 		case <-s.wake:
 		case <-time.After(30 * time.Second):
 		}

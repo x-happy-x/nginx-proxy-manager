@@ -193,7 +193,7 @@ func (a *app) startOlcrtc() {
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" || os.Getenv("MIHOMO_TRAFFIC_DISABLED") == "1" {
 		return
 	}
-	go olc.autoLoop()
+	managedGo(olc.autoLoop)
 }
 
 func (o *olcState) saveLocked() {
@@ -1580,12 +1580,12 @@ func olcHasFlag(name string) bool {
 // moves to the first working variant; every ten minutes it checks them all;
 // with none working on the user's own server it picks new ones over SSH.
 func (o *olcState) autoLoop() {
-	time.Sleep(90 * time.Second)
-	tick := time.NewTicker(time.Minute)
-	defer tick.Stop()
+	if !workerWait(90 * time.Second) {
+		return
+	}
 	n := 0
 	lastRepick := map[string]time.Time{}
-	for range tick.C {
+	for workerWait(time.Minute) {
 		n++
 		o.mu.Lock()
 		auto := o.st.Auto

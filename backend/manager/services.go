@@ -206,15 +206,17 @@ func (a *app) startServiceChecks() {
 		return
 	}
 	services = newServiceChecker(filepath.Join(coreStateDir(), "services.json"))
-	go func() {
-		time.Sleep(20 * time.Second) // let the manager and mihomo settle
-		services.checkAll("")
-		t := time.NewTicker(serviceInterval)
-		defer t.Stop()
-		for range t.C {
-			services.checkAll("")
+	managedGo(func() {
+		if !workerWait(20 * time.Second) {
+			return
 		}
-	}()
+		for workerContext.Err() == nil {
+			services.checkAll("")
+			if !workerWait(serviceInterval) {
+				return
+			}
+		}
+	})
 }
 
 func newServiceChecker(path string) *serviceChecker {

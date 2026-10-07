@@ -210,13 +210,11 @@ func (a *app) startMaintenance() {
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" {
 		return
 	}
-	go func() {
+	managedGo(func() {
 		client := &http.Client{Timeout: 3 * time.Second}
 		fingerprintPath := filepath.Join(filepath.Dir(a.appliedRoutesPath()), "keenetic.sha256")
 		fingerprint, _ := os.ReadFile(fingerprintPath)
 		lastCertificate := string(fingerprint)
-		tick := time.NewTicker(time.Minute)
-		defer tick.Stop()
 		iterations := 0
 		for {
 			// Apply only the last successfully generated routes, never an un-applied UI draft.
@@ -253,7 +251,9 @@ func (a *app) startMaintenance() {
 				a.operationMu.Unlock()
 			}
 			iterations++
-			<-tick.C
+			if !workerWait(time.Minute) {
+				return
+			}
 		}
-	}()
+	})
 }
