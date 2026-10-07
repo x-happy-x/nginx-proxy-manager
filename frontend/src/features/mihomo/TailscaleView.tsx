@@ -4,6 +4,32 @@ import { errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProxy, type TailscalePeer, type TailscaleStatus } from "./api";
 import { useMihomo } from "./context";
 import { currentExit } from "./Extras";
+import { Flag } from "../../components/ui/Flag";
+import { countryName } from "../../lib/flags";
+import { useExits } from "./useExits";
+
+/*
+ * The country of each exit (NPM-59): the core can only ask through the exit in
+ * use, so every answer is remembered for the exit it was asked through.
+ */
+const EXIT_CC_KEY = "homenet.ts.exitCountry";
+const SWITCH_KEY = "homenet.ts.exitSwitchedAt";
+type ExitCC = { cc: string; city?: string; t: number };
+function readJSON<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeJSON(key: string, v: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* private mode */
+  }
+}
 import { useStored } from "./NodeTiles";
 
 /*
@@ -64,6 +90,9 @@ function TailnetNode({ name }: { name: string }) {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const [exitCheck, setExitCheck] = useState<{ ok: boolean; text: string } | null>(null);
+  const { exits: exitRep, checkExits } = useExits();
+  const [exitCC, setExitCC] = useState<Record<string, ExitCC>>(() => readJSON(EXIT_CC_KEY, {}));
+  const [switchedAt, setSwitchedAt] = useState<number>(() => readJSON(SWITCH_KEY, 0));
   // «Мои» are the devices starred here: some coordinators (Headscale) give
   // several people one account id, so the owner a status reports can change
   // from one refresh to the next and cannot say whose a device is
@@ -107,6 +136,16 @@ function TailnetNode({ name }: { name: string }) {
   const me = "";
   const exit = st ? currentExit(st) : undefined;
   const exits = peers.filter((p) => p.exitNodeOption || p === exit).sort((a, b) => Number(b.online) - Number(a.online) || peerName(a).localeCompare(peerName(b)));
+  // an answer asked after the last switch belongs to the exit in use now
+  const asked = exitRep.nodes[name];
+  const exitKey = exit ? peerName(exit) : "";
+  useEffect(() => {
+    if (!exitKey || !asked?.ok || !asked.cc || asked.t < switchedAt) return;
+    if (exitCC[exitKey]?.t === asked.t) return;
+    const next = { ...exitCC, [exitKey]: { cc: asked.cc, city: asked.city, t: asked.t } };
+    setExitCC(next);
+    writeJSON(EXIT_CC_KEY, next);
+  }, [exitKey, asked?.t, asked?.cc, asked?.ok, switchedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const state: "on" | "login" | "off" | "wait" = !st ? "wait" : st.backendState === "Running" ? "on" : st.backendState === "NeedsLogin" || st.authURL ? "login" : !st.wantRunning ? "off" : "wait";
 
   // one row per name: re-registrations of the same machine fold under the freshest one
@@ -147,18 +186,24 @@ function TailnetNode({ name }: { name: string }) {
   const mine = peers.filter((p) => stars.includes(starKey(p))).length;
   void me;
   const staleN = peers.filter(stale).length;
-  const setExit = (value: string, label: string) => void run("exit", () => mihomo.tailscaleExitNode(name, value), value ? `Выход через ${label}` : "Выход напрямую");
   const checkExit = async () => {
     setBusy("check");
     setExitCheck(null);
     try {
       const r = await mihomo.delay(name, DEFAULT_TEST_URL, 8000);
       setExitCheck({ ok: true, text: `интернет через выход открывается · ${r.delay} мс` });
+      await checkExits({ nodes: [name] }).catch(() => undefined);
     } catch (e) {
       setExitCheck({ ok: false, text: `интернет через выход не открывается: ${errText(e)}` });
     } finally {
       setBusy("");
     }
+  };
+  const setExit = (value: string, label: string) => {
+    const at = Math.floor(Date.now() / 1000);
+    setSwitchedAt(at);
+    writeJSON(SWITCH_KEY, at);
+    void run("exit", () => mihomo.tailscaleExitNode(name, value), value ? `Выход через ${label}` : "Выход напрямую").then(() => (value ? checkExits({ nodes: [name] }).catch(() => undefined) : undefined));
   };
 
   const title =
@@ -268,9 +313,17 @@ function TailnetNode({ name }: { name: string }) {
           {[{ key: "", label: "без выхода", sub: "только адреса сети", on: !exit && !st?.exitNode, online: true, value: "" }, ...exits.map((p) => ({ key: p.id, label: peerName(p), sub: (p.ips || [])[0] || p.dnsName, on: p === exit, online: p.online, value: (p.ips || [])[0] || p.dnsName.replace(/\.$/, "") }))].map((e) => (
             <button key={e.key || "none"} type="button" className={`ts-exit${e.on ? " is-on" : ""}`} aria-pressed={e.on} disabled={!!busy || state !== "on" || !e.online} onClick={() => setExit(e.value, e.label)}>
               <span className="ts-exit-top">
-                <b className="truncate mono">{e.label}</b>
+                <span className="node-name">
+                  {e.key ? exitCC[e.label] ? <Flag cc={exitCC[e.label].cc} /> : <Flag /> : null}
+                  <b className="truncate mono">{e.label}</b>
+                </span>
                 <i className="ts-radio" aria-hidden="true" />
               </span>
+              {e.key ? (
+                <span className="ts-exit-cc truncate">
+                  {exitCC[e.label] ? `${countryName(exitCC[e.label].cc)}${exitCC[e.label].city ? `, ${exitCC[e.label].city}` : ""}` : e.on ? "страна проверяется…" : "страна — когда станет выходом"}
+                </span>
+              ) : null}
               <small className="mono truncate">{e.sub}</small>
               <span className={`nx-pill ${e.on ? "nx-out" : e.online ? "nx-ok" : "nx-silent"}`}>{e.on ? "используется" : e.key ? (e.online ? "в сети" : "не в сети") : "вариант"}</span>
             </button>
