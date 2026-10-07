@@ -33,6 +33,7 @@ export type PageKey =
   | "vpn"
   | "vpnsvc"
   | "subs"
+  | "torrents"
   | "vroute"
   | "why"
   | "proxies"
@@ -98,6 +99,7 @@ export const NAV: NavItem[] = [
   { id: "why", section: "vpn", tab: "Почему не открывается", title: "Почему не открывается", description: "Путь запроса по шагам: правило, узел, соединение, ответ сайта — и где он обрывается.", icon: "search" },
   { id: "proxies", section: "vpn", tab: "Узлы", title: "Узлы", description: "Группы, плитки, список и узлы по серверам: кто отвечает, где выход, закрепление узла в группе.", icon: "layers" },
   { id: "subs", section: "vpn", tab: "Подписки", title: "Подписки", description: "Откуда берутся узлы: подписки, свои серверы OLCRTC и Tailscale, страны выхода каждого узла.", icon: "download" },
+  { id: "torrents", section: "vpn", tab: "Торренты", title: "Торренты", description: "Своя группа для раздач — напрямую или через VPN, и проверка, через какие узлы вообще можно качать.", icon: "download" },
   { id: "vroute", section: "vpn", tab: "Маршрутизация", title: "Маршрутизация", description: "Куда пойдёт адрес, доли групп, правила по порядку и выбор внутри группы.", icon: "route" },
   { id: "checks", section: "vpn", tab: "Проверки", title: "Проверка узлов", description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.", icon: "test" },
   { id: "connections", section: "vpn", tab: "Соединения", title: "Соединения", description: "Живые соединения через mihomo: устройство, правило, цепочка, скорость.", icon: "globe" },

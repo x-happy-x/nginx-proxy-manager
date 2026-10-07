@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,6 +58,12 @@ type routingSettings struct {
 	// through which connections get no answer sits out, a sign-in group takes
 	// only nodes that passed its own check. Off — the core behaves as before.
 	PassiveCheck bool `json:"passive_check"`
+	// Torrents get a group of their own, switched by hand — direct, through
+	// bypass nodes or any node of the base subscription (NPM-60). Public
+	// trackers and the usual BitTorrent ports go there; TorrentDevices send
+	// everything but the web there too.
+	Torrents       bool     `json:"torrents"`
+	TorrentDevices []string `json:"torrent_devices"`
 	// set by the handler, not saved: the core takes exit-countries (fork 7+)
 	coreExitCountries bool
 }
@@ -93,7 +101,7 @@ var routingManaged = map[string]bool{
 	"Прямые EU": true, "Прямые мир": true, "Обходы": true, "RU": true, "Каскад": true, "Резерв": true,
 	"Быстрые": true, "AUTO": true, "ИИ прямые": true, "ИИ обходы": true, "ALL": true, "ИИ": true, "РФ": true,
 	"Игры": true, "Заблокированные сервисы": true, "Остальное": true,
-	"Белые списки": true, "QUIC": true, "GLOBAL": true, "Telegram": true, "Подписки": true,
+	"Белые списки": true, "QUIC": true, "GLOBAL": true, "Telegram": true, "Подписки": true, routingTorrents: true,
 	// replaced by the groups above (NPM-33)
 	"EU": true, "Без белых списков": true,
 }
@@ -108,7 +116,10 @@ const (
 	// the whitelist-mode probe: a Yandex address the whitelist keeps (NPM-52)
 	routingYandex204 = "api.browser.yandex.ru/generate_204"
 	routingDNS       = "HomeNet DNS"
-	routingMarker    = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
+	routingTorrents  = "Торренты"
+	// BitTorrent's usual ports: 6881-6999 of the classic clients, 51413 of Transmission
+	routingTorrentPorts = "6881-6999/51413"
+	routingMarker       = "HomeNet: маршрутизация (NPM-34). Группы ниже до «Игры» включительно\nсобирает HomeNet: правьте их в «VPN → Настройка → Маршрутизация»."
 )
 
 func routingPath() string { return filepath.Join(coreStateDir(), "routing.json") }
@@ -185,6 +196,18 @@ func (s *routingSettings) normalize() error {
 	if s.Access == nil {
 		s.Access = []accessCheck{}
 	}
+	devs := []string{}
+	for _, d := range s.TorrentDevices {
+		d = strings.TrimSpace(d)
+		ip := net.ParseIP(d)
+		if ip == nil || ip.To4() == nil || !ip.IsPrivate() {
+			return fmt.Errorf("устройство для торрентов %q: нужен IPv4-адрес домашней сети", d)
+		}
+		if !slices.Contains(devs, ip.String()) {
+			devs = append(devs, ip.String())
+		}
+	}
+	s.TorrentDevices = devs
 	seen := map[string]bool{}
 	for i := range s.Access {
 		a := &s.Access[i]
@@ -364,6 +387,10 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 		// whitelist mode, and direct UDP is closed there anyway
 		pathGroup("Игры", []any{"DIRECT", "Обходы", "AUTO"}, nil),
 	)
+	if s.Torrents {
+		// chosen by hand: direct first, any node of the base subscription below
+		tail = append(tail, m{"name": routingTorrents, "type": "select", "proxies": append(append(append([]any{"DIRECT", "Обходы", "AUTO"}, cascade...), "ALL"), extras...), "use": base})
+	}
 	if s.Telegram {
 		tail = append(tail, pathGroup("Telegram", append(append([]any{"Обходы"}, cascade...), "Прямые EU"), m{"url": routingTelegramCheck, "expected-status": "200-399"}))
 	}
@@ -865,6 +892,9 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			if parts := strings.Split(r.Value, ","); len(parts) >= 3 && strings.TrimSpace(parts[2]) == routingDNS {
 				continue
 			}
+			if strings.HasSuffix(strings.TrimSpace(r.Value), ","+routingTorrents) {
+				continue
+			}
 			out = append(out, r)
 			if at < 0 && strings.HasPrefix(strings.ToUpper(r.Value), "GEOIP,PRIVATE,") {
 				at = len(out)
@@ -887,6 +917,15 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			}
 			add = append(add, n)
 		}
+		if s.Torrents {
+			for i, v := range torrentRules(s.TorrentDevices) {
+				n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}
+				if i == 0 {
+					n.HeadComment = "Торренты: своя группа, переключается вручную (HomeNet, «Маршрутизация»)"
+				}
+				add = append(add, n)
+			}
+		}
 		if s.Telegram {
 			n := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "GEOSITE,telegram,Telegram"}
 			n.HeadComment = "Telegram: своя группа, сначала обходы (HomeNet, «Маршрутизация»)"
@@ -895,6 +934,16 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 		rules.Content = append(append(append([]*yaml.Node{}, out[:at]...), add...), out[at:]...)
 	}
 	return encodeYAML(doc)
+}
+
+// torrentRules: public trackers, the usual ports, then each download device
+// with everything but the web (its browser keeps its own routes).
+func torrentRules(devices []string) []string {
+	out := []string{"GEOSITE,category-public-tracker," + routingTorrents, "DST-PORT," + routingTorrentPorts + "," + routingTorrents}
+	for _, d := range devices {
+		out = append(out, "AND,((SRC-IP-CIDR,"+d+"/32),(NOT,((DST-PORT,80/443)))),"+routingTorrents)
+	}
+	return out
 }
 
 /* ---------- validator detail ---------- */
