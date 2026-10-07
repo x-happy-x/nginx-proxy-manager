@@ -39,6 +39,13 @@ func (a *app) serveStatic(w http.ResponseWriter, relPath string) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	// a page must not outlive a deploy; bundles carry their hash in the name (NPM-56)
+	switch {
+	case strings.HasSuffix(path, ".html"):
+		w.Header().Set("Cache-Control", "no-cache")
+	case strings.Contains(relPath, "/assets/") || strings.HasPrefix(relPath, "assets/"):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
 }
