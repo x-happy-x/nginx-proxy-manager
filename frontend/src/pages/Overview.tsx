@@ -161,7 +161,7 @@ export function Overview({ doc, status, onNavigate }: { doc: RoutesDocument; sta
       out.push({ tone: bypass.limitPct >= 90 ? "bad" : "warn", title: `Обходы: использовано ${Math.round(bypass.limitPct)}% месячного лимита`, where: `VPN · Трафик · ${bypass.gb} ГБ в месяц`, page: "traffic", href: "#/traffic/bypass" });
     if (bypass.onBypass && !(d.lastHealth && d.lastHealth.whitelist > 0))
       out.push({ tone: "info", title: "Прямые серверы не подходят — трафик идёт через обходы", where: "VPN · Настройка · Маршрутизация", page: "coreconfig", href: "#/coreconfig/routing" });
-    tsIssues.forEach((t) => out.unshift({ tone: "bad", title: t.title, where: `VPN · Узлы · Tailscale ${t.name} — ${t.authURL ? "открыть и войти" : "запросить вход"}`, page: "proxies", href: "#/proxies/tailscale" }));
+    tsIssues.forEach((t) => out.unshift({ tone: "bad", title: t.title, where: `VPN · Tailscale ${t.name} — ${t.authURL ? "открыть и войти" : "запросить вход"}`, page: "tailscale", href: "#/tailscale" }));
     return out;
   }, [d.appsDown, status, d.netDown, d.stats, d.core, d.lastHealth, tsIssues, bypass]);
 

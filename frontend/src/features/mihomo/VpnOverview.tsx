@@ -275,7 +275,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           Войти в tailnet
         </a>
       ) : (
-        <a className="btn btn-sm" href="#/proxies/tailscale">
+        <a className="btn btn-sm" href="#/tailscale">
           Открыть Tailscale
         </a>
       ),

@@ -33,6 +33,8 @@ export type PageKey =
   | "vpn"
   | "vpnsvc"
   | "subs"
+  | "tailscale"
+  | "olcrtc"
   | "vroute"
   | "why"
   | "proxies"
@@ -96,8 +98,10 @@ export const NAV: NavItem[] = [
   { id: "vpn", section: "vpn", tab: "Сейчас", title: "VPN", description: "Работает ли интернет и сервисы, которыми пользуются дома.", icon: "shield" },
   { id: "vpnsvc", section: "vpn", tab: "Сервисы", title: "Сервисы", description: "Что открывается дома: каждый сервис, его путь и последний час проверок.", icon: "apps" },
   { id: "why", section: "vpn", tab: "Почему не открывается", title: "Почему не открывается", description: "Путь запроса по шагам: правило, узел, соединение, ответ сайта — и где он обрывается.", icon: "search" },
-  { id: "proxies", section: "vpn", tab: "Узлы", title: "Узлы и группы", description: "Выбор узла в группе, проверка задержки, подписки, Tailscale, OLCRTC.", icon: "layers" },
+  { id: "proxies", section: "vpn", tab: "Узлы", title: "Узлы", description: "Группы, плитки, список и узлы по серверам: кто отвечает, где выход, закрепление узла в группе.", icon: "layers" },
   { id: "subs", section: "vpn", tab: "Подписки", title: "Подписки", description: "Узлы каждой подписки, трафик и срок, обновления и страны выхода.", icon: "download" },
+  { id: "tailscale", section: "vpn", tab: "Tailscale", title: "Tailscale", description: "Роутер в tailnet: выход в интернет через устройство, устройства и аккаунты, проверка адресов сети.", icon: "network" },
+  { id: "olcrtc", section: "vpn", tab: "OLCRTC", title: "OLCRTC", description: "Туннель внутри видеозвонка: серверы, варианты связи и автоподбор, настройка своего сервера.", icon: "globe" },
   { id: "vroute", section: "vpn", tab: "Маршрутизация", title: "Маршрутизация", description: "Куда пойдёт адрес, доли групп, правила по порядку и выбор внутри группы.", icon: "route" },
   { id: "checks", section: "vpn", tab: "Проверки", title: "Проверка узлов", description: "Режим сети и рейтинги узлов: без ограничений и при белых списках.", icon: "test" },
   { id: "connections", section: "vpn", tab: "Соединения", title: "Соединения", description: "Живые соединения через mihomo: устройство, правило, цепочка, скорость.", icon: "globe" },

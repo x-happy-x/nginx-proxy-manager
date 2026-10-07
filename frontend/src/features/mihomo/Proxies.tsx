@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Servers } from "./Servers";
-import { PageHeader, useHashTab } from "../../navigation";
+import { PageHeader } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
-import { Alert, EmptyState, SearchInput, Segmented } from "../../components/ui/controls";
+import { Alert, EmptyState } from "../../components/ui/controls";
 import { bytes, dateTime, errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProvider, type MProxy } from "./api";
 import { useMihomo } from "./context";
-import { Delay, TabCount, Tabs, lastDelay } from "./shared";
-import { HealthDots, Masonry, NodeControls, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
+import { Delay, lastDelay } from "./shared";
+import { HealthDots, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
+import { GROUP_TYPES, Nodes } from "./Nodes";
 import { OlcrtcTab, TailscaleTab } from "./Extras";
 
-type Tab = "groups" | "servers" | "providers" | "tailscale" | "olcrtc";
-const GROUP_TYPES = new Set(["Selector", "URLTest", "Fallback", "LoadBalance", "Smart", "Relay"]);
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
-const COLLAPSE_KEY = "homenet.mihomo.collapsed";
 const ORDER_KEY = "homenet.mihomo.groupOrder";
 
 function readOrder(): string[] {
@@ -25,26 +22,12 @@ function readOrder(): string[] {
   }
 }
 
-function readCollapsed(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
 
-export function Proxies({ onChecks }: { onChecks: () => void }) {
-  const { act, configs } = useMihomo();
-  const [tab, setTab] = useHashTab<Tab>("proxies", "groups");
+export function Proxies() {
+  const { configs } = useMihomo();
   const [proxies, setProxies] = useState<Record<string, MProxy>>({});
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  // view, sort and «hide unavailable»: one set for every node tab, remembered per browser (NPM-38)
-  const prefs = useNodePrefs();
-  const { sort, hideDead, view } = prefs;
-  const [testing, setTesting] = useState<Record<string, boolean>>({});
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [order, setOrderState] = useState<string[]>(readOrder);
   const [ordering, setOrdering] = useState(false);
   const setOrder = (next: string[]) => {
@@ -76,17 +59,6 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
     return () => clearInterval(timer);
   }, [load]);
 
-  const toggle = (name: string) =>
-    setCollapsed((prev) => {
-      const next = { ...prev, [name]: !prev[name] };
-      try {
-        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
-      } catch {
-        /* per-browser preference */
-      }
-      return next;
-    });
-
   const groups = useMemo(() => {
     // Own order first (set in «Порядок групп»), then the order of config.yaml.
     const cfg = proxies.GLOBAL?.all || [];
@@ -100,181 +72,109 @@ export function Proxies({ onChecks }: { onChecks: () => void }) {
     return list.sort((a, b) => rank(a.name) - rank(b.name));
   }, [proxies, configs?.mode, order]);
 
-  // Follow group → now → … to the node that actually carries traffic.
-  const leaf = useCallback(
-    (name: string): MProxy | undefined => {
-      let cur = proxies[name];
-      for (let i = 0; cur && cur.now && i < 10; i++) cur = proxies[cur.now];
-      return cur;
-    },
-    [proxies],
-  );
-  const delayOf = useCallback((name: string, url?: string) => lastDelay(leaf(name), url), [leaf]);
-
-  const testGroup = async (g: MProxy) => {
-    setTesting((t) => ({ ...t, [g.name]: true }));
-    await act(`Проверка группы ${g.name}`, () => mihomo.groupDelay(g.name, g.testUrl || DEFAULT_TEST_URL), "Задержки обновлены");
-    setTesting((t) => ({ ...t, [g.name]: false }));
-    await load();
-  };
-  const testNode = async (name: string, url?: string) => {
-    setTesting((t) => ({ ...t, [`n:${name}`]: true }));
-    try {
-      await mihomo.delay(name, url || DEFAULT_TEST_URL);
-    } catch {
-      /* failure is recorded in history as 0 */
-    }
-    setTesting((t) => ({ ...t, [`n:${name}`]: false }));
-    await load();
-  };
-  const select = async (g: MProxy, name: string) => {
-    if (g.now === name) return;
-    if (await act(`Группа ${g.name}`, () => mihomo.select(g.name, name), `Выбран узел ${name}`)) await load();
-  };
-
-  const visibleNodes = (g: MProxy) => {
-    const q = query.trim().toLowerCase();
-    let names = (g.all || []).filter((n) => !q || n.toLowerCase().includes(q) || g.name.toLowerCase().includes(q));
-    if (hideDead) names = names.filter((n) => (delayOf(n, g.testUrl) ?? 1) > 0);
-    if (sort === "name") names = [...names].sort((a, b) => a.localeCompare(b));
-    if (sort === "delay")
-      names = [...names].sort((a, b) => {
-        const da = delayOf(a, g.testUrl);
-        const db = delayOf(b, g.testUrl);
-        const va = da == null ? 1e6 : da <= 0 ? 1e7 : da;
-        const vb = db == null ? 1e6 : db <= 0 ? 1e7 : db;
-        return va - vb;
-      });
-    return names;
-  };
-
-  const providerList = Object.values(providers).filter((p) => p.vehicleType !== "Compatible" && p.name !== "default");
-  const isOlc = (x: MProxy) => x.type.toLowerCase() === "olcrtc";
-  const tsNodes = Object.values(proxies).filter((x) => x.type.toLowerCase() === "tailscale");
-  const olcProviders = providerList.filter((p) => p.proxies.some(isOlc));
-  const olcInProviders = new Set(olcProviders.flatMap((p) => p.proxies.map((x) => x.name)));
-  const olcStandalone = Object.values(proxies).filter((x) => isOlc(x) && !olcInProviders.has(x.name));
-  const olcCount = olcProviders.reduce((n, p) => n + p.proxies.filter(isOlc).length, 0) + olcStandalone.length;
-  const tabs: Array<[Tab, React.ReactNode]> = [
-    ["groups", <>Группы <TabCount n={groups.length} /></>],
-    ["servers", <>По серверам</>],
-    ["providers", <>Провайдеры <TabCount n={providerList.length} /></>],
-  ];
-  if (tsNodes.length) tabs.push(["tailscale", <>Tailscale <TabCount n={tsNodes.length} /></>]);
-  if (olcCount) tabs.push(["olcrtc", <>OLCRTC <TabCount n={olcCount} /></>]);
-  const loaded = Object.keys(proxies).length > 0;
-  const shownTab: Tab = !loaded || tabs.some(([id]) => id === tab) ? tab : "groups";
-
   return (
     <div className="stack">
       <PageHeader
         page="proxies"
         actions={
-          <>
-            <button type="button" className="btn" onClick={() => void load()}>
-              <Icon name="refresh" />
-              Обновить
-            </button>
-            {shownTab === "groups" ? (
-              <button type="button" className="btn btn-primary" onClick={() => groups.forEach((g) => void testGroup(g))} disabled={!groups.length}>
-                <Icon name="bolt" />
-                Проверить все
-              </button>
-            ) : shownTab === "providers" ? (
-              <button type="button" className="btn btn-primary" onClick={() => providerList.forEach((p) => void act(`Подписка ${p.name}`, () => mihomo.updateProvider(p.name), "Обновлена").then(load))} disabled={!providerList.length}>
-                <Icon name="refresh" />
-                Обновить подписки
-              </button>
-            ) : null}
-          </>
+          <button type="button" className="btn" onClick={() => void load()}>
+            <Icon name="refresh" />
+            Обновить
+          </button>
         }
       />
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
-      <Tabs<Tab>
-        label="Раздел прокси"
-        value={shownTab}
-        onChange={setTab}
-        items={tabs}
-      />
-      {shownTab === "groups" ? (
+      {ordering ? (
         <>
-          <NodeControls
-            prefs={prefs}
-            end={
-              <button type="button" className={`btn btn-sm${ordering ? " btn-primary" : ""}`} onClick={() => setOrdering(!ordering)} aria-pressed={ordering}>
-                <Icon name="grip" />
-                {ordering ? "Готово" : "Порядок групп"}
-              </button>
-            }
-          >
-            <SearchInput label="Поиск узла или группы" placeholder="Узел или группа" value={query} onChange={setQuery} />
-          </NodeControls>
-          {ordering ? (
-            <GroupOrder groups={groups.map((g) => g.name)} custom={order.length > 0} onChange={setOrder} />
-          ) : groups.length ? (
-            <Masonry className="mh-groups">
-              {groups.map((g) => (
-                <GroupCard
-                  key={g.name}
-                  g={g}
-                  view={view}
-                  open={!collapsed[g.name]}
-                  onToggle={() => toggle(g.name)}
-                  nodes={visibleNodes(g)}
-                  hideDead={hideDead}
-                  proxies={proxies}
-                  delayOf={delayOf}
-                  testing={testing}
-                  onTestGroup={() => void testGroup(g)}
-                  onTestNode={(n) => void testNode(n, g.testUrl)}
-                  onSelect={(n) => void select(g, n)}
-                  onUnfix={() => void act(`Группа ${g.name}`, () => mihomo.unfix(g.name), "Закрепление снято").then(load)}
-                />
-              ))}
-            </Masonry>
-          ) : (
-            <EmptyState icon="layers" title="Групп нет">
-              В config.yaml нет proxy-groups. Добавьте группу в «Конфигурации».
-            </EmptyState>
-          )}
+          <GroupOrder groups={groups.map((g) => g.name)} custom={order.length > 0} onChange={setOrder} />
+          <button type="button" className="btn btn-primary" style={{ justifySelf: "start" }} onClick={() => setOrdering(false)}>
+            Готово
+          </button>
         </>
-      ) : shownTab === "servers" ? (
-        <>
-          <div className="toolbar">
-            <button type="button" className={`vn-chip mh-hide-chip${hideDead ? " is-on" : ""}`} aria-pressed={hideDead} onClick={() => prefs.setHideDead(!hideDead)}>
-              {hideDead ? <Icon name="check" size={13} /> : null}
-              Скрыть молчащие
+      ) : Object.keys(proxies).length ? (
+        <Nodes
+          proxies={proxies}
+          providers={providers}
+          groups={groups}
+          onReload={load}
+          orderButton={
+            <button type="button" className="vn-chip" onClick={() => setOrdering(true)}>
+              <Icon name="grip" size={13} /> Порядок групп
             </button>
-          </div>
-          <Servers providers={providerList} prefs={prefs} />
-        </>
-      ) : shownTab === "tailscale" ? (
-        <TailscaleTab nodes={tsNodes} prefs={prefs} />
-      ) : shownTab === "olcrtc" ? (
-        <OlcrtcTab providers={olcProviders} standalone={olcStandalone} groups={groups} onReload={load} prefs={prefs} />
+          }
+        />
+      ) : !error ? (
+        <p className="mh-muted">Загружаю узлы…</p>
       ) : (
-        <>
-          {providerList.length ? (
-            <NodeControls prefs={prefs} />
-          ) : null}
-          {providerList.length ? (
-            <Masonry className="mh-groups">
-              {providerList.map((p) => (
-                <ProviderCard key={p.name} p={p} prefs={prefs} onReload={load} onChecks={onChecks} />
-              ))}
-            </Masonry>
-          ) : (
-            <EmptyState icon="layers" title="Подписок нет">
-              Добавьте подписку в «Конфигурация → Подписки».
-            </EmptyState>
-          )}
-        </>
+        <EmptyState icon="layers" title="Узлов нет">
+          mihomo не отдал узлы.
+        </EmptyState>
       )}
     </div>
   );
 }
 
-function GroupCard({
+/** A page of its own for one kind of extra node (NPM-56): Tailscale, OLCRTC. */
+function useAllProxies() {
+  const [proxies, setProxies] = useState<Record<string, MProxy>>({});
+  const [providers, setProviders] = useState<Record<string, MProvider>>({});
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const all = await mihomo.allProxies();
+      setProxies(all.proxies);
+      setProviders(all.providers);
+      setError("");
+    } catch (err) {
+      setError(errText(err));
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+    const timer = setInterval(() => document.visibilityState === "visible" && void load(), 15000);
+    return () => clearInterval(timer);
+  }, [load]);
+  return { proxies, providers, error, load };
+}
+
+export function TailscalePage() {
+  const { proxies, error } = useAllProxies();
+  const prefs = useNodePrefs();
+  const nodes = Object.values(proxies).filter((x) => x.type.toLowerCase() === "tailscale");
+  return (
+    <div className="stack">
+      <PageHeader page="tailscale" />
+      {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
+      {nodes.length ? (
+        <TailscaleTab nodes={nodes} prefs={prefs} />
+      ) : (
+        <EmptyState icon="network" title="Узла Tailscale нет">
+          Добавьте узел Tailscale в «Настройка → Свои узлы».
+        </EmptyState>
+      )}
+    </div>
+  );
+}
+
+export function OlcrtcPage() {
+  const { proxies, providers, error, load } = useAllProxies();
+  const prefs = useNodePrefs();
+  const isOlc = (x: MProxy) => x.type.toLowerCase() === "olcrtc";
+  const providerList = Object.values(providers).filter((p) => p.vehicleType !== "Compatible");
+  const olcProviders = providerList.filter((p) => p.proxies.some(isOlc));
+  const inProviders = new Set(olcProviders.flatMap((p) => p.proxies.map((x) => x.name)));
+  const standalone = Object.values(proxies).filter((x) => isOlc(x) && !inProviders.has(x.name));
+  const groups = Object.values(proxies).filter((p) => GROUP_TYPES.has(p.type) && !p.hidden);
+  return (
+    <div className="stack">
+      <PageHeader page="olcrtc" />
+      {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
+      <OlcrtcTab providers={olcProviders} standalone={standalone} groups={groups} onReload={load} prefs={prefs} />
+    </div>
+  );
+}
+
+export function GroupCard({
   g,
   view,
   open,
@@ -426,7 +326,7 @@ function GroupOrder({ groups, custom, onChange }: { groups: string[]; custom: bo
   );
 }
 
-function ProviderCard({ p, prefs, onReload, onChecks }: { p: MProvider; prefs: NodePrefs; onReload: () => Promise<void>; onChecks: () => void }) {
+export function ProviderCard({ p, prefs, onReload, onChecks }: { p: MProvider; prefs: NodePrefs; onReload: () => Promise<void>; onChecks: () => void }) {
   const { view, sort, hideDead } = prefs;
   const { act } = useMihomo();
   const [busy, setBusy] = useState("");
