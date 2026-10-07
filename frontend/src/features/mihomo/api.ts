@@ -297,6 +297,8 @@ export type OlcReport = {
   instances: string[];
   transports: string[];
   selected: string;
+  /** «весь трафик через OLCRTC»: group → its previous choice; empty — off (NPM-61) */
+  route?: Record<string, string>;
   /** the uplink's mode now: whitelist | normal | offline | unknown */
   channel: string;
 };
@@ -444,7 +446,7 @@ export const core = {
   torrents: () => call<TorrentsReport>("/api/core/torrents"),
   torrentsCheck: (body: { provider?: string; nodes?: string[] }) => call<TorrentsReport>("/api/core/torrents/check", json("POST", body)),
   exitsCheck: (body: { provider?: string; nodes?: string[] }) => call<ExitsReport>("/api/core/exits/check", json("POST", body)),
-  olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove" | "tidy", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
+  olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove" | "tidy" | "route", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>
     call<{ install: InstallState }>("/api/core/install", json("POST", req)).then((r) => r.install),
