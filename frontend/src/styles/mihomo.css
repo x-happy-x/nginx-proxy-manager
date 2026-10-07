@@ -3197,3 +3197,10 @@ button.vr-gchip { cursor: pointer; }
 .ol-form .ol-room select, .ol-form .ol-room .ol-fixed-tr { grid-row: 2; grid-column: 1 / 3; }
 .ol-form .ol-room .btn-icon { grid-row: 2; grid-column: 3; }
 .ol-fixed-tr { font-size: 12.5px; color: var(--text-2); padding: 8px 2px; }
+
+/* NPM-56: the folded log of a setup and «Изменить варианты» */
+.ol-log { border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); }
+.ol-log > summary { padding: 9px 12px; cursor: pointer; font-size: 13px; color: var(--text-2); min-height: 40px; display: flex; align-items: center; gap: 6px; }
+.ol-log pre { margin: 0; padding: 10px 12px; border-top: 1px solid var(--border); max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-family: var(--font-mono); font-size: 12px; color: var(--text-2); background: var(--code-bg); border-radius: 0 0 10px 10px; }
+.ol-reconf { margin-top: 4px; }
+.ol-reconf .ol-room { grid-template-columns: minmax(0, 1fr) 160px auto; }
