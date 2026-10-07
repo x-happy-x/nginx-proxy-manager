@@ -38,6 +38,9 @@ const (
 	olcGroup      = "OLCRTC"
 	olcGoVersion  = "1.26.3"
 	olcRepo       = "https://github.com/openlibrecommunity/olcrtc"
+	// the olcrtc the router's core embeds (mihomo fork go.mod): builds with
+	// another wire format do not connect, so the server builds this one
+	olcCommit = "92b2332769c3dd5000584366201572efc448065f"
 	olcDir        = "/opt/olcrtc"
 	olcCheckURL   = "https://www.gstatic.com/generate_204"
 	olcKeepMax    = 3
@@ -54,6 +57,7 @@ var olcInstances = []string{
 var olcTransports = []string{"datachannel", "vp8channel", "seichannel"}
 
 type olcVariant struct {
+	Provider  string `json:"provider,omitempty"` // jitsi | telemost | wbstream; empty — jitsi
 	Node      string `json:"node"`
 	Instance  string `json:"instance"`
 	Transport string `json:"transport"`
@@ -500,6 +504,64 @@ type olcSetupReq struct {
 	Transports []string `json:"transports"`
 	Keep       int      `json:"keep"`
 	Mode       string   `json:"mode"` // whitelist | normal
+	// rooms people made themselves: Telemost and WB Stream cannot be made by
+	// olcrtc, an own Jitsi has its own address
+	Rooms []olcRoomReq `json:"rooms"`
+}
+
+type olcRoomReq struct {
+	Provider  string `json:"provider"`
+	Room      string `json:"room"`
+	Transport string `json:"transport"`
+}
+
+// What works where, from olcrtc's docs/settings.ru.md: Telemost dropped the
+// data channel, WB Stream's guests cannot publish data.
+var olcProviderTransports = map[string][]string{
+	"jitsi":    {"datachannel", "vp8channel", "seichannel"},
+	"telemost": {"vp8channel"},
+	"wbstream": {"vp8channel", "seichannel"},
+}
+
+// olcProviderHost is the address the router must reach directly for a provider.
+func olcProviderHost(provider, room string) string {
+	switch provider {
+	case "telemost":
+		return "telemost.yandex.ru"
+	case "wbstream":
+		return "stream.wb.ru"
+	}
+	return olcHost(room)
+}
+
+// olcRoomID turns a pasted link into the room id olcrtc expects: the full URL
+// for Jitsi, the last part of the link for Telemost and WB Stream.
+func olcRoomID(provider, room string) string {
+	room = strings.TrimSpace(room)
+	if provider == "jitsi" {
+		if !strings.Contains(room, "://") {
+			room = "https://" + room
+		}
+		return strings.TrimSuffix(room, "/")
+	}
+	if u, err := url.Parse(room); err == nil && u.Host != "" {
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		return parts[len(parts)-1]
+	}
+	return strings.Trim(room, "/")
+}
+
+func olcTransportFor(provider, want string) string {
+	list := olcProviderTransports[provider]
+	for _, t := range list {
+		if t == want {
+			return t
+		}
+	}
+	if len(list) == 0 {
+		return want
+	}
+	return list[0]
 }
 
 var olcHostRe = regexp.MustCompile(`^[A-Za-z0-9.\-:\[\]]{1,253}$`)
@@ -747,7 +809,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 	}
 	// what already runs becomes a variant of this server, not a stranger to pick around
 	for _, f := range found {
-		if f.Room == "" || f.Provider != "jitsi" {
+		if f.Room == "" || olcProviderTransports[f.Provider] == nil {
 			continue
 		}
 		known := false
@@ -757,10 +819,10 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		if known {
 			continue
 		}
-		v := olcVariant{Node: f.Node, Instance: olcHost(f.Room), Transport: f.Transport, Room: f.Room, External: f.Container, Key: f.key}
+		v := olcVariant{Provider: f.Provider, Node: f.Node, Instance: olcProviderHost(f.Provider, f.Room), Transport: f.Transport, Room: f.Room, External: f.Container, Key: f.key}
 		if v.Node == "" {
 			v.Node = fmt.Sprintf("OLC %s %s/%s", srv.Name, strings.SplitN(v.Instance, ".", 2)[0], v.Transport)
-			node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": "jitsi", "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+			node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": f.Provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
 			if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
 				o.logf(j, "existing", "узел для "+f.Container+" не добавлен: "+shortErr(err))
 				continue
@@ -813,7 +875,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		}{
 			{"packages", `if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates openssl tar; elif command -v dnf >/dev/null; then dnf install -y -q git curl ca-certificates openssl tar; elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed git curl ca-certificates openssl tar; else echo "нет apt-get, dnf или pacman" >&2; exit 1; fi; git --version`, 10 * time.Minute, "git, curl, openssl установлены"},
 			{"go", fmt.Sprintf(`if /usr/local/go/bin/go version 2>/dev/null | grep -q 'go%[1]s'; then /usr/local/go/bin/go version; else curl -fsSL https://go.dev/dl/go%[1]s.linux-%[2]s.tar.gz -o /tmp/go.tgz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz && /usr/local/go/bin/go version; fi`, olcGoVersion, srv.Arch), 10 * time.Minute, "Go " + olcGoVersion},
-			{"source", fmt.Sprintf(`mkdir -p %[1]s && if [ -d %[1]s/src/.git ]; then cd %[1]s/src && git fetch -q --depth 1 origin && git reset -q --hard FETCH_HEAD; else git clone -q --depth 1 %[2]s %[1]s/src; fi && cd %[1]s/src && git log -1 --format='%%h %%cs'`, olcDir, olcRepo), 5 * time.Minute, "исходники olcrtc"},
+			{"source", fmt.Sprintf(`mkdir -p %[1]s/src && cd %[1]s/src && ([ -d .git ] || git init -q) && (git remote get-url origin >/dev/null 2>&1 || git remote add origin %[2]s) && git fetch -q --depth 1 origin %[3]s && git reset -q --hard FETCH_HEAD && git log -1 --format='%%h %%cs'`, olcDir, olcRepo, olcCommit), 5 * time.Minute, "исходники olcrtc той же версии, что в ядре роутера"},
 			{"build", fmt.Sprintf(`cd %[1]s/src && h=$(git rev-parse --short HEAD) && if [ -x %[1]s/olcrtc ] && [ "$(cat %[1]s/.built 2>/dev/null)" = "$h" ]; then echo "уже собран из этой версии $h"; else CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && echo "$h" > %[1]s/.built && echo "собран $h"; fi`, olcDir), 30 * time.Minute, "olcrtc"},
 		}
 		for _, st := range steps {
@@ -977,6 +1039,27 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 	}
 
 	kept := []olcVariant{}
+	type room struct{ provider, id, tr string }
+	rooms := []room{}
+	for _, rq := range req.Rooms {
+		pr := rq.Provider
+		if _, ok := olcProviderTransports[pr]; !ok || strings.TrimSpace(rq.Room) == "" {
+			continue
+		}
+		id := olcRoomID(pr, rq.Room)
+		if id == "" || len(id) > 300 {
+			continue
+		}
+		rooms = append(rooms, room{pr, id, olcTransportFor(pr, rq.Transport)})
+	}
+	o.mu.Lock()
+	tries := []olcTry{}
+	for _, rm := range rooms {
+		tries = append(tries, olcTry{Label: map[string]string{"telemost": "Телемост", "wbstream": "WB Stream", "jitsi": "свой Jitsi"}[rm.provider] + " · " + olcShortRoom(rm.id) + " · " + rm.tr, State: "wait"})
+	}
+	j.Tries = append(tries, j.Tries...)
+	o.mu.Unlock()
+	offset := len(rooms)
 	_ = o.do(j, "pick", func() (string, error) {
 		// what still works stays; the dead are taken down first
 		wl := olcChannelMode() == "whitelist"
@@ -1000,8 +1083,27 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 				o.logf(j, "pick", "убран нерабочий "+v.Node+": "+c.Err)
 			}
 		}
-		for i, c := range cands {
-			if len(kept) >= keep {
+		for i, rm := range rooms {
+			dup := false
+			for _, v := range kept {
+				dup = dup || olcSameRoom(v.Room, rm.id)
+			}
+			if dup {
+				setTry(i, "ok", "уже работает")
+				continue
+			}
+			setTry(i, "run", "поднимаю…")
+			v, res, ok := o.tryVariantIn(x, srv, rm.provider, rm.id, rm.tr)
+			if ok {
+				kept = append(kept, v)
+				setTry(i, "ok", res)
+			} else {
+				setTry(i, "fail", res)
+			}
+		}
+		for i0, c := range cands {
+			i := i0 + offset
+			if len(kept) >= keep+len(rooms) {
 				setTry(i, "skip", "достаточно рабочих")
 				continue
 			}
@@ -1042,21 +1144,36 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 }
 
 func (o *olcState) tryVariant(x *olcSSH, srv *olcServer, inst, tr string) (olcVariant, string, bool) {
-	// an alternative to the VPN must not need it: the router reaches Jitsi straight
+	return o.tryVariantIn(x, srv, "jitsi", fmt.Sprintf("https://%s/homenet-%s", inst, randHex(6)), tr)
+}
+
+func olcShortRoom(id string) string {
+	id = strings.TrimPrefix(strings.TrimPrefix(id, "https://"), "http://")
+	if len(id) > 28 {
+		return id[:28] + "…"
+	}
+	return id
+}
+
+func (o *olcState) tryVariantIn(x *olcSSH, srv *olcServer, provider, room, tr string) (olcVariant, string, bool) {
+	inst := olcProviderHost(provider, room)
+	// an alternative to the VPN must not need it: the router reaches the call service straight
 	if err := olcDirectReach(inst); err != nil {
 		return olcVariant{}, "не открывается из дома без VPN: " + err.Error(), false
 	}
-	room := fmt.Sprintf("https://%s/homenet-%s", inst, randHex(6))
 	short := strings.SplitN(inst, ".", 2)[0]
+	if provider != "jitsi" {
+		short = map[string]string{"telemost": "telemost", "wbstream": "wb"}[provider]
+	}
 	unit := fmt.Sprintf("v%s-%s", randHex(3), tr)
-	v := olcVariant{Node: fmt.Sprintf("OLC %s %s/%s", srv.Name, short, tr), Instance: inst, Transport: tr, Room: room, Unit: unit}
-	cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: jitsi\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\nliveness:\n  interval: 10s\n  timeout: 15s\n  failures: 4\n", room, olcDir+"/olcrtc.key", tr)
+	v := olcVariant{Provider: provider, Node: fmt.Sprintf("OLC %s %s/%s", srv.Name, short, tr), Instance: inst, Transport: tr, Room: room, Unit: unit}
+	cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: %s\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\nliveness:\n  interval: 10s\n  timeout: 15s\n  failures: 4\n", provider, room, olcDir+"/olcrtc.key", tr)
 	if out, err := x.root(fmt.Sprintf("cat > %s/%s.yaml <<'EOF'\n%sEOF\nsystemctl enable --now olcrtc@%s >/dev/null 2>&1 && sleep 6 && systemctl is-active olcrtc@%s", olcDir, unit, cfg, unit, unit), time.Minute); err != nil {
 		_, _ = x.root(fmt.Sprintf("journalctl -u olcrtc@%s -n 20 --no-pager", unit), 20*time.Second)
 		o.dropVariant(x, v)
 		return v, "служба не запустилась: " + olcLast(out), false
 	}
-	node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": "jitsi", "room-id": room, "transport": tr, "encryption-key": srv.Key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+	node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": room, "transport": tr, "encryption-key": srv.Key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
 	if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
 		o.dropVariant(x, v)
 		return v, "роутер не принял узел: " + shortErr(err), false
@@ -1477,7 +1594,11 @@ func (o *olcState) migrate(j *olcJob, x *olcSSH, srv *olcServer) {
 			continue
 		}
 		unit := fmt.Sprintf("m%s-%s", randHex(3), v.Transport)
-		cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: jitsi\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\n", v.Room, olcDir+"/"+unit+".key", v.Transport)
+		pr := v.Provider
+		if pr == "" {
+			pr = "jitsi"
+		}
+		cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: %s\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\n", pr, v.Room, olcDir+"/"+unit+".key", v.Transport)
 		cmd := fmt.Sprintf("umask 077 && printf %%s %[1]s > %[2]s/%[3]s.key && cat > %[2]s/%[3]s.yaml <<'EOF'\n%[4]sEOF\npodman stop %[5]s >/dev/null && systemctl enable --now olcrtc@%[3]s >/dev/null 2>&1 && sleep 6 && systemctl is-active olcrtc@%[3]s", shq(v.Key), olcDir, unit, cfg, shq(v.External))
 		out, err := x.root(cmd, time.Minute)
 		ok := err == nil

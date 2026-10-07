@@ -74,3 +74,22 @@ func TestOlcMarksVariantsDuringWhitelist(t *testing.T) {
 		t.Fatalf("marks = %q %q %q", v[0].WL, v[1].WL, v[2].WL)
 	}
 }
+
+func TestOlcRoomsOfOtherServices(t *testing.T) {
+	for _, c := range [][3]string{
+		{"telemost", "https://telemost.yandex.ru/j/12345678901234", "12345678901234"},
+		{"wbstream", "https://stream.wb.ru/room/abc-def/", "abc-def"},
+		{"wbstream", "room-01", "room-01"},
+		{"jitsi", "meet.example.ru/myroom/", "https://meet.example.ru/myroom"},
+	} {
+		if got := olcRoomID(c[0], c[1]); got != c[2] {
+			t.Errorf("olcRoomID(%s, %s) = %s, want %s", c[0], c[1], got, c[2])
+		}
+	}
+	if olcTransportFor("telemost", "datachannel") != "vp8channel" || olcTransportFor("wbstream", "seichannel") != "seichannel" || olcTransportFor("wbstream", "datachannel") != "vp8channel" {
+		t.Fatal("transport matrix")
+	}
+	if olcProviderHost("telemost", "123") != "telemost.yandex.ru" || olcProviderHost("jitsi", "https://meet.x.ru/r") != "meet.x.ru" {
+		t.Fatal("provider host")
+	}
+}

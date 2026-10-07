@@ -276,6 +276,14 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
 
 const STEP_MARK: Record<OlcStep["status"], string> = { ok: "✓", run: "…", fail: "!", wait: "", skip: "–" };
 
+// what works where, from olcrtc's docs/settings.ru.md
+const ROOM_KINDS: Array<{ id: string; label: string; site: string; hint: string; transports: string[] }> = [
+  { id: "telemost", label: "Яндекс Телемост", site: "https://telemost.yandex.ru/", hint: "создайте встречу и вставьте ссылку https://telemost.yandex.ru/j/…", transports: ["vp8channel"] },
+  { id: "wbstream", label: "WB Stream", site: "https://stream.wb.ru/", hint: "создайте комнату на stream.wb.ru и вставьте её ссылку или ID", transports: ["vp8channel", "seichannel"] },
+  { id: "jitsi", label: "Свой Jitsi", site: "", hint: "адрес комнаты на своём или любом другом Jitsi: https://host/комната", transports: ["datachannel", "vp8channel", "seichannel"] },
+];
+type RoomRow = { provider: string; room: string; transport: string };
+
 function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (a: Parameters<typeof core.olcrtcDo>[0], b: Record<string, unknown>, k?: string) => Promise<void> }) {
   const [mode, setMode] = useState<Mode>("auto");
   const [auth, setAuth] = useState<"key" | "pass">("key");
@@ -284,6 +292,9 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
   const [tr, setTr] = useState<Record<string, boolean>>({ datachannel: true, vp8channel: true });
   const [keep, setKeep] = useState(2);
   const [mode2, setMode2] = useState<"whitelist" | "normal">("whitelist");
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const kindOf = (id: string) => ROOM_KINDS.find((k) => k.id === id) || ROOM_KINDS[0];
+  const setRoom = (i: number, patch: Partial<RoomRow>) => setRooms(rooms.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   const wlNow = rep?.channel === "whitelist";
   useEffect(() => setKeep(mode2 === "whitelist" && !wlNow ? 3 : 2), [mode2, wlNow]);
   const [open, setOpen] = useState<string>("");
@@ -309,6 +320,7 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
         transports: (rep?.transports || []).filter((t) => tr[t]),
         keep,
         mode: mode2,
+        rooms: rooms.filter((r) => r.room.trim()),
       },
       "setup",
     ).then(() => setForm((f) => ({ ...f, password: "" })));
@@ -410,9 +422,61 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                 </label>
               ))}
             </div>
+            <span className="vn-eyebrow">Свои комнаты — Телемост, WB Stream, свой Jitsi</span>
+            <small className="mh-muted">
+              Комнату в Телемосте и WB Stream olcrtc создать не умеет — её делают на сайте сервиса. Вставьте ссылку: HomeNet проверит, что сервис открывается из дома без VPN, поднимет вариант на сервере и оставит, если заработает. Транспорт подбирается по совместимости: Телемост — только vp8channel, WB Stream — vp8channel или seichannel.
+            </small>
+            <div className="ol-rooms">
+              {rooms.map((r, i) => {
+                const k = kindOf(r.provider);
+                return (
+                  <div key={i} className="ol-room">
+                    <label className="sr-only" htmlFor={`ol-rk-${i}`}>
+                      Сервис
+                    </label>
+                    <select id={`ol-rk-${i}`} className="input" value={r.provider} onChange={(e) => setRoom(i, { provider: e.target.value, transport: kindOf(e.target.value).transports[0] })}>
+                      {ROOM_KINDS.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.label}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="sr-only" htmlFor={`ol-rr-${i}`}>
+                      Ссылка на комнату
+                    </label>
+                    <input id={`ol-rr-${i}`} className="input mono" placeholder={k.hint} value={r.room} onChange={(e) => setRoom(i, { room: e.target.value })} />
+                    <label className="sr-only" htmlFor={`ol-rt-${i}`}>
+                      Транспорт
+                    </label>
+                    <select id={`ol-rt-${i}`} className="input" value={r.transport} onChange={(e) => setRoom(i, { transport: e.target.value })}>
+                      {k.transports.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn btn-icon" aria-label="Убрать комнату" onClick={() => setRooms(rooms.filter((_, n) => n !== i))}>
+                      <Icon name="close" size={13} />
+                    </button>
+                    {k.site ? (
+                      <a className="ol-room-site" href={k.site} target="_blank" rel="noopener noreferrer">
+                        создать комнату на {k.site.replace(/^https:\/\//, "").replace(/\/$/, "")} →
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              })}
+              <div className="vn-chips">
+                {ROOM_KINDS.map((k) => (
+                  <button key={k.id} type="button" className="vn-chip" onClick={() => setRooms([...rooms, { provider: k.id, room: "", transport: k.transports[0] }])}>
+                    <Icon name="plus" size={12} /> {k.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="ol-row2">
               <span className="su-field">
-                <span>Транспорт</span>
+                <span>Транспорт для Jitsi из списка</span>
                 <span className="vn-chips">
                   {(rep?.transports || []).map((t) => (
                     <button key={t} type="button" className={`vn-chip${tr[t] ? " is-on" : ""}`} aria-pressed={!!tr[t]} onClick={() => setTr({ ...tr, [t]: !tr[t] })}>
@@ -548,15 +612,17 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
 const MANUAL: Array<[string, string, string[]]> = [
   ["Подготовьте сервер", "Debian 12, Ubuntu 22.04 и новее, Fedora или Arch — вне России. Если памяти меньше 4 ГБ, добавьте swap, иначе сборка оборвётся.", ["sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile", "echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab"]],
   ["Поставьте git, curl и Go 1.26", "В Debian и Ubuntu Go из пакетов старый — берите архив с go.dev.", ["sudo apt update && sudo apt install -y git curl openssl", "curl -fsSL https://go.dev/dl/go1.26.3.linux-amd64.tar.gz | sudo tar -C /usr/local -xz && /usr/local/go/bin/go version"]],
-  ["Скачайте и соберите olcrtc", "Без mage — той же командой, что использует его сборка.", ["sudo git clone --depth 1 https://github.com/openlibrecommunity/olcrtc /opt/olcrtc/src", "cd /opt/olcrtc/src && sudo CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -ldflags '-s -w' -o /opt/olcrtc/olcrtc ./cmd/olcrtc"]],
+  ["Скачайте и соберите olcrtc той же версии, что в роутере", "Сборки с разным форматом шифрования не соединяются, поэтому нужна версия 92b2332 — её встроено в ядро HomeNet. Без mage — той же командой, что использует его сборка.", ["sudo git init -q /opt/olcrtc/src && cd /opt/olcrtc/src && sudo git fetch -q --depth 1 https://github.com/openlibrecommunity/olcrtc 92b2332769c3dd5000584366201572efc448065f && sudo git checkout -q FETCH_HEAD", "cd /opt/olcrtc/src && sudo CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -ldflags '-s -w' -o /opt/olcrtc/olcrtc ./cmd/olcrtc"]],
   ["Создайте ключ", "Один на сервер. Тот же ключ понадобится в HomeNet.", ["sudo sh -c 'umask 077 && openssl rand -hex 32 > /opt/olcrtc/olcrtc.key' && sudo cat /opt/olcrtc/olcrtc.key"]],
-  ["Опишите вариант", "Комнату Jitsi можно выдумать. Площадку выберите из списка olcrtc — такую, что открывается из дома без VPN.", ["sudo tee /opt/olcrtc/v1.yaml <<'EOF'\nmode: srv\nauth:\n  provider: jitsi\nroom:\n  id: \"https://meet.egovm.ru/homenet-ваша-комната\"\ncrypto:\n  key_file: \"/opt/olcrtc/olcrtc.key\"\nnet:\n  transport: datachannel\n  dns: \"8.8.8.8:53\"\nEOF"]],
+  ["Опишите вариант", "Комнату Jitsi можно выдумать; площадку возьмите из списка olcrtc — такую, что открывается из дома без VPN. Для Телемоста: provider: telemost, transport: vp8channel, id — номер из ссылки встречи. Для WB Stream: provider: wbstream, transport: vp8channel или seichannel, id комнаты с stream.wb.ru.", ["sudo tee /opt/olcrtc/v1.yaml <<'EOF'\nmode: srv\nauth:\n  provider: jitsi\nroom:\n  id: \"https://meet.egovm.ru/homenet-ваша-комната\"\ncrypto:\n  key_file: \"/opt/olcrtc/olcrtc.key\"\nnet:\n  transport: datachannel\n  dns: \"8.8.8.8:53\"\nEOF"]],
   ["Запустите как службу", "Служба на вариант: второй вариант — v2.yaml и olcrtc@v2.", ["sudo tee /etc/systemd/system/olcrtc@.service <<'EOF'\n[Unit]\nDescription=olcrtc %i\nAfter=network-online.target\n\n[Service]\nExecStart=/opt/olcrtc/olcrtc /opt/olcrtc/%i.yaml\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\nEOF", "sudo systemctl daemon-reload && sudo systemctl enable --now olcrtc@v1 && journalctl -u olcrtc@v1 -f"]],
   ["Добавьте в HomeNet", "«Серверы и варианты» → «Без своего сервера» → «Изменить узлы вручную» → новый узел: провайдер jitsi, та же комната, транспорт и ключ. Затем «Проверить».", []],
 ];
 const PROBLEMS: Array<[string, string]> = [
   ["Сборка обрывается словом killed", "Не хватило памяти: включите swap 4 ГБ (шаг 1) и соберите заново."],
   ["Клиент не входит в комнату", "У сервера и HomeNet должны совпадать площадка, комната, транспорт и ключ — ровно 64 шестнадцатеричных символа."],
+  ["Комната есть, но данные не идут", "Версии olcrtc на сервере и в ядре роутера разные: соберите версию 92b2332 (шаг 3)."],
+  ["Телемост не соединяется", "У Телемоста работает только vp8channel — datachannel он убрал."],
   ["При белых списках не работает", "Площадка должна открываться из дома без VPN: берите Jitsi на российском адресе. Держите хотя бы два варианта."],
   ["WB Stream и datachannel", "Эта пара не работает — для WB Stream нужен vp8channel."],
   ["После перезагрузки сервера пропал", "Служба не включена: systemctl enable --now olcrtc@v1."],
