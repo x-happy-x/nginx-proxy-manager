@@ -514,7 +514,7 @@ def main():
             keep=int(os.environ.get("RELEASES_KEEP","10"))
             router.run("cd /opt/etc/homenet/releases && ls -1 | grep -E '^[0-9]{8}-[0-9]{6}$' | sort -r | tail -n +"+str(keep+1)+" | grep -vxF "+q(stamp)+" | while read d; do rm -rf \"$d\"; done", timeout=300)
         except Exception as error:
-            print("release cleanup skipped: "+str(error),file=sys.stderr,flush=True)
+            print("release cleanup skipped: "+str(error),flush=True)
     except Exception:
         router.run("sh "+q(release+"/rollback.sh"))
         # Prevent the watchdog repeating a rollback already completed.
