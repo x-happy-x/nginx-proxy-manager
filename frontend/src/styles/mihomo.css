@@ -3172,3 +3172,9 @@ button.vr-gchip { cursor: pointer; }
 .ol-room { display: grid; grid-template-columns: 150px minmax(0, 1fr) 130px auto; gap: 8px; align-items: center; }
 .ol-room-site { grid-column: 1 / -1; font-size: 12.5px; }
 @media (max-width: 760px) { .ol-room { grid-template-columns: minmax(0, 1fr) auto; } .ol-room input { grid-column: 1 / -1; } }
+/* the form column is narrow: the link takes its own line, transports wrap in a row */
+.ol-form .ol-room { grid-template-columns: minmax(0, 1fr) 130px auto; }
+.ol-form .ol-room input { grid-column: 1 / -1; grid-row: 2; }
+.ol-form .ol-room-site { grid-row: 3; }
+.ol-form .ol-row2 { grid-template-columns: minmax(0, 1fr); }
+.ol-form .ol-row2 .vn-chips { flex-wrap: wrap; }
