@@ -5,6 +5,11 @@ import { bytes, errText } from "../../lib/format";
 import { core, mihomo, type HealthPoint, type MProvider, type MProxy, type ProviderUpdate } from "./api";
 import { ChartTip, VpnChart, dm, intoSlots, slots } from "./VpnCharts";
 import { Pill, type Tone } from "./VpnOverview";
+import { useNodeRows } from "./Nodes";
+import { useStored } from "./NodeTiles";
+
+type SubView = "cards" | "table";
+type SubTab = "overview" | "nodes" | "log" | "settings";
 
 /*
  * VPN → «Подписки» (NPM-51): each subscription — how many nodes and how many
@@ -51,6 +56,8 @@ export function Subscriptions() {
   const [days, setDays] = useState<HealthPoint[]>([]);
   const [sel, setSel] = useState(13);
   const [busy, setBusy] = useState("");
+  const [view, setView] = useStored<SubView>("homenet.subs.view", "cards", (v): v is SubView => v === "cards" || v === "table");
+  const [tab, setTab] = useState<SubTab>("overview");
   const [err, setErr] = useState("");
 
   const pull = useCallback(() => {
@@ -101,6 +108,27 @@ export function Subscriptions() {
     }
   };
 
+  const healthcheck = async (name: string) => {
+    setBusy(`hc:${name}`);
+    try {
+      await mihomo.healthcheck(name);
+      pull();
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy("");
+    }
+  };
+  const updateAll = async () => {
+    setBusy("all");
+    setErr("");
+    await Promise.all(subs.filter((p) => p.vehicleType === "HTTP").map((p) => mihomo.updateProvider(p.name).catch((e) => setErr(errText(e)))));
+    pull();
+    setBusy("");
+  };
+  const kindOf = (p: MProvider) => (p.name === "CHAIN" ? "каскады: копия основной через обходы" : p.name === "AI" ? "копия основной для ИИ" : p.vehicleType === "HTTP" ? "подписка по ссылке" : "файл на роутере");
+  const nodeRowsMap = useNodeRows({}, cur ? { [cur.name]: cur } : {}, [], {});
+  const nodeRows = [...nodeRowsMap.values()];
   const now = Date.now() / 1000;
   const subsGroup = proxies[SUBS_GROUP];
   const subsLeaf = subsGroup ? leafOf(SUBS_GROUP, proxies) : "";
@@ -164,24 +192,50 @@ export function Subscriptions() {
         ) : null}
       </section>
 
-      <div className="su-layout">
-        <div className="su-list">
+      <div className="su-toolbar">
+        <div className="nx-views" role="group" aria-label="Вид">
+          {(
+            [
+              ["cards", "Карточки"],
+              ["table", "Таблица"],
+            ] as Array<[SubView, string]>
+          ).map(([k, label]) => (
+            <button key={k} type="button" className={view === k ? "is-on" : ""} aria-pressed={view === k} onClick={() => setView(k)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="su-toolbar-gap" />
+        <button type="button" className="btn" disabled={busy === "all"} onClick={() => void updateAll()}>
+          <Icon name="refresh" size={14} /> {busy === "all" ? "Обновляю…" : "Обновить все"}
+        </button>
+        <a className="btn btn-primary" href="#/coreconfig/providers">
+          <Icon name="plus" size={14} /> Добавить подписку
+        </a>
+      </div>
+
+      {view === "cards" ? (
+        <div className="su-cards">
           {subs.map((p) => {
             const st = state(p);
             const info = p.subscriptionInfo;
             const used = (info?.Download || 0) + (info?.Upload || 0);
             const on = p.name === cur?.name;
+            const a = aliveNow(p);
             return (
               <button key={p.name} className={`vn-card su-card${on ? " is-sel" : ""}`} aria-pressed={on} onClick={() => setPick(p.name)}>
                 <span className="vn-card-top">
                   <span className="vn-card-name">
                     <b>{p.name}</b>
-                    <small>{p.vehicleType === "HTTP" ? "подписка по ссылке" : "файл на роутере"}</small>
+                    <small>{kindOf(p)}</small>
                   </span>
                   <Pill tone={st.tone}>{st.text}</Pill>
                 </span>
                 <span className="su-big">
-                  <b>{aliveNow(p)}</b> из {p.proxies.length} узлов отвечают
+                  <b>{a}</b> из {p.proxies.length} отвечают
+                </span>
+                <span className="su-split" aria-hidden="true">
+                  <span style={{ width: `${p.proxies.length ? (a / p.proxies.length) * 100 : 0}%` }} />
                 </span>
                 {info?.Total ? (
                   <span className="su-quota">
@@ -197,133 +251,342 @@ export function Subscriptions() {
                   </span>
                 ) : null}
                 <span className="vn-card-foot">
-                  <span>{p.updatedAt ? `обновлена ${ago(now - ts(p.updatedAt))}` : "не скачивалась"}</span>
+                  <span>{p.updatedAt ? `обновлена ${ago(now - ts(p.updatedAt))}` : p.vehicleType === "HTTP" ? "не скачивалась" : "свой файл"}</span>
                   <span>{info?.Expire ? `до ${new Date(info.Expire * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}` : ""}</span>
                 </span>
               </button>
             );
           })}
           {!subs.length ? <p className="mh-muted">Подписок в конфиге нет. Добавьте ссылку в «Настройке».</p> : null}
-          <a className="vn-card su-add" href="#/coreconfig/providers">
-            <Icon name="plus" size={14} /> Добавить подписку
-          </a>
         </div>
+      ) : (
+        <div className="su-table" role="table" aria-label="Подписки">
+          <div className="su-trow su-thead" role="row">
+            <span role="columnheader">Подписка</span>
+            <span role="columnheader">Отвечают</span>
+            <span role="columnheader" className="nx-hm">
+              Трафик
+            </span>
+            <span role="columnheader" className="nx-hm">
+              Обновлена
+            </span>
+            <span role="columnheader" className="nx-hm">
+              Срок
+            </span>
+            <span role="columnheader">Состояние</span>
+          </div>
+          {subs.map((p) => {
+            const st = state(p);
+            const info = p.subscriptionInfo;
+            const used = (info?.Download || 0) + (info?.Upload || 0);
+            return (
+              <button key={p.name} type="button" role="row" className={`su-trow${p.name === cur?.name ? " is-sel" : ""}`} onClick={() => setPick(p.name)}>
+                <span role="cell" className="su-tname">
+                  <b className="truncate">{p.name}</b>
+                  <small className="truncate">{kindOf(p)}</small>
+                </span>
+                <span role="cell" className="mono">
+                  {aliveNow(p)} / {p.proxies.length}
+                </span>
+                <span role="cell" className="nx-hm mono">
+                  {info?.Total ? `${Math.round((used / info.Total) * 100)}%` : used ? bytes(used) : "—"}
+                </span>
+                <span role="cell" className="nx-hm">
+                  {p.updatedAt ? ago(now - ts(p.updatedAt)) : "—"}
+                </span>
+                <span role="cell" className="nx-hm">
+                  {info?.Expire ? new Date(info.Expire * 1000).toLocaleDateString("ru-RU") : "—"}
+                </span>
+                <span role="cell">
+                  <Pill tone={st.tone}>{st.text}</Pill>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-        {cur ? (
-          <section className="vs-panel su-detail" aria-label={cur.name}>
-            <div className="vs-panel-head">
-              <span className="vn-card-name">
-                <b>{cur.name}</b>
-                <small>
-                  {cur.updatedAt ? `обновлена ${ago(now - ts(cur.updatedAt))}` : "не скачивалась"}
-                  {log[cur.name]?.length && log[cur.name][log[cur.name].length - 1].via ? ` · через ${log[cur.name][log[cur.name].length - 1].via}` : ""}
-                </small>
-              </span>
+      {cur ? (
+        <section className="su-detail" aria-label={cur.name}>
+          <div className="su-detail-head">
+            <span className="vn-card-name">
+              <b>{cur.name}</b>
+              <small>
+                {cur.updatedAt ? `обновлена ${ago(now - ts(cur.updatedAt))}` : kindOf(cur)}
+                {log[cur.name]?.length && log[cur.name][log[cur.name].length - 1].via ? ` · через ${log[cur.name][log[cur.name].length - 1].via}` : ""}
+              </small>
+            </span>
+            <span className="nx-actions">
+              <button className="btn btn-sm" disabled={busy === `hc:${cur.name}`} onClick={() => void healthcheck(cur.name)}>
+                <Icon name="bolt" size={13} /> {busy === `hc:${cur.name}` ? "Проверяю…" : "Проверить узлы"}
+              </button>
               {cur.vehicleType === "HTTP" ? (
                 <button className="btn btn-sm btn-primary" disabled={busy === cur.name} onClick={() => void update(cur.name)}>
                   <Icon name="refresh" size={14} /> {busy === cur.name ? "Обновляю…" : "Обновить сейчас"}
                 </button>
               ) : null}
-            </div>
-            <div className="su-stats">
-              <div>
-                <small>Узлов</small>
-                <b>{cur.proxies.length}</b>
-              </div>
-              <div>
-                <small>Отвечают</small>
-                <b>{aliveNow(cur)}</b>
-              </div>
-              <div>
-                <small>Стран</small>
-                <b>{countries.filter(([c]) => c !== "?").length || "—"}</b>
-              </div>
-              <div>
-                <small>Проверка</small>
-                <b>{cur.adaptive ? "адаптивная" : "обычная"}</b>
-              </div>
-            </div>
+            </span>
+          </div>
+          <div className="su-tabs" role="tablist">
+            {(
+              [
+                ["overview", "Обзор"],
+                ["nodes", `Узлы · ${cur.proxies.length}`],
+                ["log", "Журнал обновлений"],
+                ["settings", "Настройки"],
+              ] as Array<[SubTab, string]>
+            ).map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-            <div className="su-block">
-              <span className="vn-eyebrow">Узлы за 14 дней</span>
-              {days.length ? (
-                <>
-                  <VpnChart
-                    times={dayTimes}
-                    kind="bars"
-                    height={150}
-                    series={[
-                      { key: "alive", label: "отвечали", color: "var(--status-good)", values: alive },
-                      { key: "dead", label: "не отвечали", color: "var(--series-neutral)", values: total.map((t, k) => (t == null ? null : Math.max(0, t - (alive[k] || 0)))) },
-                    ]}
-                    format={(v) => String(Math.round(v))}
-                    selected={di}
-                    onSelect={setSel}
-                    bands={wl.map((v) => (v || 0) >= 60)}
-                    label="Узлы по дням"
-                    xLabel={(t, k) => (k % 2 === 1 ? dm(t) : "")}
-                    slotLabel={(t) => dm(t)}
-                  />
-                  <ChartTip
-                    title={new Date(dayTimes[di] * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short" })}
-                    rows={
-                      total[di] == null
-                        ? []
-                        : [
-                            { color: "var(--status-good)", label: "отвечали в среднем", value: String(alive[di]) },
-                            { color: "var(--series-neutral)", label: "в подписке", value: String(total[di]) },
-                          ]
-                    }
-                    note={total[di] == null ? "За этот день записей нет." : (wl[di] || 0) >= 60 ? `Белые списки ${Math.round((wl[di] || 0) / 60)} ч: отвечали в основном обходы.` : undefined}
-                  />
-                </>
-              ) : (
-                <p className="mh-muted">История появится через час: роутер записывает подписки раз в минуту.</p>
-              )}
-            </div>
+          {tab === "overview" ? (
+            <>
+              <div className="su-stats">
+                <div>
+                  <small>Узлов</small>
+                  <b>{cur.proxies.length}</b>
+                </div>
+                <div>
+                  <small>Отвечают</small>
+                  <b>{aliveNow(cur)}</b>
+                </div>
+                <div>
+                  <small>Стран</small>
+                  <b>{countries.filter(([c]) => c !== "?").length || "—"}</b>
+                </div>
+                <div>
+                  <small>Проверка</small>
+                  <b>{cur.adaptive ? "адаптивная" : "обычная"}</b>
+                </div>
+              </div>
 
+              <div className="su-block">
+                <span className="vn-eyebrow">Узлы за 14 дней · нажмите на день</span>
+                {days.length ? (
+                  <>
+                    <VpnChart
+                      times={dayTimes}
+                      kind="bars"
+                      height={150}
+                      series={[
+                        { key: "alive", label: "отвечали", color: "var(--status-good)", values: alive },
+                        { key: "dead", label: "не отвечали", color: "var(--series-neutral)", values: total.map((t, k) => (t == null ? null : Math.max(0, t - (alive[k] || 0)))) },
+                      ]}
+                      format={(v) => String(Math.round(v))}
+                      selected={di}
+                      onSelect={setSel}
+                      bands={wl.map((v) => (v || 0) >= 60)}
+                      label="Узлы по дням"
+                      xLabel={(t, k) => (k % 2 === 1 ? dm(t) : "")}
+                      slotLabel={(t) => dm(t)}
+                    />
+                    <ChartTip
+                      title={new Date(dayTimes[di] * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short" })}
+                      rows={
+                        total[di] == null
+                          ? []
+                          : [
+                              { color: "var(--status-good)", label: "отвечали в среднем", value: String(alive[di]) },
+                              { color: "var(--series-neutral)", label: "в подписке", value: String(total[di]) },
+                            ]
+                      }
+                      note={total[di] == null ? "За этот день записей нет." : (wl[di] || 0) >= 60 ? `Белые списки ${Math.round((wl[di] || 0) / 60)} ч: отвечали в основном обходы.` : undefined}
+                    />
+                  </>
+                ) : (
+                  <p className="mh-muted">История появится через час: роутер записывает подписки раз в минуту.</p>
+                )}
+              </div>
+
+              <div className="su-block">
+                <span className="vn-eyebrow">Страны выхода</span>
+                <div className="su-countries">
+                  {countries.map(([c, v]) => (
+                    <div key={c}>
+                      <span>
+                        <span>{c === "?" ? "не известна" : `${COUNTRY[c] || c}`}</span>
+                        <b>
+                          {v.alive} / {v.n}
+                        </b>
+                      </span>
+                      <span className="bar-track">
+                        <span className="bar-fill" style={{ width: `${(v.alive / v.n) * 100}%` }} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {cur.adaptive ? null : <small className="mh-muted">Страна — по флагу в названии узла; у адаптивной подписки — по факту выхода.</small>}
+              </div>
+            </>
+          ) : null}
+
+          {tab === "nodes" ? (
             <div className="su-block">
-              <span className="vn-eyebrow">Страны выхода</span>
-              <div className="su-countries">
-                {countries.map(([c, v]) => (
-                  <div key={c}>
-                    <span>
-                      <span>{c === "?" ? "не известна" : `${COUNTRY[c] || c}`}</span>
-                      <b>
-                        {v.alive} / {v.n}
-                      </b>
+              <span className="mh-muted">
+                Узлы только этой подписки. Сравнить с другими и закрепить в группе — на вкладке{" "}
+                <a href="#/proxies" onClick={() => undefined}>
+                  «Узлы»
+                </a>
+                .
+              </span>
+              <div className="nx-tiles">
+                {nodeRows.map((r) => (
+                  <span key={r.name} className={`nx-tile nx-t-${r.state}`} title={r.note}>
+                    <span className="nx-tile-top">
+                      {r.country ? <span className="nx-cc">{r.country}</span> : null}
+                      <b className="truncate">{r.name}</b>
                     </span>
-                    <span className="bar-track">
-                      <span className="bar-fill" style={{ width: `${(v.alive / v.n) * 100}%` }} />
+                    <span className="nx-tile-foot">
+                      <span className={`nx-pill nx-${r.state}`}>{r.state === "ok" ? "живой" : r.state === "slow" ? "медленно" : r.state === "out" ? "снят" : r.state === "reset" ? "сброс" : r.state === "silent" ? "молчит" : "не проверялся"}</span>
+                      <span className="mono">{r.delay && r.delay > 0 ? `${r.delay} мс` : ""}</span>
                     </span>
-                  </div>
+                  </span>
                 ))}
               </div>
-              {cur.adaptive ? null : <small className="mh-muted">Страна — по флагу в названии узла; у адаптивной подписки — по факту выхода.</small>}
             </div>
+          ) : null}
 
+          {tab === "log" ? (
             <div className="su-block">
-              <span className="vn-eyebrow">Журнал обновлений</span>
               {log[cur.name]?.length ? (
                 <div className="su-log">
-                  {[...log[cur.name]].reverse().slice(0, 12).map((u) => (
+                  {[...log[cur.name]].reverse().slice(0, 30).map((u) => (
                     <div key={u.t}>
                       <time>{new Date(u.t * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</time>
                       <i className={`vn-dot vn-${u.via && u.via !== "DIRECT" ? "warn" : "ok"}`} />
                       <span>{u.via ? (u.via === "DIRECT" ? "напрямую" : `через ${u.via}`) : "путь не известен"}</span>
                       <small>
-                        {u.total} узлов{u.added ? ` · ${u.added > 0 ? "+" : ""}${u.added}` : ""}
+                        {u.total} узлов · отвечали {u.alive}
+                        {u.added ? ` · ${u.added > 0 ? "+" : ""}${u.added}` : ""}
                       </small>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mh-muted">Роутер записывает обновления с этой версии HomeNet: первое появится после ближайшего обновления подписки.</p>
+                <p className="mh-muted">{cur.vehicleType === "HTTP" ? "Первое обновление появится здесь после ближайшего скачивания подписки." : "Это файл на роутере: он не скачивается, журнала нет."}</p>
               )}
             </div>
-          </section>
-        ) : null}
+          ) : null}
+
+          {tab === "settings" ? <SubSettings name={cur.name} managed={cur.name === "CHAIN" || cur.name === "AI"} onSaved={pull} /> : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+type ProviderCfg = { type?: string; url?: string; interval?: number; proxy?: string; filter?: string; "exclude-filter"?: string; path?: string; "health-check"?: { interval?: number; adaptive?: unknown } };
+
+/** «Настройки» of one subscription (NPM-56): the fields people change, checked by mihomo -t before they apply. */
+function SubSettings({ name, managed, onSaved }: { name: string; managed: boolean; onSaved: () => void }) {
+  const [sha, setSha] = useState("");
+  const [all, setAll] = useState<Record<string, ProviderCfg>>({});
+  const [form, setForm] = useState<ProviderCfg>({});
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
+  useEffect(() => {
+    setMsg(null);
+    setShow(false);
+    void core
+      .config()
+      .then((c) => {
+        const providers = ((c.sections || {})["proxy-providers"] || {}) as Record<string, ProviderCfg>;
+        setSha(c.sha);
+        setAll(providers);
+        setForm({ ...(providers[name] || {}) });
+      })
+      .catch((e) => setMsg({ tone: "bad", text: errText(e) }));
+  }, [name]);
+  const orig = all[name];
+  if (!orig) return <p className="mh-muted">{msg ? msg.text : "Загружаю настройки…"}</p>;
+  const isHttp = orig.type === "http";
+  const masked = (u?: string) => (u ? u.replace(/^(https?:\/\/[^/]+\/).+$/, "$1••••••••") : "");
+  const changed = JSON.stringify(form) !== JSON.stringify(orig);
+  const set = (k: keyof ProviderCfg, v: unknown) => setForm((f) => ({ ...f, [k]: v === "" ? undefined : v }));
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const next = { ...all, [name]: Object.fromEntries(Object.entries(form).filter(([, v]) => v !== undefined)) };
+      const res = await core.applyConfig({ sha, set: { "proxy-providers": next } });
+      setSha(res.sha);
+      setAll(next as Record<string, ProviderCfg>);
+      setMsg({ tone: "ok", text: res.message || "Применено" });
+      onSaved();
+    } catch (e) {
+      setMsg({ tone: "bad", text: errText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (managed)
+    return (
+      <p className="mh-muted">
+        Эту подписку собирает «Маршрутизация» из основной — её настройки меняются там:{" "}
+        <a href="#/coreconfig/routing">Настройка → Маршрутизация</a>.
+      </p>
+    );
+  return (
+    <div className="su-form">
+      {isHttp ? (
+        <label className="su-field su-wide">
+          <span>Ссылка подписки</span>
+          <span className="su-inline">
+            <input className="input mono" value={show ? form.url || "" : masked(form.url)} readOnly={!show} onChange={(e) => set("url", e.target.value)} />
+            <button type="button" className="btn btn-sm" onClick={() => setShow(!show)}>
+              {show ? "Скрыть" : "Показать и изменить"}
+            </button>
+          </span>
+        </label>
+      ) : (
+        <p className="mh-muted su-wide">Файл на роутере: {orig.path || "—"}. Узлы правятся на своей вкладке.</p>
+      )}
+      {isHttp ? (
+        <label className="su-field">
+          <span>Обновлять</span>
+          <select className="input" value={String(form.interval || 3600)} onChange={(e) => set("interval", Number(e.target.value))}>
+            <option value="3600">раз в час</option>
+            <option value="21600">раз в 6 часов</option>
+            <option value="43200">раз в 12 часов</option>
+            <option value="86400">раз в сутки</option>
+          </select>
+        </label>
+      ) : null}
+      {isHttp ? (
+        <label className="su-field">
+          <span>Скачивать через</span>
+          <select className="input" value={form.proxy || ""} onChange={(e) => set("proxy", e.target.value)}>
+            <option value="Подписки">Подписки — напрямую, затем обходы и каскад</option>
+            <option value="DIRECT">только напрямую</option>
+            <option value="">как задано в ядре (напрямую)</option>
+          </select>
+        </label>
+      ) : null}
+      <label className="su-field">
+        <span>Брать только узлы (регулярное выражение)</span>
+        <input className="input mono" placeholder="все" value={form.filter || ""} onChange={(e) => set("filter", e.target.value)} />
+      </label>
+      <label className="su-field">
+        <span>Отсеивать узлы (регулярное выражение)</span>
+        <input className="input mono" placeholder="ничего" value={form["exclude-filter"] || ""} onChange={(e) => set("exclude-filter", e.target.value)} />
+      </label>
+      <div className="nx-actions su-wide">
+        <button type="button" className="btn btn-primary" disabled={!changed || busy} onClick={() => void save()}>
+          {busy ? "Проверяю и применяю…" : "Проверить и применить"}
+        </button>
+        <button type="button" className="btn" disabled={!changed || busy} onClick={() => setForm({ ...orig })}>
+          Отменить
+        </button>
+        <a className="btn" href="#/coreconfig/providers">
+          Все параметры
+        </a>
       </div>
+      {msg ? <p className={msg.tone === "ok" ? "su-ok" : "vn-err"}>{msg.text}</p> : null}
+      <small className="mh-muted su-wide">Перед применением конфиг проверяется mihomo -t, старый сохраняется копией; при ошибке ничего не меняется.</small>
     </div>
   );
 }
