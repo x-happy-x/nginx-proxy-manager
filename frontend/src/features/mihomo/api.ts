@@ -279,7 +279,7 @@ export type ServicesReport = { checked: number; interval: number; slow_ms: numbe
 /** OLCRTC servers set up over SSH and the background pick of variants (NPM-56). */
 export type OlcVariant = { provider?: string; node: string; instance: string; transport: string; room: string; unit: string; external?: string; wl?: "ok" | "fail"; wl_at?: number };
 export type OlcFound = { container: string; status: string; dir: string; provider: string; room: string; transport: string; in_tmp: boolean; node?: string };
-export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; mode?: "whitelist" | "normal"; variants: OlcVariant[]; created: number };
+export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; mode?: "whitelist" | "normal"; variants: OlcVariant[]; created: number; country?: string; city?: string; exit_ip?: string; isp?: string; country_at?: number };
 export type OlcCheck = { t: number; ok: boolean; ms: number; error?: string };
 export type OlcStep = { id: string; title: string; status: "wait" | "run" | "ok" | "fail" | "skip"; detail?: string; log?: string[]; fix?: string; fix_label?: string; ms?: number };
 export type OlcTry = { label: string; state: "wait" | "run" | "ok" | "fail" | "skip"; result?: string };
@@ -434,7 +434,7 @@ export const core = {
   olcrtc: () => call<OlcReport>("/api/core/olcrtc"),
   exits: () => call<ExitsReport>("/api/core/exits"),
   exitsCheck: (body: { provider?: string; nodes?: string[] }) => call<ExitsReport>("/api/core/exits/check", json("POST", body)),
-  olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
+  olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove" | "tidy", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>
     call<{ install: InstallState }>("/api/core/install", json("POST", req)).then((r) => r.install),

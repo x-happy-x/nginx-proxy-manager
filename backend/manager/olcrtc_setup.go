@@ -97,6 +97,13 @@ type olcServer struct {
 	Arch     string       `json:"arch,omitempty"`
 	Mode     string       `json:"mode,omitempty"` // whitelist | normal
 	Variants []olcVariant `json:"variants"`
+	// Where the server's traffic leaves for the internet, asked through one
+	// of its nodes (NPM-59); the flag of Country goes into its node names.
+	Country   string `json:"country,omitempty"`
+	City      string `json:"city,omitempty"`
+	ExitIP    string `json:"exit_ip,omitempty"`
+	ISP       string `json:"isp,omitempty"`
+	CountryAt int64  `json:"country_at,omitempty"`
 	Created  int64        `json:"created"`
 }
 
@@ -826,7 +833,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		}
 		v := olcVariant{Provider: f.Provider, Node: f.Node, Instance: olcProviderHost(f.Provider, f.Room), Transport: f.Transport, Room: f.Room, External: f.Container, Key: f.key}
 		if v.Node == "" {
-			v.Node = fmt.Sprintf("OLC %s %s/%s", srv.Name, strings.SplitN(v.Instance, ".", 2)[0], v.Transport)
+			v.Node = olcNodeName(srv, f.Provider, v.Instance, v.Transport, o.olcTaken())
 			node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": f.Provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
 			if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
 				o.logf(j, "existing", "узел для "+f.Container+" не добавлен: "+shortErr(err))
@@ -1012,6 +1019,14 @@ WantedBy=multi-user.target
 			_ = olcSelect(best)
 		}
 		note := ""
+		// where the server exits: its flag goes into the node names (NPM-59)
+		if cc, city, ip, isp, err := olcExit(best); err == nil && cc != "" {
+			o.mu.Lock()
+			srv.Country, srv.City, srv.ExitIP, srv.ISP, srv.CountryAt = cc, city, ip, isp, time.Now().Unix()
+			o.saveLocked()
+			o.mu.Unlock()
+			note += " · выход " + strings.TrimSpace(cc+" "+city)
+		}
 		if srv.Mode == "whitelist" {
 			if olcChannelMode() == "whitelist" {
 				note = " · проверены при белых списках"
@@ -1023,6 +1038,7 @@ WantedBy=multi-user.target
 	})
 	o.finish(j, true, "")
 	o.event("ok", fmt.Sprintf("%s: %s, рабочих вариантов %d", srv.Name, map[string]string{"setup": "сервер настроен", "repick": "варианты подобраны заново"}[j.Kind], len(kept)))
+	go o.tidy()
 }
 
 func olcLast(s string) string {
@@ -1199,21 +1215,17 @@ func (o *olcState) tryVariantIn(x *olcSSH, srv *olcServer, provider, room, tr st
 	if err := olcDirectReach(inst); err != nil {
 		return olcVariant{}, "не открывается из дома без VPN: " + err.Error(), false
 	}
-	short := strings.SplitN(inst, ".", 2)[0]
-	if provider != "jitsi" {
-		short = map[string]string{"telemost": "telemost", "wbstream": "wb"}[provider]
-	}
 	unit := fmt.Sprintf("v%s-%s", randHex(3), tr)
-	v := olcVariant{Provider: provider, Node: fmt.Sprintf("OLC %s %s/%s", srv.Name, short, tr), Instance: inst, Transport: tr, Room: room, Unit: unit}
+	v := olcVariant{Provider: provider, Node: olcNodeName(srv, provider, inst, tr, o.olcTaken()), Instance: inst, Transport: tr, Room: room, Unit: unit}
 	cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: %s\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\nliveness:\n  interval: 10s\n  timeout: 15s\n  failures: 4\n", provider, room, olcDir+"/olcrtc.key", tr)
 	if out, err := x.root(fmt.Sprintf("cat > %s/%s.yaml <<'EOF'\n%sEOF\nsystemctl enable --now olcrtc@%s >/dev/null 2>&1 && sleep 6 && systemctl is-active olcrtc@%s", olcDir, unit, cfg, unit, unit), time.Minute); err != nil {
 		_, _ = x.root(fmt.Sprintf("journalctl -u olcrtc@%s -n 20 --no-pager", unit), 20*time.Second)
-		o.dropVariant(x, v)
+		o.dropUnit(x, v)
 		return v, "служба не запустилась: " + olcLast(out), false
 	}
 	node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": room, "transport": tr, "encryption-key": srv.Key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
 	if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
-		o.dropVariant(x, v)
+		o.dropUnit(x, v)
 		return v, "роутер не принял узел: " + shortErr(err), false
 	}
 	// a Jitsi session takes a few seconds to come up on both ends
@@ -1279,9 +1291,207 @@ func (o *olcState) dropVariant(x *olcSSH, v olcVariant) {
 		return // olcrtc's own container: not ours to stop or forget on the router
 	}
 	_ = mihomoDo(http.MethodDelete, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies/"+url.PathEscape(v.Node), nil, nil, 10*time.Second)
-	if x != nil && v.Unit != "" {
+	o.dropUnit(x, v)
+}
+
+// dropUnit stops the variant's service on the server and leaves the router
+// alone: a try that never added its node must not delete one by that name.
+func (o *olcState) dropUnit(x *olcSSH, v olcVariant) {
+	if v.External == "" && x != nil && v.Unit != "" {
 		_, _ = x.root(fmt.Sprintf("systemctl disable --now olcrtc@%[2]s >/dev/null 2>&1; rm -f %[1]s/%[2]s.yaml", olcDir, v.Unit), 30*time.Second)
 	}
+}
+
+// olcHostLabel: a host without its top-level domain — meet.riddlerx.org →
+// meet.riddlerx. The first label alone («meet») made two variants on
+// different Jitsi share a node name, and a failed try deleted the working
+// node of the other (NPM-59).
+func olcHostLabel(provider, inst string) string {
+	switch provider {
+	case "telemost":
+		return "telemost"
+	case "wbstream":
+		return "wb"
+	}
+	if i := strings.LastIndex(inst, "."); i > 0 {
+		return inst[:i]
+	}
+	return inst
+}
+
+// olcFlag: "NL" → 🇳🇱.
+func olcFlag(cc string) string {
+	if len(cc) != 2 {
+		return ""
+	}
+	cc = strings.ToUpper(cc)
+	if cc[0] < 'A' || cc[0] > 'Z' || cc[1] < 'A' || cc[1] > 'Z' {
+		return ""
+	}
+	return string([]rune{0x1F1E6 + rune(cc[0]-'A'), 0x1F1E6 + rune(cc[1]-'A')})
+}
+
+// olcNodeName: «🇳🇱 OLC VDSKA meet.riddlerx/datachannel», unique among taken.
+func olcNodeName(srv *olcServer, provider, inst, tr string, taken map[string]bool) string {
+	base := fmt.Sprintf("OLC %s %s/%s", srv.Name, olcHostLabel(provider, inst), tr)
+	if f := olcFlag(srv.Country); f != "" {
+		base = f + " " + base
+	}
+	name := base
+	for i := 2; taken[name]; i++ {
+		name = fmt.Sprintf("%s %d", base, i)
+	}
+	return name
+}
+
+// olcTaken: every node name in the olcrtc provider and in the servers' records.
+func (o *olcState) olcTaken() map[string]bool {
+	taken := map[string]bool{}
+	if nodes, err := olcNodes(); err == nil {
+		for _, n := range nodes {
+			taken[n.Name] = true
+		}
+	}
+	o.mu.Lock()
+	for _, s := range o.st.Servers {
+		for _, v := range s.Variants {
+			taken[v.Node] = true
+		}
+	}
+	o.mu.Unlock()
+	return taken
+}
+
+// olcExit asks the core where traffic through the node leaves (MIHOMO-16).
+func olcExit(node string) (cc, city, ip, isp string, err error) {
+	var res struct {
+		Country string `json:"country"`
+		City    string `json:"city"`
+		IP      string `json:"ip"`
+		ISP     string `json:"isp"`
+	}
+	if err = mihomoDo(http.MethodGet, "/providers/proxies/"+url.PathEscape(olcProvider)+"/"+url.PathEscape(node)+"/exit?timeout=15000", nil, &res, 25*time.Second); err != nil {
+		return
+	}
+	return strings.ToUpper(res.Country), res.City, res.IP, res.ISP, nil
+}
+
+// olcNodeConfig: the router node of a variant, as the core keeps it.
+func olcNodeConfig(srv *olcServer, v olcVariant) map[string]any {
+	key := v.Key
+	if key == "" {
+		key = srv.Key
+	}
+	provider := v.Provider
+	if provider == "" {
+		provider = "jitsi"
+	}
+	return map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+}
+
+// tidy: the servers' exit countries, flags in their node names, and nodes
+// the router lost put back. Runs in the background loop and on request.
+func (o *olcState) tidy() {
+	nodes, err := olcNodes()
+	if err != nil {
+		return
+	}
+	have := map[string]bool{}
+	for _, n := range nodes {
+		have[n.Name] = true
+	}
+	o.mu.Lock()
+	servers := append([]*olcServer(nil), o.st.Servers...)
+	o.mu.Unlock()
+	for _, srv := range servers {
+		o.mu.Lock()
+		variants := append([]olcVariant(nil), srv.Variants...)
+		known := srv.Country != "" && time.Since(time.Unix(srv.CountryAt, 0)) < 24*time.Hour
+		o.mu.Unlock()
+		// lost: the record has the variant, the core does not
+		for _, v := range variants {
+			if have[v.Node] || srv.Key == "" && v.Key == "" {
+				continue
+			}
+			if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", olcNodeConfig(srv, v), nil, 15*time.Second); err == nil {
+				have[v.Node] = true
+				o.event("warn", fmt.Sprintf("узла «%s» не было на роутере — вернул", v.Node))
+			}
+		}
+		if !known {
+			for _, v := range variants {
+				if !o.workingNode(v.Node) {
+					continue
+				}
+				cc, city, ip, isp, err := olcExit(v.Node)
+				if err != nil || cc == "" {
+					continue
+				}
+				o.mu.Lock()
+				if srv.Country != cc && srv.Country != "" {
+					o.mu.Unlock()
+					o.event("warn", fmt.Sprintf("%s: страна выхода сменилась — %s вместо %s", srv.Name, cc, srv.Country))
+					o.mu.Lock()
+				}
+				srv.Country, srv.City, srv.ExitIP, srv.ISP, srv.CountryAt = cc, city, ip, isp, time.Now().Unix()
+				o.saveLocked()
+				o.mu.Unlock()
+				break
+			}
+		}
+		o.flagNames(srv, have)
+	}
+}
+
+// flagNames puts the server's flag in front of its node names: the core
+// renames the node, and the record, checks and the OLCRTC choice follow.
+func (o *olcState) flagNames(srv *olcServer, have map[string]bool) {
+	o.mu.Lock()
+	flag := olcFlag(srv.Country)
+	variants := append([]olcVariant(nil), srv.Variants...)
+	o.mu.Unlock()
+	if flag == "" {
+		return
+	}
+	selected := olcSelected()
+	for _, v := range variants {
+		if !have[v.Node] || strings.HasPrefix(v.Node, flag+" ") || olcHasFlag(v.Node) {
+			continue
+		}
+		name := flag + " " + v.Node
+		for i := 2; have[name]; i++ {
+			name = fmt.Sprintf("%s %s %d", flag, v.Node, i)
+		}
+		if err := mihomoDo(http.MethodPut, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies/"+url.PathEscape(v.Node), map[string]any{"name": name}, nil, 15*time.Second); err != nil {
+			continue
+		}
+		have[name], have[v.Node] = true, false
+		o.mu.Lock()
+		for i := range srv.Variants {
+			if srv.Variants[i].Node == v.Node {
+				srv.Variants[i].Node = name
+			}
+		}
+		if c, ok := o.st.Checks[v.Node]; ok {
+			o.st.Checks[name] = c
+			delete(o.st.Checks, v.Node)
+		}
+		o.saveLocked()
+		o.mu.Unlock()
+		if selected == v.Node {
+			_ = olcSelect(name)
+		}
+	}
+}
+
+// olcHasFlag: the name already carries a flag emoji, ours or the user's.
+func olcHasFlag(name string) bool {
+	for _, r := range name {
+		if r >= 0x1F1E6 && r <= 0x1F1FF {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------- the background loop ----------
@@ -1316,6 +1526,11 @@ func (o *olcState) autoLoop() {
 		}
 		o.wasWL = wl
 		if n%10 == 1 || n == 0 {
+			o.tidy()
+			if fresh, err := olcNodes(); err == nil && len(fresh) > 0 {
+				nodes = fresh
+				cur = olcSelected()
+			}
 			for _, nd := range nodes {
 				c := olcNodeCheck(nd.Name, 15*time.Second)
 				o.mu.Lock()
@@ -1480,6 +1695,13 @@ func (a *app) handleOlcrtcPost(w http.ResponseWriter, r *http.Request) {
 		olc.mu.Lock()
 		olc.saveLocked()
 		olc.mu.Unlock()
+	case "tidy":
+		olc.mu.Lock()
+		for _, s := range olc.st.Servers {
+			s.CountryAt = 0
+		}
+		olc.mu.Unlock()
+		olc.tidy()
 	case "main":
 		var req struct {
 			Node string `json:"node"`
