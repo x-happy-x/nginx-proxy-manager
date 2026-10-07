@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,7 +106,7 @@ type olcServer struct {
 	ExitIP    string `json:"exit_ip,omitempty"`
 	ISP       string `json:"isp,omitempty"`
 	CountryAt int64  `json:"country_at,omitempty"`
-	Created  int64        `json:"created"`
+	Created   int64  `json:"created"`
 }
 
 type olcEvent struct {
@@ -121,6 +123,9 @@ type olcCheck struct {
 }
 
 type olcStore struct {
+	// Route: «весь трафик через OLCRTC» is on — what each manual group had
+	// chosen before, to put back (NPM-61).
+	Route   map[string]string   `json:"route,omitempty"`
 	Auto    bool                `json:"auto"`
 	Servers []*olcServer        `json:"servers"`
 	Events  []olcEvent          `json:"events"`
@@ -487,7 +492,11 @@ func (o *olcState) snapshot() map[string]any {
 	if job != nil && job.Tries == nil {
 		job.Tries = []olcTry{}
 	}
-	return map[string]any{"auto": o.st.Auto, "servers": servers, "events": append([]olcEvent{}, o.st.Events...), "checks": checks, "job": job,
+	route := map[string]string{}
+	for k, v := range o.st.Route {
+		route[k] = v
+	}
+	return map[string]any{"route": route, "auto": o.st.Auto, "servers": servers, "events": append([]olcEvent{}, o.st.Events...), "checks": checks, "job": job,
 		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports, "channel": olcChannelMode()}
 }
 
@@ -1484,6 +1493,77 @@ func (o *olcState) flagNames(srv *olcServer, have map[string]bool) {
 	}
 }
 
+// olcRouteSkip: groups that stay as they are when all traffic goes through
+// OLCRTC — QUIC is rejected on purpose, the access checks have their own path.
+var olcRouteSkip = map[string]bool{"QUIC": true}
+
+// route on: every manual group with OLCRTC among its members switches to it,
+// the previous choice remembered; off: each gets its choice back (NPM-61).
+func (o *olcState) route(on bool) error {
+	var all struct {
+		Proxies map[string]struct {
+			Type string   `json:"type"`
+			Now  string   `json:"now"`
+			All  []string `json:"all"`
+		} `json:"proxies"`
+	}
+	if err := mihomoDo(http.MethodGet, "/proxies", nil, &all, 15*time.Second); err != nil {
+		return err
+	}
+	o.mu.Lock()
+	saved := map[string]string{}
+	for k, v := range o.st.Route {
+		saved[k] = v
+	}
+	o.mu.Unlock()
+	if !on {
+		var failed []string
+		for g, prev := range saved {
+			if prev == "" {
+				continue
+			}
+			if err := mihomoDo(http.MethodPut, "/proxies/"+url.PathEscape(g), map[string]any{"name": prev}, nil, 10*time.Second); err != nil {
+				failed = append(failed, g)
+			}
+		}
+		o.mu.Lock()
+		o.st.Route = nil
+		o.saveLocked()
+		o.mu.Unlock()
+		o.event("ok", "трафик вернулся на прежние группы")
+		if len(failed) > 0 {
+			return fmt.Errorf("не вернулись: %s", strings.Join(failed, ", "))
+		}
+		return nil
+	}
+	switched := []string{}
+	for name, g := range all.Proxies {
+		if g.Type != "Selector" || olcRouteSkip[name] || !slices.Contains(g.All, olcGroup) {
+			continue
+		}
+		if g.Now == olcGroup {
+			continue
+		}
+		if err := mihomoDo(http.MethodPut, "/proxies/"+url.PathEscape(name), map[string]any{"name": olcGroup}, nil, 10*time.Second); err != nil {
+			continue
+		}
+		if _, ok := saved[name]; !ok {
+			saved[name] = g.Now
+		}
+		switched = append(switched, name)
+	}
+	if len(saved) == 0 {
+		return errors.New("ни одна ручная группа не содержит OLCRTC — примените «Маршрутизацию», чтобы он появился в ALL и других группах")
+	}
+	sort.Strings(switched)
+	o.mu.Lock()
+	o.st.Route = saved
+	o.saveLocked()
+	o.mu.Unlock()
+	o.event("warn", "весь трафик через OLCRTC: "+strings.Join(switched, ", "))
+	return nil
+}
+
 // olcHasFlag: the name already carries a flag emoji, ours or the user's.
 func olcHasFlag(name string) bool {
 	for _, r := range name {
@@ -1695,6 +1775,17 @@ func (a *app) handleOlcrtcPost(w http.ResponseWriter, r *http.Request) {
 		olc.mu.Lock()
 		olc.saveLocked()
 		olc.mu.Unlock()
+	case "route":
+		var req struct {
+			On bool `json:"on"`
+		}
+		if !a.decodeJSON(w, r, &req) {
+			return
+		}
+		if err := olc.route(req.On); err != nil {
+			fail(err)
+			return
+		}
 	case "tidy":
 		olc.mu.Lock()
 		for _, s := range olc.st.Servers {

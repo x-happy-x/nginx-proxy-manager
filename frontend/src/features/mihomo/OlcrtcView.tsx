@@ -116,6 +116,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   const selCC = ccOf(sel);
   const selExit = exits.nodes[sel];
   const okNow = !!selC?.ok;
+  const routeOn = Object.keys(rep?.route || {}).length > 0;
 
   const rows = cur
     ? cur.variants.map((v) => ({ node: v.node, platform: platformOf(v.provider), room: v.room, transport: v.transport, v, missing: !inCore.has(v.node) && !v.external }))
@@ -160,6 +161,24 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
         <h3 className="ol-now-title">
           {!sel ? "Выберите вариант основным или настройте свой сервер" : okNow ? `Сейчас через ${host(selRoom) || sel} · ${selC?.ms} мс` : rep?.auto ? "Автоподбор ищет рабочий вариант…" : "Основной не отвечает, автоподбор выключен"}
         </h3>
+        <div className={`ol-route${routeOn ? " is-on" : ""}`}>
+          <span>
+            <b>{routeOn ? "Весь трафик идёт через OLCRTC" : "Пустить весь трафик через OLCRTC"}</b>
+            <small>
+              {routeOn
+                ? `Переключены: ${Object.keys(rep?.route || {}).sort().join(", ")}. Прежний выбор каждой группы запомнен на роутере.`
+                : "Одной кнопкой: все ручные группы, где есть OLCRTC (ALL, «Заблокированные сервисы», «Остальное», «Торренты»…), переключатся на него. Без UDP: звонки и игры через него не работают."}
+            </small>
+          </span>
+          <button
+            type="button"
+            className={`btn btn-sm${routeOn ? "" : " btn-primary"}`}
+            disabled={busy === "route" || !olcNodes.length}
+            onClick={() => (routeOn || window.confirm("Переключить все ручные группы с OLCRTC на него? Прежний выбор запомнится, вернуть — одной кнопкой.")) && void act("route", { on: !routeOn }, "route")}
+          >
+            {busy === "route" ? "Переключаю…" : routeOn ? "Вернуть как было" : "Всё через OLCRTC"}
+          </button>
+        </div>
         {sel ? (
           <div className="ol-hops">
             <div className="ol-hop">

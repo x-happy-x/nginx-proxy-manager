@@ -634,3 +634,16 @@ func toStrings(v any) []string {
 	}
 	return out
 }
+
+func TestRoutingALLHasOLCRTC(t *testing.T) {
+	out, err := buildRouting([]byte(routingFixture), defaultRouting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := groupByName(routingDoc(t, out), "ALL")
+	got := fmt.Sprint(g["proxies"])
+	// NPM-61: groups that go through ALL can be sent to OLCRTC by one switch
+	if !strings.Contains(got, "OLCRTC") || !strings.Contains(got, "Tailscale") || !strings.HasSuffix(got, "DIRECT]") {
+		t.Fatalf("ALL = %s", got)
+	}
+}

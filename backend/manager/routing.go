@@ -355,16 +355,6 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 			leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}, "filter": bypass}),
 		)
 	}
-	all := []any{"AUTO", "Прямые EU", "Прямые мир", "Обходы", "RU"}
-	if s.Cascade {
-		all = append(all, "Каскад")
-	}
-	if len(reserve) > 0 {
-		all = append(all, "Резерв")
-	}
-	head = append(head, m{"name": "ALL", "type": "select", "proxies": append(all, "DIRECT"), "use": base})
-
-	ai := append([]any{"ИИ прямые", "ИИ обходы"}, cascade...)
 	extras := []any{}
 	if hasOLC {
 		extras = append(extras, "OLCRTC")
@@ -372,6 +362,17 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	if hasTS {
 		extras = append(extras, "Tailscale")
 	}
+	all := []any{"AUTO", "Прямые EU", "Прямые мир", "Обходы", "RU"}
+	if s.Cascade {
+		all = append(all, "Каскад")
+	}
+	if len(reserve) > 0 {
+		all = append(all, "Резерв")
+	}
+	// OLCRTC and Tailscale in ALL too: groups that go through ALL follow it (NPM-61)
+	head = append(head, m{"name": "ALL", "type": "select", "proxies": append(append(all, extras...), "DIRECT"), "use": base})
+
+	ai := append([]any{"ИИ прямые", "ИИ обходы"}, cascade...)
 	pick := func(first ...any) []any {
 		out := append([]any{}, first...)
 		return out
