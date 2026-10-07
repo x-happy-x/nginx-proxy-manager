@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/ui/Icon";
 import { errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, mihomo, type MProxy, type TailscalePeer, type TailscaleStatus } from "./api";
@@ -64,6 +64,22 @@ function TailnetNode({ name }: { name: string }) {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const [exitCheck, setExitCheck] = useState<{ ok: boolean; text: string } | null>(null);
+  // «Мои» are the devices starred here: some coordinators (Headscale) give
+  // several people one account id, so the owner a status reports can change
+  // from one refresh to the next and cannot say whose a device is
+  const [stars, setStars] = useStored<string[]>("homenet.ts.stars", [], (v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string"));
+  const [unstable, setUnstable] = useStored("homenet.ts.accountsUnstable", false, isBool);
+  const seenUsers = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!st || unstable) return;
+    const m = seenUsers.current;
+    const all = [...(st.peers || []), ...(st.self ? [{ ...st.self, id: "self" }] : [])];
+    if (all.some((p) => p.user && m.has(p.id) && m.get(p.id) !== p.user)) setUnstable(true);
+    all.forEach((p) => p.user && m.set(p.id, p.user));
+  }, [st, unstable, setUnstable]);
+  const starKey = (p: TailscalePeer) => peerName(p).toLowerCase();
+  const toggleStar = (p: TailscalePeer) => setStars(stars.includes(starKey(p)) ? stars.filter((x) => x !== starKey(p)) : [...stars, starKey(p)]);
+  const showAccounts = !unstable;
 
   const load = useCallback(async () => {
     try {
@@ -88,7 +104,7 @@ function TailnetNode({ name }: { name: string }) {
   };
 
   const peers = useMemo(() => (st?.peers || []).filter((p) => !p.self), [st]);
-  const me = st?.self?.user || "";
+  const me = "";
   const exit = st ? currentExit(st) : undefined;
   const exits = peers.filter((p) => p.exitNodeOption || p === exit).sort((a, b) => Number(b.online) - Number(a.online) || peerName(a).localeCompare(peerName(b)));
   const state: "on" | "login" | "off" | "wait" = !st ? "wait" : st.backendState === "Running" ? "on" : st.backendState === "NeedsLogin" || st.authURL ? "login" : !st.wantRunning ? "off" : "wait";
@@ -108,8 +124,8 @@ function TailnetNode({ name }: { name: string }) {
   const rows = useMemo(() => {
     const query = q.trim().toLowerCase();
     const base = peers.filter((p) => {
-      if (scope === "mine" && me && p.user !== me) return false;
-      if (scope === "all" && account && (p.user || "") !== account) return false;
+      if (scope === "mine" && !stars.includes(starKey(p))) return false;
+      if (scope === "all" && showAccounts && account && (p.user || "") !== account) return false;
       if (query && !`${peerName(p)} ${p.dnsName} ${(p.ips || []).join(" ")} ${p.user || ""} ${p.userName || ""} ${p.os || ""}`.toLowerCase().includes(query)) return false;
       return true;
     });
@@ -125,10 +141,11 @@ function TailnetNode({ name }: { name: string }) {
         .filter((r) => (!onlyOnline || r.p.online) && (!hideStale || !stale(r.p)))
         .sort((a, b) => Number(b.p.online) - Number(a.p.online) || peerName(a.p).localeCompare(peerName(b.p))),
     };
-  }, [peers, scope, me, account, q, onlyOnline, hideStale]);
+  }, [peers, scope, stars, showAccounts, account, q, onlyOnline, hideStale]);
 
   const online = peers.filter((p) => p.online).length;
-  const mine = me ? peers.filter((p) => p.user === me).length : 0;
+  const mine = peers.filter((p) => stars.includes(starKey(p))).length;
+  void me;
   const staleN = peers.filter(stale).length;
   const setExit = (value: string, label: string) => void run("exit", () => mihomo.tailscaleExitNode(name, value), value ? `Выход через ${label}` : "Выход напрямую");
   const checkExit = async () => {
@@ -219,14 +236,16 @@ function TailnetNode({ name }: { name: string }) {
           </div>
           <div>
             <small>Ваших</small>
-            <b>{me ? number(mine) : "—"}</b>
-            <span className="truncate">{me ? `аккаунт ${st?.self?.userName || me}` : "ядро не отдаёт аккаунт"}</span>
+            <b>{number(mine)}</b>
+            <span className="truncate">{mine ? "отмечены звёздочкой" : "отметьте свои звёздочкой"}</span>
           </div>
-          <div>
-            <small>Аккаунтов</small>
-            <b>{number(accounts.length)}</b>
-            <span>в tailnet</span>
-          </div>
+          {showAccounts ? (
+            <div>
+              <small>Аккаунтов</small>
+              <b>{number(accounts.length)}</b>
+              <span>в tailnet</span>
+            </div>
+          ) : null}
           <div>
             <small>Старые регистрации</small>
             <b>{number(staleN)}</b>
@@ -274,13 +293,13 @@ function TailnetNode({ name }: { name: string }) {
             </label>
             <input id="ts-q" className="input" placeholder="Имя, адрес, система или аккаунт" value={q} onChange={(e) => setQ(e.target.value)} />
             <div className="vn-chips">
-              <button type="button" className={`vn-chip${scope === "mine" ? " is-on" : ""}`} aria-pressed={scope === "mine"} disabled={!me} onClick={() => setScope("mine")}>
+              <button type="button" className={`vn-chip${scope === "mine" ? " is-on" : ""}`} aria-pressed={scope === "mine"} onClick={() => setScope("mine")}>
                 Мои <span className="vs-count">{number(mine)}</span>
               </button>
               <button type="button" className={`vn-chip${scope === "all" ? " is-on" : ""}`} aria-pressed={scope === "all"} onClick={() => setScope("all")}>
                 Все <span className="vs-count">{number(peers.length)}</span>
               </button>
-              {scope === "all" && accounts.length > 1 ? (
+              {scope === "all" && showAccounts && accounts.length > 1 ? (
                 <>
                   <label className="sr-only" htmlFor="ts-acc">
                     Аккаунт
@@ -304,12 +323,16 @@ function TailnetNode({ name }: { name: string }) {
               </button>
             </div>
           </div>
-          <div className="ts-table" role="table" aria-label="Устройства tailnet">
+          {unstable ? <small className="mh-muted">Координатор отдаёт владельца устройства непостоянно — один и тот же аккаунт у разных людей, — поэтому колонка и фильтр по аккаунту скрыты. «Мои» — устройства со звёздочкой.</small> : null}
+          {scope === "mine" && !mine ? <small className="mh-muted">Своих устройств пока нет: откройте «Все» и отметьте их звёздочкой.</small> : null}
+          <div className={`ts-table${showAccounts ? "" : " no-acc"}`} role="table" aria-label="Устройства tailnet">
             <div className="ts-row ts-head" role="row">
               <span role="columnheader">Устройство</span>
-              <span role="columnheader" className="nx-hm">
-                Аккаунт
-              </span>
+              {showAccounts ? (
+                <span role="columnheader" className="nx-hm">
+                  Аккаунт
+                </span>
+              ) : null}
               <span role="columnheader">Система</span>
               <span role="columnheader" className="nx-hm">
                 Адрес
@@ -322,6 +345,9 @@ function TailnetNode({ name }: { name: string }) {
               <div key={p.id} className={`ts-row${p.online ? "" : " is-off"}`} role="row">
                 <span role="cell" className="ts-dev">
                   <span className="ts-dev-name">
+                    <button type="button" className={`ts-star${stars.includes(starKey(p)) ? " is-on" : ""}`} aria-pressed={stars.includes(starKey(p))} aria-label={stars.includes(starKey(p)) ? "Убрать из моих" : "Отметить как моё"} onClick={() => toggleStar(p)}>
+                      ★
+                    </button>
                     <i className={`nx-dot ${p.online ? "nx-ok" : "nx-silent"}`} />
                     <span className="truncate" title={p.dnsName}>
                       {peerName(p)}
@@ -330,10 +356,12 @@ function TailnetNode({ name }: { name: string }) {
                   </span>
                   {extra ? <small>и ещё {extra} {extra === 1 ? "старая регистрация" : "старые регистрации"} с этим именем</small> : null}
                 </span>
-                <span role="cell" className="nx-hm ts-acc">
-                  <span className="truncate">{p.userName || p.user || "—"}</span>
-                  {p.user && p.user !== p.userName ? <small className="truncate mono">{p.user}</small> : null}
-                </span>
+                {showAccounts ? (
+                  <span role="cell" className="nx-hm ts-acc">
+                    <span className="truncate">{p.userName || p.user || "—"}</span>
+                    {p.user && p.user !== p.userName ? <small className="truncate mono">{p.user}</small> : null}
+                  </span>
+                ) : null}
                 <span role="cell">{osName(p.os)}</span>
                 <span role="cell" className="nx-hm mono">
                   {(p.ips || [])[0] || "—"}
@@ -363,8 +391,12 @@ function TailnetNode({ name }: { name: string }) {
               <dd className="mono">{name}</dd>
               <dt>Имя</dt>
               <dd className="truncate">{st?.self?.hostName || "—"}</dd>
-              <dt>Аккаунт</dt>
-              <dd className="truncate">{st?.self ? st.self.userName || st.self.user || "—" : "—"}</dd>
+              {showAccounts ? (
+                <>
+                  <dt>Аккаунт</dt>
+                  <dd className="truncate">{st?.self ? st.self.userName || st.self.user || "—" : "—"}</dd>
+                </>
+              ) : null}
               <dt>Адрес</dt>
               <dd className="mono">{(st?.self?.ips || [])[0] || "—"}</dd>
               <dt>Через</dt>

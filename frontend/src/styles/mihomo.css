@@ -3066,3 +3066,91 @@ button.vr-gchip { cursor: pointer; }
   .ts-hero { padding: 18px 16px; }
   .ts-hero h2 { font-size: 22px; }
 }
+.ts-table.no-acc .ts-row { grid-template-columns: minmax(0, 2fr) 90px 120px 110px; }
+.ts-star { border: 0; background: transparent; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--border-strong); cursor: pointer; min-width: 22px; min-height: 22px; }
+.ts-star:hover { color: var(--text-3); }
+.ts-star.is-on { color: var(--warning); }
+@media (max-width: 760px) { .ts-table.no-acc .ts-row { grid-template-columns: minmax(0, 1fr) 80px; } }
+
+/* NPM-56: «OLCRTC» — servers, variants, the background pick and the SSH setup */
+.ol-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.ol-head p { margin: 0; max-width: 80ch; }
+.ol-auto { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.ol-auto i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.ol-auto.is-on { border-color: var(--success-border); color: var(--success); }
+.ol-auto.is-on i { background: var(--success); }
+.ol-servers { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.ol-server { display: grid; gap: 10px; text-align: left; padding: 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.ol-server:hover { border-color: var(--border-strong); }
+.ol-server.is-sel { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border); }
+.ol-server-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; min-width: 0; }
+.ol-server-top .vn-pill { flex: none; }
+.ol-bars { display: flex; gap: 3px; min-height: 6px; }
+.ol-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); max-width: 60px; }
+.ol-bar.is-ok { background: var(--success); }
+.ol-bar.is-bad { background: var(--danger); }
+.ol-layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.ol-variants, .ol-steps, .ol-manual { flex: 999 1 560px; min-width: 0; display: grid; gap: 12px; }
+.ol-side { flex: 1 1 320px; min-width: 0; display: grid; gap: 14px; }
+.ol-form { flex: 1 1 340px; min-width: 0; }
+.ol-table { display: grid; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+.ol-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 110px 120px minmax(0, 1.2fr) 190px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13.5px; min-height: 48px; }
+.ol-row.is-main { background: var(--accent-soft); }
+.ol-thead { border-top: 0; background: var(--surface-2); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); min-height: 0; }
+.ol-what { display: grid; min-width: 0; }
+.ol-what-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ol-what small { color: var(--text-3); font-size: 12px; }
+.ol-note { color: var(--text-3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.ol-events { display: grid; }
+.ol-events > div { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.ol-events time { color: var(--text-3); width: 42px; flex: none; }
+.ol-events .vn-dot { margin-top: 5px; flex: none; }
+.ol-modebar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.ol-addr { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 10px; }
+.ol-auth { justify-self: start; }
+.ol-code { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--code-bg); border: 1px solid var(--border); min-width: 0; }
+.ol-code pre { margin: 0; flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-all; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2); max-height: 280px; overflow: auto; }
+.ol-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 12px; }
+.ol-check { display: flex; align-items: center; gap: 8px; font-size: 13px; min-height: 30px; min-width: 0; }
+.ol-check input { width: 16px; height: 16px; flex: none; }
+.ol-check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-row2 { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 12px; align-items: end; }
+.ol-progress { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.ol-progress span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s ease; }
+.ol-progress span.is-ok { background: var(--success); }
+.ol-progress span.is-warn { background: var(--warning); }
+.ol-progress span.is-bad { background: var(--danger); }
+.ol-steplist { display: grid; }
+.ol-step { display: grid; gap: 8px; padding: 10px 6px; border-top: 1px solid var(--border); }
+.ol-step.is-run { background: var(--accent-soft); border-radius: 10px; }
+.ol-step-head { display: flex; gap: 12px; align-items: flex-start; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer; }
+.ol-mark { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--surface-3); color: var(--text-3); }
+.ol-step.is-ok .ol-mark { background: var(--success-soft); color: var(--success); }
+.ol-step.is-run .ol-mark { background: var(--accent-soft); color: var(--accent-text); }
+.ol-step.is-fail .ol-mark { background: var(--warning-soft); color: var(--warning); }
+.ol-step-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ol-step-text > span { display: flex; justify-content: space-between; gap: 8px; }
+.ol-step-text small { color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+.ol-step-text > span small { color: var(--text-3); font-size: 12px; }
+.ol-fix { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-left: 40px; padding: 10px 12px; border-radius: 10px; background: var(--warning-soft); border: 1px solid var(--warning-border); font-size: 13px; }
+.ol-fix > span { flex: 1 1 260px; }
+.ol-tries { display: grid; gap: 4px; margin-left: 40px; }
+.ol-tries > div { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); font-size: 12.5px; min-width: 0; }
+.ol-tries .truncate { flex: 1; }
+.ol-tries small { color: var(--text-2); max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-tries .is-skip, .ol-tries .is-wait { opacity: .6; }
+.ol-step > .ol-code { margin-left: 40px; }
+.ol-done { display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; }
+.ol-done.is-ok { background: var(--success-soft); border: 1px solid var(--success-border); }
+.ol-done.is-bad { background: var(--danger-soft); border: 1px solid var(--danger-border); }
+.ol-plan { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; color: var(--text-2); }
+.ol-mtitle { display: flex; gap: 12px; align-items: center; }
+.ol-mtitle .ol-mark { background: var(--accent-soft); color: var(--accent-text); }
+.ol-problem { display: grid; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; }
+.ol-problem small { color: var(--text-2); }
+@media (max-width: 760px) {
+  .ol-row { grid-template-columns: minmax(0, 1fr) 110px; }
+  .ol-row2 { grid-template-columns: minmax(0, 1fr); }
+  .ol-fix, .ol-tries, .ol-step > .ol-code { margin-left: 0; }
+}

@@ -276,6 +276,26 @@ export type ProbeWay = { history: ProbeResult[]; loc?: string; ip?: string; path
 export type ProbeState = { id: string; name: string; what: string; url: string; region: "ru" | "world"; status: number; trace?: boolean; direct: ProbeWay; mihomo: ProbeWay };
 export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[]; probes?: ProbeState[] };
 
+/** OLCRTC servers set up over SSH and the background pick of variants (NPM-56). */
+export type OlcVariant = { node: string; instance: string; transport: string; room: string; unit: string };
+export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; variants: OlcVariant[]; created: number };
+export type OlcCheck = { t: number; ok: boolean; ms: number; error?: string };
+export type OlcStep = { id: string; title: string; status: "wait" | "run" | "ok" | "fail" | "skip"; detail?: string; log?: string[]; fix?: string; fix_label?: string; ms?: number };
+export type OlcTry = { label: string; state: "wait" | "run" | "ok" | "fail" | "skip"; result?: string };
+export type OlcJob = { id: string; server: string; kind: "setup" | "repick"; running: boolean; done: boolean; ok: boolean; error?: string; waiting?: string; started: number; ended?: number; steps: OlcStep[]; tries: OlcTry[]; result?: OlcCheck[] };
+export type OlcReport = {
+  auto: boolean;
+  servers: OlcServer[];
+  events: Array<{ t: number; kind: "ok" | "warn" | "fail"; text: string }>;
+  checks: Record<string, OlcCheck>;
+  job: OlcJob | null;
+  pubkey: string;
+  instances: string[];
+  transports: string[];
+  selected: string;
+};
+export type OlcSetup = { id?: string; name?: string; host?: string; port?: number; user?: string; password?: string; instances?: string[]; transports?: string[]; keep?: number };
+
 export type InstallPlan = {
   asset: string;
   release_base: string;
@@ -404,6 +424,8 @@ export const core = {
   saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
+  olcrtc: () => call<OlcReport>("/api/core/olcrtc"),
+  olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>
     call<{ install: InstallState }>("/api/core/install", json("POST", req)).then((r) => r.install),

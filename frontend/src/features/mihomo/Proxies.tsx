@@ -8,7 +8,7 @@ import { useMihomo } from "./context";
 import { Delay, lastDelay } from "./shared";
 import { HealthDots, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
 import { GROUP_TYPES, Nodes } from "./Nodes";
-import { OlcrtcTab } from "./Extras";
+import { OlcrtcView } from "./OlcrtcView";
 import { TailscaleView } from "./TailscaleView";
 
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
@@ -158,7 +158,6 @@ export function TailscalePage() {
 
 export function OlcrtcPage() {
   const { proxies, providers, error, load } = useAllProxies();
-  const prefs = useNodePrefs();
   const isOlc = (x: MProxy) => x.type.toLowerCase() === "olcrtc";
   const providerList = Object.values(providers).filter((p) => p.vehicleType !== "Compatible");
   const olcProviders = providerList.filter((p) => p.proxies.some(isOlc));
@@ -169,7 +168,7 @@ export function OlcrtcPage() {
     <div className="stack">
       <PageHeader page="olcrtc" />
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
-      <OlcrtcTab providers={olcProviders} standalone={standalone} groups={groups} onReload={load} prefs={prefs} />
+      <OlcrtcView providers={olcProviders} proxies={proxies} groups={groups} onReload={load} />
     </div>
   );
 }
