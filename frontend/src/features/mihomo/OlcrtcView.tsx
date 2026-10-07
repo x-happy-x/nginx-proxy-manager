@@ -277,10 +277,37 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
 const STEP_MARK: Record<OlcStep["status"], string> = { ok: "✓", run: "…", fail: "!", wait: "", skip: "–" };
 
 // what works where, from olcrtc's docs/settings.ru.md
-const ROOM_KINDS: Array<{ id: string; label: string; site: string; hint: string; transports: string[] }> = [
-  { id: "telemost", label: "Яндекс Телемост", site: "https://telemost.yandex.ru/", hint: "создайте встречу и вставьте ссылку https://telemost.yandex.ru/j/…", transports: ["vp8channel"] },
-  { id: "wbstream", label: "WB Stream", site: "https://stream.wb.ru/", hint: "создайте комнату на stream.wb.ru и вставьте её ссылку или ID", transports: ["vp8channel", "seichannel"] },
-  { id: "jitsi", label: "Свой Jitsi", site: "", hint: "адрес комнаты на своём или любом другом Jitsi: https://host/комната", transports: ["datachannel", "vp8channel", "seichannel"] },
+const ROOM_KINDS: Array<{ id: string; label: string; note: string; site: string; hint: string; transports: string[]; steps: string[]; transportNote: string }> = [
+  {
+    id: "telemost",
+    label: "Яндекс Телемост",
+    note: "в белом списке; комнату создаёте вы",
+    site: "https://telemost.yandex.ru/",
+    hint: "https://telemost.yandex.ru/j/…",
+    transports: ["vp8channel"],
+    steps: ["Откройте telemost.yandex.ru и войдите в Яндекс ID.", "«Создать видеовстречу» и скопируйте ссылку вида https://telemost.yandex.ru/j/…", "Вставьте ссылку ниже. Вкладку со встречей можно закрыть — сервер зайдёт в неё сам."],
+    transportNote: "Только vp8channel: datachannel Телемост убрал, seichannel не поддерживает, videochannel слишком медленный.",
+  },
+  {
+    id: "wbstream",
+    label: "WB Stream",
+    note: "комнату создаёте вы на stream.wb.ru",
+    site: "https://stream.wb.ru/",
+    hint: "ссылка на комнату или её ID",
+    transports: ["vp8channel", "seichannel"],
+    steps: ["Откройте stream.wb.ru и войдите.", "Создайте комнату и скопируйте её ссылку или ID.", "Вставьте ниже и выберите транспорт."],
+    transportNote: "vp8channel — рекомендуется; seichannel медленнее, но с меньшим пингом. datachannel у гостей WB Stream не передаёт данные, поэтому его нет.",
+  },
+  {
+    id: "jitsi",
+    label: "Свой Jitsi",
+    note: "любой Jitsi Meet, которого нет в списке",
+    site: "",
+    hint: "https://ваш-jitsi/имя-комнаты",
+    transports: ["datachannel", "vp8channel", "seichannel"],
+    steps: ["Укажите адрес Jitsi Meet и любое имя комнаты: https://host/имя.", "Проверьте, что адрес открывается из дома без VPN — иначе вариант не пройдёт проверку."],
+    transportNote: "datachannel — самый быстрый; vp8channel и seichannel — если datachannel на этом Jitsi не идёт.",
+  },
 ];
 type RoomRow = { provider: string; room: string; transport: string };
 
@@ -293,6 +320,7 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
   const [keep, setKeep] = useState(2);
   const [mode2, setMode2] = useState<"whitelist" | "normal">("whitelist");
   const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [openGroup, setOpenGroup] = useState("jitsi");
   const kindOf = (id: string) => ROOM_KINDS.find((k) => k.id === id) || ROOM_KINDS[0];
   const setRoom = (i: number, patch: Partial<RoomRow>) => setRooms(rooms.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   const wlNow = rep?.channel === "whitelist";
@@ -304,6 +332,8 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
     if (instances.length && !Object.keys(inst).length) setInst(Object.fromEntries(instances.slice(0, 6).map((i) => [i, true])));
   }, [instances, inst]);
   const job: OlcJob | null | undefined = rep?.job;
+  const jitsiCount = instances.filter((i) => inst[i]).length;
+  const jitsiTr = (rep?.transports || []).filter((t) => tr[t]);
   const copy = (key: string, text: string) => {
     void navigator.clipboard?.writeText(text).then(() => setCopied(key));
   };
@@ -413,87 +443,124 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                 : "Каждый вариант сначала открывается с роутера напрямую, без VPN."}
             </p>
             <span className="vn-eyebrow">Варианты связи</span>
-            <small className="mh-muted">Публичные Jitsi из списка olcrtc. Сначала роутер открывает площадку напрямую, без VPN; что не открылось — не пробуется. Остальные HomeNet поднимет по очереди и оставит рабочие.</small>
-            <div className="ol-checks">
-              {instances.map((i) => (
-                <label key={i} className="ol-check">
-                  <input type="checkbox" checked={!!inst[i]} onChange={(e) => setInst({ ...inst, [i]: e.target.checked })} />
-                  <span className="mono">{i}</span>
-                </label>
-              ))}
-            </div>
-            <span className="vn-eyebrow">Свои комнаты — Телемост, WB Stream, свой Jitsi</span>
             <small className="mh-muted">
-              Комнату в Телемосте и WB Stream olcrtc создать не умеет — её делают на сайте сервиса. Вставьте ссылку: HomeNet проверит, что сервис открывается из дома без VPN, поднимет вариант на сервере и оставит, если заработает. Транспорт подбирается по совместимости: Телемост — только vp8channel, WB Stream — vp8channel или seichannel.
+              Вариант — это площадка видеозвонков, комната на ней и транспорт. На сервере у каждого варианта своя служба, на роутере — свой узел в группе OLCRTC. Перед каждым вариантом роутер открывает площадку напрямую, без VPN: что не открылось, не пробуется.
             </small>
-            <div className="ol-rooms">
-              {rooms.map((r, i) => {
-                const k = kindOf(r.provider);
-                return (
-                  <div key={i} className="ol-room">
-                    <label className="sr-only" htmlFor={`ol-rk-${i}`}>
-                      Сервис
-                    </label>
-                    <select id={`ol-rk-${i}`} className="input" value={r.provider} onChange={(e) => setRoom(i, { provider: e.target.value, transport: kindOf(e.target.value).transports[0] })}>
-                      {ROOM_KINDS.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.label}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="sr-only" htmlFor={`ol-rr-${i}`}>
-                      Ссылка на комнату
-                    </label>
-                    <input id={`ol-rr-${i}`} className="input mono" placeholder={k.hint} value={r.room} onChange={(e) => setRoom(i, { room: e.target.value })} />
-                    <label className="sr-only" htmlFor={`ol-rt-${i}`}>
-                      Транспорт
-                    </label>
-                    <select id={`ol-rt-${i}`} className="input" value={r.transport} onChange={(e) => setRoom(i, { transport: e.target.value })}>
-                      {k.transports.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                    <button type="button" className="btn btn-icon" aria-label="Убрать комнату" onClick={() => setRooms(rooms.filter((_, n) => n !== i))}>
-                      <Icon name="close" size={13} />
+            <div className="ol-groups">
+              <details className="ol-group" open={openGroup === "jitsi"} onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && setOpenGroup("jitsi")}>
+                <summary>
+                  <span className="ol-group-title">
+                    <b>Jitsi из списка olcrtc</b>
+                    <small>комнаты придумываются сами, регистрация не нужна</small>
+                  </span>
+                  <span className="ol-group-sum">
+                    {jitsiCount ? `${jitsiCount} из ${instances.length} · ${jitsiTr.join(", ") || "нет транспорта"}` : "не выбрано"}
+                  </span>
+                </summary>
+                <div className="ol-group-body">
+                  <div className="vn-chips">
+                    <button type="button" className="vn-chip" onClick={() => setInst(Object.fromEntries(instances.map((i) => [i, true])))}>
+                      Все
                     </button>
-                    {k.site ? (
-                      <a className="ol-room-site" href={k.site} target="_blank" rel="noopener noreferrer">
-                        создать комнату на {k.site.replace(/^https:\/\//, "").replace(/\/$/, "")} →
-                      </a>
-                    ) : null}
+                    <button type="button" className="vn-chip" onClick={() => setInst(Object.fromEntries(instances.slice(0, 6).map((i) => [i, true])))}>
+                      Первые 6
+                    </button>
+                    <button type="button" className="vn-chip" onClick={() => setInst({})}>
+                      Ничего
+                    </button>
                   </div>
+                  <div className="ol-checks">
+                    {instances.map((i) => (
+                      <label key={i} className="ol-check">
+                        <input type="checkbox" checked={!!inst[i]} onChange={(e) => setInst({ ...inst, [i]: e.target.checked })} />
+                        <span className="mono">{i}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <span className="su-field">
+                    <span>Транспорт</span>
+                    <span className="vn-chips">
+                      {(rep?.transports || []).map((t) => (
+                        <button key={t} type="button" className={`vn-chip${tr[t] ? " is-on" : ""}`} aria-pressed={!!tr[t]} onClick={() => setTr({ ...tr, [t]: !tr[t] })}>
+                          {t}
+                        </button>
+                      ))}
+                    </span>
+                    <small className="mh-muted">datachannel — самый быстрый и рекомендуемый. Сначала пробуется первый выбранный транспорт на всех площадках, потом следующий.</small>
+                  </span>
+                  <label className="su-field">
+                    <span>Оставить рабочих из этого списка</span>
+                    <select className="input" value={keep} onChange={(e) => setKeep(Number(e.target.value))}>
+                      <option value={1}>1</option>
+                      <option value={2}>2 — рекомендуется</option>
+                      <option value={3}>3</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              {ROOM_KINDS.map((k) => {
+                const mine = rooms.map((r, i) => ({ r, i })).filter((x) => x.r.provider === k.id);
+                const filled = mine.filter((x) => x.r.room.trim()).length;
+                return (
+                  <details key={k.id} className="ol-group" open={openGroup === k.id} onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && setOpenGroup(k.id)}>
+                    <summary>
+                      <span className="ol-group-title">
+                        <b>{k.label}</b>
+                        <small>{k.note}</small>
+                      </span>
+                      <span className="ol-group-sum">{filled ? `комнат: ${filled} · ${[...new Set(mine.map((x) => x.r.transport))].join(", ")}` : "нет комнат"}</span>
+                    </summary>
+                    <div className="ol-group-body">
+                      <ol className="ol-howto">
+                        {k.steps.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ol>
+                      {mine.map(({ r, i }) => (
+                        <div key={i} className="ol-room">
+                          <label className="sr-only" htmlFor={`ol-rr-${i}`}>
+                            Ссылка на комнату
+                          </label>
+                          <input id={`ol-rr-${i}`} className="input mono" placeholder={k.hint} value={r.room} onChange={(e) => setRoom(i, { room: e.target.value })} />
+                          {k.transports.length > 1 ? (
+                            <>
+                              <label className="sr-only" htmlFor={`ol-rt-${i}`}>
+                                Транспорт
+                              </label>
+                              <select id={`ol-rt-${i}`} className="input" value={r.transport} onChange={(e) => setRoom(i, { transport: e.target.value })}>
+                                {k.transports.map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          ) : (
+                            <span className="ol-fixed-tr mono">{k.transports[0]}</span>
+                          )}
+                          <button type="button" className="btn btn-icon" aria-label="Убрать комнату" onClick={() => setRooms(rooms.filter((_, n) => n !== i))}>
+                            <Icon name="close" size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="nx-actions">
+                        <button type="button" className="btn btn-sm" onClick={() => setRooms([...rooms, { provider: k.id, room: "", transport: k.transports[0] }])}>
+                          <Icon name="plus" size={12} /> Добавить комнату
+                        </button>
+                        {k.site ? (
+                          <a className="btn btn-sm" href={k.site} target="_blank" rel="noopener noreferrer">
+                            Открыть {k.site.replace(/^https:\/\//, "").replace(/\/$/, "")}
+                          </a>
+                        ) : null}
+                      </div>
+                      <small className="mh-muted">{k.transportNote}</small>
+                    </div>
+                  </details>
                 );
               })}
-              <div className="vn-chips">
-                {ROOM_KINDS.map((k) => (
-                  <button key={k.id} type="button" className="vn-chip" onClick={() => setRooms([...rooms, { provider: k.id, room: "", transport: k.transports[0] }])}>
-                    <Icon name="plus" size={12} /> {k.label}
-                  </button>
-                ))}
-              </div>
             </div>
-            <div className="ol-row2">
-              <span className="su-field">
-                <span>Транспорт для Jitsi из списка</span>
-                <span className="vn-chips">
-                  {(rep?.transports || []).map((t) => (
-                    <button key={t} type="button" className={`vn-chip${tr[t] ? " is-on" : ""}`} aria-pressed={!!tr[t]} onClick={() => setTr({ ...tr, [t]: !tr[t] })}>
-                      {t}
-                    </button>
-                  ))}
-                </span>
-              </span>
-              <label className="su-field">
-                <span>Оставить рабочих</span>
-                <select className="input" value={keep} onChange={(e) => setKeep(Number(e.target.value))}>
-                  <option value={1}>1</option>
-                  <option value={2}>2 — рекомендуется</option>
-                  <option value={3}>3</option>
-                </select>
-              </label>
-            </div>
+            <small className="mh-muted">Свои комнаты остаются, если заработали, — в дополнение к подобранным Jitsi.</small>
             <button type="button" className="btn btn-primary" disabled={!rep || !form.host.trim() || !!job?.running || busy === "setup" || (auth === "pass" && !form.password)} onClick={start}>
               {job?.running ? "Настраиваю…" : "Начать настройку"}
             </button>
