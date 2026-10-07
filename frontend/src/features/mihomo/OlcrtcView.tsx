@@ -40,7 +40,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
   const [preset, setPreset] = useState<Preset | null>(null);
-  const [reconf, setReconf] = useState("");
+  const [reconf, setReconf] = useState<string | null>(null);
 
   const pull = useCallback(async () => {
     try {
@@ -85,6 +85,8 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
     ...(rep?.servers || []).map((s) => ({ id: s.id, name: s.name, addr: `${s.host}${s.port !== 22 ? `:${s.port}` : ""} · ssh ${s.user}`, own: true, mode: s.mode, nodes: s.variants.map((v) => v.node) })),
   ].filter((s) => s.own || s.nodes.length);
   const cur = servers.find((s) => s.id === srv) || servers.find((s) => s.nodes.includes(rep?.selected || "")) || servers[0];
+  // only a server HomeNet set up can be reconfigured; the «no server» card has the empty id
+  const reconfServer = cur?.own && reconf === cur.id ? (rep?.servers || []).find((x) => x.id === cur.id) : undefined;
   const check = (n: string): OlcCheck | undefined => rep?.checks[n];
   const tone = (n: string) => {
     const c = check(n);
@@ -220,7 +222,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
               <div className="nx-actions">
                 {cur && cur.id !== NO_SERVER ? (
                   <>
-                    <button type="button" className={`btn${reconf === cur.id ? " btn-primary" : ""}`} aria-expanded={reconf === cur.id} onClick={() => setReconf(reconf === cur.id ? "" : cur.id)}>
+                    <button type="button" className={`btn${reconf === cur.id ? " btn-primary" : ""}`} aria-expanded={reconf === cur.id} onClick={() => setReconf(reconf === cur.id ? null : cur.id)}>
                       <Icon name="edit" size={14} /> Изменить варианты
                     </button>
                     <button
@@ -252,7 +254,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                   </button>
                 )}
               </div>
-              {cur && reconf === cur.id ? <Reconfigure key={cur.id} server={(rep?.servers || []).find((x) => x.id === cur.id)!} rep={rep} busy={busy} act={act} /> : null}
+              {reconfServer ? <Reconfigure key={reconfServer.id} server={reconfServer} rep={rep} busy={busy} act={act} /> : null}
               {editing ? <OlcrtcTab providers={providers.filter((p) => p.proxies.some((x) => x.type.toLowerCase() === "olcrtc"))} standalone={Object.values(proxies).filter((x) => x.type.toLowerCase() === "olcrtc" && !olcNodes.includes(x.name))} groups={groups} onReload={async () => (await onReload(), await pull())} prefs={prefs} /> : null}
             </section>
 
