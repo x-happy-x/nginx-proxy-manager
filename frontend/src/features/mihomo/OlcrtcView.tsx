@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/ui/Icon";
 import { errText } from "../../lib/format";
-import { core, mihomo, type MProvider, type MProxy, type OlcCheck, type OlcJob, type OlcReport, type OlcStep } from "./api";
+import { Flag, FlagText, NodeName } from "../../components/ui/Flag";
+import { countryName } from "../../lib/flags";
+import { core, mihomo, type MProvider, type MProxy, type OlcCheck, type OlcJob, type OlcReport, type OlcStep, type OlcVariant } from "./api";
+import { useExits } from "./useExits";
 import { OlcrtcTab } from "./Extras";
 import { useNodePrefs } from "./NodeTiles";
 
@@ -9,10 +12,11 @@ import { useNodePrefs } from "./NodeTiles";
  * VPN → «OLCRTC» (NPM-56): servers and their variants of the link (a Jitsi
  * instance × a transport), the background pick that moves the OLCRTC group to
  * a working variant, and setting up an own server over SSH step by step — or
- * by hand. Design: https://claude.ai/artifact/8w7GwGhKrK96ePPxL166SG
+ * by hand. Design: https://claude.ai/artifact/8w7GwGhKrK96ePPxL166SG (v2 of NPM-59:
+ * the route now, servers with their exit country, variants by call service,
+ * the setup in a side panel)
  */
 
-type Tab = "servers" | "setup";
 type Mode = "auto" | "manual";
 const NO_SERVER = "";
 const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
@@ -30,17 +34,28 @@ const host = (room?: string) => {
 
 type NodeCfg = { name: string; "auth-provider"?: string; transport?: string; "room-id"?: string };
 
+const PLATFORMS: Array<{ id: string; label: string; note: string; empty: string }> = [
+  { id: "jitsi", label: "Jitsi", note: "публичные Jitsi из списка и свои · datachannel — самый быстрый", empty: "Вариантов на Jitsi нет." },
+  { id: "telemost", label: "Яндекс Телемост", note: "в белых списках · комнату создаёте вы · vp8channel, videochannel", empty: "Телемоста пока нет. Создайте встречу на telemost.yandex.ru и добавьте ссылку в «Изменить варианты» — сервер зайдёт в неё сам." },
+  { id: "wbstream", label: "WB Stream", note: "комнату создаёте вы · vp8channel, seichannel, videochannel", empty: "WB Stream пока нет. Создайте комнату на stream.wb.ru и добавьте ссылку в «Изменить варианты»." },
+];
+const platformOf = (p?: string) => (p === "telemost" || p === "wbstream" ? p : "jitsi");
+const platformLabel = (p?: string) => PLATFORMS.find((x) => x.id === platformOf(p))?.label || "Jitsi";
+const channelText = (c?: string) => (c === "whitelist" ? "белые списки" : c === "normal" ? "без ограничений" : c === "offline" ? "без интернета" : "не определён");
+
 export function OlcrtcView({ providers, proxies, groups, onReload }: { providers: MProvider[]; proxies: Record<string, MProxy>; groups: MProxy[]; onReload: () => Promise<void> }) {
   const prefs = useNodePrefs();
+  const { exits } = useExits();
   const [rep, setRep] = useState<OlcReport | null>(null);
   const [cfg, setCfg] = useState<NodeCfg[]>([]);
-  const [tab, setTab] = useState<Tab>("servers");
+  const [drawer, setDrawer] = useState(false);
   const [srv, setSrv] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
   const [preset, setPreset] = useState<Preset | null>(null);
   const [reconf, setReconf] = useState<string | null>(null);
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
 
   const pull = useCallback(async () => {
     try {
@@ -59,7 +74,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
     return () => clearInterval(t);
   }, [pull, running]);
   useEffect(() => {
-    if (running && rep?.job?.kind === "setup") setTab("setup");
+    if (running && rep?.job?.kind === "setup") setDrawer(true);
   }, [running, rep?.job?.kind]);
 
   const act = async (action: Parameters<typeof core.olcrtcDo>[0], body: Record<string, unknown>, key: string = action) => {
@@ -78,215 +93,364 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   };
 
   const olcNodes = providers.flatMap((p) => p.proxies.filter((x) => x.type.toLowerCase() === "olcrtc").map((x) => x.name));
+  const inCore = new Set(olcNodes);
   const owned = new Map<string, string>();
   (rep?.servers || []).forEach((s) => s.variants.forEach((v) => owned.set(v.node, s.id)));
-  const servers = [
-    { id: NO_SERVER, name: "Без своего сервера", addr: "узлы из файла olcrtc и подписок", own: false, nodes: olcNodes.filter((n) => !owned.has(n)) },
-    ...(rep?.servers || []).map((s) => ({ id: s.id, name: s.name, addr: `${s.host}${s.port !== 22 ? `:${s.port}` : ""} · ssh ${s.user}`, own: true, mode: s.mode, nodes: s.variants.map((v) => v.node) })),
-  ].filter((s) => s.own || s.nodes.length);
-  const cur = servers.find((s) => s.id === srv) || servers.find((s) => s.nodes.includes(rep?.selected || "")) || servers[0];
-  // only a server HomeNet set up can be reconfigured; the «no server» card has the empty id
-  const reconfServer = cur?.own && reconf === cur.id ? (rep?.servers || []).find((x) => x.id === cur.id) : undefined;
+  const own = rep?.servers || [];
+  const loose = olcNodes.filter((n) => !owned.has(n));
+  const curId = srv ?? (own.find((s) => s.variants.some((v) => v.node === rep?.selected))?.id || (loose.includes(rep?.selected || "") ? NO_SERVER : own[0]?.id ?? NO_SERVER));
+  const cur = own.find((s) => s.id === curId);
+  const reconfServer = cur && reconf === cur.id ? cur : undefined;
   const check = (n: string): OlcCheck | undefined => rep?.checks[n];
-  const tone = (n: string) => {
-    const c = check(n);
-    return !c ? "none" : c.ok ? "ok" : "bad";
-  };
   const cfgOf = (n: string) => cfg.find((c) => c.name === n);
-  const variantOf = (n: string) => (rep?.servers || []).flatMap((s) => s.variants).find((v) => v.node === n);
+  const variantOf = (n: string) => own.flatMap((s) => s.variants).find((v) => v.node === n);
+  const serverOf = (n: string) => own.find((s) => s.variants.some((v) => v.node === n));
+  const ccOf = (n: string) => serverOf(n)?.country || exits.nodes[n]?.cc || "";
+
+  // what OLCRTC goes through right now: home → call service → server → internet
+  const sel = rep?.selected || "";
+  const selV = variantOf(sel);
+  const selSrv = serverOf(sel);
+  const selC = check(sel);
+  const selRoom = selV?.room || cfgOf(sel)?.["room-id"];
+  const selCC = ccOf(sel);
+  const selExit = exits.nodes[sel];
+  const okNow = !!selC?.ok;
+
+  const rows = cur
+    ? cur.variants.map((v) => ({ node: v.node, platform: platformOf(v.provider), room: v.room, transport: v.transport, v, missing: !inCore.has(v.node) && !v.external }))
+    : loose.map((n) => ({ node: n, platform: platformOf(cfgOf(n)?.["auth-provider"]), room: cfgOf(n)?.["room-id"] || "", transport: cfgOf(n)?.transport || "", v: undefined as OlcVariant | undefined, missing: false }));
+  const okCount = (nodes: string[]) => nodes.filter((n) => check(n)?.ok).length;
 
   return (
     <div className="stack ol">
       <div className="ol-head">
-        <p className="mh-muted">Туннель внутри видеозвонка: трафик идёт через Jitsi и выглядит как обычный созвон. Запасной путь, когда белые списки режут всё остальное.</p>
-        <button type="button" className={`ol-auto${rep?.auto ? " is-on" : ""}`} aria-pressed={!!rep?.auto} disabled={!rep || busy === "auto"} onClick={() => void act("auto", { auto: !rep?.auto })}>
-          <i aria-hidden="true" />
-          {rep?.auto ? "Автоподбор включён" : "Автоподбор выключен"}
-        </button>
+        <p className="mh-muted">Туннель внутри видеозвонка. Площадка звонка должна открываться из дома без VPN — тогда это настоящий запасной путь, когда белые списки режут всё остальное.</p>
+        <div className="nx-actions">
+          <button type="button" className="btn btn-sm" disabled={busy === "check-all" || !olcNodes.length} onClick={() => void act("check", {}, "check-all")}>
+            <Icon name="bolt" size={13} /> {busy === "check-all" ? "Проверяю…" : "Проверить все варианты"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => {
+              setPreset(null);
+              setDrawer(true);
+            }}
+          >
+            <Icon name="plus" size={13} /> Свой сервер
+          </button>
+        </div>
       </div>
       {err ? <p className="vn-err">{err}</p> : null}
-      <div className="su-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "servers"} className={tab === "servers" ? "is-on" : ""} onClick={() => setTab("servers")}>
-          Серверы и варианты
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "setup"} className={tab === "setup" ? "is-on" : ""} onClick={() => setTab("setup")}>
-          {running ? "Настройка идёт…" : "Добавить свой сервер"}
+
+      <section className={`ol-now${sel ? (okNow ? " is-ok" : " is-bad") : ""}`} aria-label="Сейчас">
+        <div className="ol-now-top">
+          <span className="ol-now-tag">
+            <i />
+            {!sel ? "Узел не выбран" : okNow ? "Работает · группа OLCRTC" : "Основной не отвечает"}
+          </span>
+          <span className="ol-now-auto">
+            <span>Автоподбор</span>
+            <button type="button" className={`ol-switch${rep?.auto ? " is-on" : ""}`} role="switch" aria-checked={!!rep?.auto} aria-label="Автоподбор" disabled={!rep || busy === "auto"} onClick={() => void act("auto", { auto: !rep?.auto })}>
+              <i />
+            </button>
+          </span>
+        </div>
+        <h3 className="ol-now-title">
+          {!sel ? "Выберите вариант основным или настройте свой сервер" : okNow ? `Сейчас через ${host(selRoom) || sel} · ${selC?.ms} мс` : rep?.auto ? "Автоподбор ищет рабочий вариант…" : "Основной не отвечает, автоподбор выключен"}
+        </h3>
+        {sel ? (
+          <div className="ol-hops">
+            <div className="ol-hop">
+              <small>Дом</small>
+              <b>Роутер</b>
+              <span>канал: {channelText(rep?.channel)}</span>
+              <em className="is-ok">сокеты мимо правил</em>
+            </div>
+            <div className="ol-hop">
+              <small>Площадка звонка</small>
+              <b className="truncate">{host(selRoom) || "—"}</b>
+              <span>
+                {platformLabel(selV?.provider || cfgOf(sel)?.["auth-provider"])} · {selV?.transport || cfgOf(sel)?.transport || "—"}
+              </span>
+              <em className={okNow ? "is-ok" : "is-bad"}>{okNow ? "открывается напрямую" : selC?.error || "не отвечает"}</em>
+            </div>
+            <div className="ol-hop">
+              <small>Сервер</small>
+              <b className="node-name">
+                {selCC ? <Flag cc={selCC} /> : null}
+                <span className="truncate">{selSrv?.name || "чужой сервер"}</span>
+              </b>
+              <span className="mono truncate">{selSrv ? selSrv.host : "из файла olcrtc"}</span>
+              <em>{selV?.unit ? `olcrtc@${selV.transport}` : selV?.external ? "контейнер srv.sh" : "узел вручную"}</em>
+            </div>
+            <div className="ol-hop">
+              <small>Выход в интернет</small>
+              <b className="node-name">
+                {selCC ? <Flag cc={selCC} /> : <Flag />}
+                <span className="truncate">{selCC ? countryName(selCC) : "не проверен"}</span>
+              </b>
+              <span className="truncate">{[selSrv?.city || selExit?.city, selSrv?.exit_ip || selExit?.ip].filter(Boolean).join(" · ") || "—"}</span>
+              <em>{selSrv?.country_at ? `проверено ${ago(selSrv.country_at)}` : selExit?.t ? `проверено ${ago(selExit.t)}` : "проверится сам"}</em>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <div className="vn-section-head">
+        <h3>
+          Серверы <span>· флаг — по стране выхода, проверяется через туннель</span>
+        </h3>
+      </div>
+      <div className="ol-servers">
+        {own.map((s) => {
+          const nodes = s.variants.map((v) => v.node);
+          const ok = okCount(nodes);
+          const on = curId === s.id;
+          return (
+            <div key={s.id} className={`ol-server${on ? " is-sel" : ""}`}>
+              <button type="button" className="ol-server-pick" aria-pressed={on} onClick={() => setSrv(s.id)}>
+                <span className="ol-server-top">
+                  <span className="vn-card-name">
+                    <b className="node-name">
+                      {s.country ? <Flag cc={s.country} /> : <Flag />}
+                      <span className="truncate">{s.name}</span>
+                    </b>
+                    <small className="mono truncate">
+                      {s.host}
+                      {s.port !== 22 ? `:${s.port}` : ""} · ssh {s.user}
+                      {s.arch ? ` · ${s.arch}` : ""}
+                    </small>
+                  </span>
+                  <span className={`vn-pill vn-${s.mode === "normal" ? "idle" : "ok"}`}>{s.mode === "normal" ? "обычный режим" : "для белых списков"}</span>
+                </span>
+                <span className="ol-server-stats">
+                  <span>
+                    <small>Выход</small>
+                    <b className="truncate">{s.country ? countryName(s.country) : "не проверен"}</b>
+                    <em className="truncate">{s.city || ""}</em>
+                  </span>
+                  <span>
+                    <small>Варианты</small>
+                    <b>
+                      {ok} из {nodes.length}
+                    </b>
+                    <em>работают</em>
+                  </span>
+                  <span>
+                    <small>Связь</small>
+                    <b>{nodes.includes(sel) ? (okNow ? "используется" : "переключается") : ok ? "запасной" : "молчит"}</b>
+                    <em>{nodes.some((n) => !inCore.has(n)) ? "есть потерянный узел" : ""}</em>
+                  </span>
+                </span>
+                <span className="ol-bars" aria-hidden="true">
+                  {nodes.map((n) => (
+                    <i key={n} className={`ol-bar is-${!check(n) ? "none" : check(n)!.ok ? "ok" : "bad"}`} />
+                  ))}
+                </span>
+              </button>
+              <span className="ol-server-acts">
+                <button type="button" className={`btn btn-sm${reconf === s.id ? " btn-primary" : ""}`} aria-expanded={reconf === s.id} onClick={() => (setSrv(s.id), setReconf(reconf === s.id ? null : s.id))}>
+                  <Icon name="edit" size={13} /> Изменить варианты
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={running}
+                  onClick={() => {
+                    setPreset({ name: s.name, host: s.host, port: s.port, user: s.user, mode: s.mode });
+                    setDrawer(true);
+                  }}
+                >
+                  Переустановить
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm ol-danger"
+                  disabled={running || busy === "remove"}
+                  onClick={() => {
+                    if (window.confirm(`Убрать «${s.name}» из HomeNet? Его узлы уйдут из olcrtc, службы на сервере остановятся.`)) void act("remove", { id: s.id }, "remove").then(() => setSrv(null));
+                  }}
+                >
+                  Убрать
+                </button>
+              </span>
+            </div>
+          );
+        })}
+        {loose.length ? (
+          <div className={`ol-server${curId === NO_SERVER ? " is-sel" : ""}`}>
+            <button type="button" className="ol-server-pick" aria-pressed={curId === NO_SERVER} onClick={() => setSrv(NO_SERVER)}>
+              <span className="ol-server-top">
+                <span className="vn-card-name">
+                  <b>Без своего сервера</b>
+                  <small>узлы из файла olcrtc и подписок</small>
+                </span>
+                <span className="vn-pill vn-idle">{loose.includes(sel) ? "используется" : "запас"}</span>
+              </span>
+              <span className="ol-bars" aria-hidden="true">
+                {loose.map((n) => (
+                  <i key={n} className={`ol-bar is-${!check(n) ? "none" : check(n)!.ok ? "ok" : "bad"}`} />
+                ))}
+              </span>
+              <span className="vn-card-foot">
+                <span>
+                  {okCount(loose)} из {loose.length} работают
+                </span>
+              </span>
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="ol-server ol-server-add"
+          onClick={() => {
+            setPreset(null);
+            setDrawer(true);
+          }}
+        >
+          <Icon name="plus" size={18} />
+          <b>Добавить сервер</b>
+          <small>второй сервер в другой стране — запас, если первый заблокируют</small>
         </button>
       </div>
 
-      {tab === "servers" ? (
-        <>
+      {reconfServer ? <Reconfigure key={reconfServer.id} server={reconfServer} rep={rep} busy={busy} act={act} /> : null}
+
+      <div className="ol-layout">
+        <section className="ol-variants" aria-label="Варианты связи">
           <div className="vn-section-head">
-            <h3>Серверы</h3>
+            <h3>
+              Варианты связи · {cur?.name || "без своего сервера"} <span>· по площадкам звонков, кружок — основной</span>
+            </h3>
+          </div>
+          {PLATFORMS.map((pl) => {
+            const list = rows.filter((r) => r.platform === pl.id);
+            if (!list.length && !cur) return null;
+            const ok = okCount(list.map((r) => r.node));
+            const open = !closed[pl.id] && (list.length > 0 || pl.id !== "jitsi");
+            return (
+              <div key={pl.id} className="ol-pgroup">
+                <button type="button" className="ol-pgroup-head" aria-expanded={open} onClick={() => setClosed({ ...closed, [pl.id]: open })}>
+                  <span className="vn-card-name">
+                    <b>{pl.label}</b>
+                    <small>{pl.note}</small>
+                  </span>
+                  <span className={`vn-pill vn-${!list.length ? "idle" : ok === list.length ? "ok" : ok ? "warn" : "bad"}`}>{list.length ? `${ok} из ${list.length} работают` : "нет комнаты"}</span>
+                  <Icon name="chevronDown" size={14} />
+                </button>
+                {open ? (
+                  list.length ? (
+                    <div className="ol-vlist" role="table" aria-label={pl.label}>
+                      {list.map((r) => {
+                        const c = check(r.node);
+                        const isMain = sel === r.node;
+                        return (
+                          <div key={r.node} className={`ol-vrow${isMain ? " is-main" : ""}${r.missing ? " is-missing" : ""}`} role="row">
+                            <button type="button" role="cell" className={`ol-radio${isMain ? " is-on" : ""}`} aria-label={`Сделать основным: ${r.node}`} disabled={isMain || r.missing || busy === `m:${r.node}`} onClick={() => void act("main", { node: r.node }, `m:${r.node}`)} />
+                            <span role="cell" className="ol-vname">
+                              <NodeName name={r.node} cc={ccOf(r.node)} />
+                              <small className="mono truncate">
+                                {host(r.room) || r.room}
+                                {r.v?.external ? ` · контейнер srv.sh ${r.v.external}` : ""}
+                              </small>
+                            </span>
+                            <span role="cell" className="nx-hm">
+                              <span className="ol-tr mono">{r.transport || "—"}</span>
+                            </span>
+                            <span role="cell" className="nx-hm ol-wlcell" title={r.v?.wl_at ? `проверено ${ago(r.v.wl_at)}` : undefined}>
+                              <i className={`ol-wldot is-${r.v?.wl || "none"}`} />
+                              {r.v?.wl === "ok" ? "при белых списках работает" : r.v?.wl === "fail" ? "при белых списках не работает" : "белые списки — не проверен"}
+                            </span>
+                            <span role="cell" className="ol-vstate">
+                              {r.missing ? <span className="vn-pill vn-warn">нет узла</span> : <span className={`vn-pill vn-${c ? (c.ok ? "ok" : "bad") : "idle"}`}>{c ? (c.ok ? `${c.ms} мс` : "не отвечает") : "не проверялся"}</span>}
+                              <small>{r.missing ? "mihomo 404" : c ? `${ago(c.t)}${!c.ok && c.error ? ` · ${c.error}` : ""}` : ""}</small>
+                            </span>
+                            <span role="cell" className="ol-vacts">
+                              {r.missing ? (
+                                <button type="button" className="btn btn-sm btn-primary" disabled={busy === "tidy"} onClick={() => void act("tidy", {}, "tidy")}>
+                                  Вернуть узел
+                                </button>
+                              ) : (
+                                <button type="button" className="btn btn-sm" disabled={busy === `c:${r.node}`} onClick={() => void act("check", { node: r.node }, `c:${r.node}`)}>
+                                  {busy === `c:${r.node}` ? "…" : "Проверить"}
+                                </button>
+                              )}
+                            </span>
+                            {r.missing ? <p className="ol-vnote">Комната на сервере есть, а узла в файле olcrtc на роутере нет — проверка получает 404. «Вернуть узел» допишет его заново.</p> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="ol-pempty">
+                      <span>{pl.empty}</span>
+                      {cur ? (
+                        <button type="button" className="btn btn-sm" onClick={() => setReconf(cur.id)}>
+                          Изменить варианты
+                        </button>
+                      ) : null}
+                    </div>
+                  )
+                ) : null}
+              </div>
+            );
+          })}
+          {!rows.length && !cur ? <p className="mh-muted">Узлов OLCRTC пока нет — настройте свой сервер или добавьте узел вручную.</p> : null}
+          {!cur ? (
             <div className="nx-actions">
-              <button type="button" className="btn btn-sm" disabled={busy === "check-all" || !olcNodes.length} onClick={() => void act("check", {}, "check-all")}>
-                <Icon name="bolt" size={13} /> {busy === "check-all" ? "Проверяю все варианты…" : "Проверить все варианты"}
-              </button>
-              <button type="button" className="btn btn-sm btn-primary" onClick={() => setTab("setup")}>
-                <Icon name="plus" size={13} /> Свой сервер
+              <button type="button" className="btn btn-sm" onClick={() => setEditing(!editing)}>
+                <Icon name="edit" size={13} /> {editing ? "Скрыть редактор узлов" : "Изменить узлы вручную"}
               </button>
             </div>
-          </div>
-          <div className="ol-servers">
-            {servers.map((s) => {
-              const ok = s.nodes.filter((n) => tone(n) === "ok").length;
-              const main = s.nodes.includes(rep?.selected || "") ? rep!.selected : "";
-              const state = main ? (tone(main) === "bad" ? "warn" : "ok") : ok ? "idle" : s.nodes.length ? "bad" : "idle";
-              return (
-                <button key={s.id || "none"} type="button" className={`ol-server${cur?.id === s.id ? " is-sel" : ""}`} aria-pressed={cur?.id === s.id} onClick={() => setSrv(s.id)}>
-                  <span className="ol-server-top">
-                    <span className="vn-card-name">
-                      <b>{s.name}</b>
-                      <small className="mono">{s.addr}</small>
-                    </span>
-                    <span className={`vn-pill vn-${state}`}>{main ? (state === "ok" ? "используется" : "переключается") : ok ? "запасной" : s.nodes.length ? "не отвечает" : "нет вариантов"}</span>
-                  </span>
-                  <span className="ol-bars" aria-hidden="true">
-                    {s.nodes.map((n) => (
-                      <i key={n} className={`ol-bar is-${tone(n)}`} />
-                    ))}
-                  </span>
-                  <span className="vn-card-foot">
-                    <span>
-                      {ok} из {s.nodes.length} вариантов работают
-                    </span>
-                    <span>{s.own ? ("mode" in s && s.mode === "normal" ? "свой · обычный режим" : "свой · для белых списков") : "без сервера"}</span>
-                  </span>
-                </button>
-              );
-            })}
-            {!servers.length ? <p className="mh-muted">Узлов OLCRTC пока нет — настройте свой сервер или добавьте узел вручную.</p> : null}
-          </div>
+          ) : null}
+          {editing && !cur ? <OlcrtcTab providers={providers.filter((p) => p.proxies.some((x) => x.type.toLowerCase() === "olcrtc"))} standalone={Object.values(proxies).filter((x) => x.type.toLowerCase() === "olcrtc" && !olcNodes.includes(x.name))} groups={groups} onReload={async () => (await onReload(), await pull())} prefs={prefs} /> : null}
+        </section>
 
-          <div className="ol-layout">
-            <section className="ol-variants" aria-label="Варианты связи">
-              <div className="vn-section-head">
-                <h3>
-                  Варианты связи · {cur?.name || "—"} <span>· роутер держит узел на каждый, группа OLCRTC идёт через выбранный</span>
-                </h3>
-              </div>
-              <div className="ol-table" role="table">
-                <div className="ol-row ol-thead" role="row">
-                  <span role="columnheader">Площадка · комната</span>
-                  <span role="columnheader" className="nx-hm">
-                    Транспорт
+        <aside className="ol-side">
+          <section className="vo-panel">
+            <h3>Как работает автоподбор</h3>
+            <ul className="ol-rules">
+              <li>Основной проверяется раз в минуту, все — раз в 10 минут</li>
+              <li>После 2 неудач подряд — на следующий рабочий</li>
+              <li>При белых списках остаются варианты с отметкой «работает»</li>
+              <li>Ни одного рабочего — новые на своём сервере по SSH, не чаще раза в час</li>
+              <li>Узел пропал с роутера — возвращается сам</li>
+            </ul>
+            <small className="mh-muted">{rep?.auto ? "Включён." : "Выключен — переключение только вручную."}</small>
+          </section>
+          <section className="vo-panel">
+            <h3>Что происходило</h3>
+            <div className="ol-events">
+              {(rep?.events || []).slice(0, 12).map((e, i) => (
+                <div key={`${e.t}-${i}`}>
+                  <time className="mono">{hhmm(e.t)}</time>
+                  <i className={`vn-dot vn-${e.kind === "ok" ? "ok" : e.kind === "warn" ? "warn" : "bad"}`} />
+                  <span>
+                    <FlagText text={e.text} />
                   </span>
-                  <span role="columnheader">Состояние</span>
-                  <span role="columnheader" className="nx-hm">
-                    Проверка
-                  </span>
-                  <span role="columnheader" className="nx-hm" />
                 </div>
-                {(cur?.nodes || []).map((n) => {
-                  const c = check(n);
-                  const conf = cfgOf(n);
-                  const v = variantOf(n);
-                  const isMain = rep?.selected === n;
-                  return (
-                    <div key={n} className={`ol-row${isMain ? " is-main" : ""}`} role="row">
-                      <span role="cell" className="ol-what">
-                        <span className="ol-what-top">
-                          <b className="truncate">{conf?.["auth-provider"] ? conf["auth-provider"][0].toUpperCase() + conf["auth-provider"].slice(1) : "Jitsi"}</b>
-                          {isMain ? <span className="nx-pill nx-out">основной</span> : null}
-                        </span>
-                        <small className="mono truncate" title={n}>
-                          {host(v?.room || conf?.["room-id"]) || n}
-                          {v?.external ? ` · контейнер srv.sh ${v.external}` : ""}
-                        </small>
-                      </span>
-                      <span role="cell" className="nx-hm mono">
-                        {v?.transport || conf?.transport || "—"}
-                      </span>
-                      <span role="cell" className="ol-state">
-                        <span className={`vn-pill vn-${c ? (c.ok ? "ok" : "bad") : "idle"}`}>{c ? (c.ok ? `${c.ms} мс` : "не работает") : "не проверялся"}</span>
-                        <small className={`ol-wl is-${v?.wl || "none"}`} title={v?.wl_at ? `проверено ${ago(v.wl_at)}` : undefined}>
-                          {v?.wl === "ok" ? "при белых списках работал" : v?.wl === "fail" ? "при белых списках не работал" : v ? "при белых списках ещё не проверялся" : ""}
-                        </small>
-                      </span>
-                      <span role="cell" className="nx-hm ol-note">
-                        {c ? `${ago(c.t)}${c.error ? ` · ${c.error}` : ""}` : "—"}
-                      </span>
-                      <span role="cell" className="nx-hm ol-acts">
-                        <button type="button" className="btn btn-sm" disabled={busy === `c:${n}`} onClick={() => void act("check", { node: n }, `c:${n}`)}>
-                          {busy === `c:${n}` ? "…" : "Проверить"}
-                        </button>
-                        <button type="button" className="btn btn-sm" disabled={isMain || busy === `m:${n}`} onClick={() => void act("main", { node: n }, `m:${n}`)}>
-                          Основным
-                        </button>
-                      </span>
-                    </div>
-                  );
-                })}
-                {!cur?.nodes.length ? <p className="mh-muted ts-empty">У сервера нет рабочих вариантов — подберите их заново.</p> : null}
-              </div>
-              <div className="nx-actions">
-                {cur && cur.id !== NO_SERVER ? (
-                  <>
-                    <button type="button" className={`btn${reconf === cur.id ? " btn-primary" : ""}`} aria-expanded={reconf === cur.id} onClick={() => setReconf(reconf === cur.id ? null : cur.id)}>
-                      <Icon name="edit" size={14} /> Изменить варианты
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={running}
-                      onClick={() => {
-                        const sv = (rep?.servers || []).find((x) => x.id === cur.id);
-                        if (sv) setPreset({ name: sv.name, host: sv.host, port: sv.port, user: sv.user, mode: sv.mode });
-                        setTab("setup");
-                      }}
-                    >
-                      Переустановить
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={running || busy === "remove"}
-                      onClick={() => {
-                        if (window.confirm(`Убрать «${cur.name}» из HomeNet? Его узлы уйдут из olcrtc, службы на сервере остановятся.`)) void act("remove", { id: cur.id }, "remove").then(() => setSrv(null));
-                      }}
-                    >
-                      Убрать сервер
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="btn" onClick={() => setEditing(!editing)}>
-                    <Icon name="edit" size={14} /> {editing ? "Скрыть редактор узлов" : "Изменить узлы вручную"}
-                  </button>
-                )}
-              </div>
-              {reconfServer ? <Reconfigure key={reconfServer.id} server={reconfServer} rep={rep} busy={busy} act={act} /> : null}
-              {editing ? <OlcrtcTab providers={providers.filter((p) => p.proxies.some((x) => x.type.toLowerCase() === "olcrtc"))} standalone={Object.values(proxies).filter((x) => x.type.toLowerCase() === "olcrtc" && !olcNodes.includes(x.name))} groups={groups} onReload={async () => (await onReload(), await pull())} prefs={prefs} /> : null}
-            </section>
+              ))}
+              {!rep?.events?.length ? <p className="mh-muted">Пока ничего — события появятся здесь.</p> : null}
+            </div>
+          </section>
+        </aside>
+      </div>
 
-            <aside className="ol-side">
-              <section className="vo-panel">
-                <h3>Автоподбор</h3>
-                <small className="mh-muted">
-                  Раз в минуту роутер проверяет вариант, через который идёт OLCRTC, раз в 10 минут — все. Если основной не ответил 2 раза подряд, группа переключается на первый рабочий. Если не работает ни один, на своём сервере по SSH подбираются новые варианты — не чаще раза в час.
-                </small>
-                <button type="button" className={`btn${rep?.auto ? "" : " btn-primary"}`} disabled={!rep || busy === "auto"} onClick={() => void act("auto", { auto: !rep?.auto })}>
-                  {rep?.auto ? "Выключить автоподбор" : "Включить автоподбор"}
-                </button>
-              </section>
-              <section className="vo-panel">
-                <h3>Что делал автоподбор</h3>
-                <div className="ol-events">
-                  {(rep?.events || []).slice(0, 12).map((e, i) => (
-                    <div key={`${e.t}-${i}`}>
-                      <time className="mono">{hhmm(e.t)}</time>
-                      <i className={`vn-dot vn-${e.kind === "ok" ? "ok" : e.kind === "warn" ? "warn" : "bad"}`} />
-                      <span>{e.text}</span>
-                    </div>
-                  ))}
-                  {!rep?.events?.length ? <p className="mh-muted">Пока ничего — события появятся здесь.</p> : null}
-                </div>
-              </section>
-            </aside>
-          </div>
-        </>
-      ) : (
-        <Setup rep={rep} busy={busy} act={act} preset={preset} />
-      )}
+      {drawer ? (
+        <div className="ol-drawer-back" onClick={(e) => e.target === e.currentTarget && !running && setDrawer(false)}>
+          <section className="ol-drawer" role="dialog" aria-modal="true" aria-label="Свой сервер OLCRTC">
+            <div className="ol-drawer-head">
+              <b>{preset ? `Переустановить · ${preset.name}` : "Свой сервер OLCRTC"}</b>
+              <button type="button" className="btn btn-sm btn-icon" aria-label="Закрыть" onClick={() => setDrawer(false)}>
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+            <Setup rep={rep} busy={busy} act={act} preset={preset} />
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

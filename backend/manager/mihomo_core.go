@@ -683,7 +683,7 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreTrafficReset(w)
 	case "/api/core/traffic/limit":
 		a.handleBypassLimit(w, r)
-	case "/api/core/olcrtc/setup", "/api/core/olcrtc/repick", "/api/core/olcrtc/resume", "/api/core/olcrtc/auto", "/api/core/olcrtc/check", "/api/core/olcrtc/main", "/api/core/olcrtc/remove":
+	case "/api/core/olcrtc/setup", "/api/core/olcrtc/repick", "/api/core/olcrtc/resume", "/api/core/olcrtc/auto", "/api/core/olcrtc/check", "/api/core/olcrtc/main", "/api/core/olcrtc/remove", "/api/core/olcrtc/tidy":
 		a.handleOlcrtcPost(w, r)
 	case "/api/core/exits/check":
 		a.handleExitsCheck(w, r)

@@ -3285,3 +3285,93 @@ button.vr-gchip { cursor: pointer; }
   .hub-head { display: none; }
   .hub-detail .su-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ===== NPM-59: OLCRTC v2 — the route now, servers with exits, variants by call service ===== */
+.ol-now { display: grid; gap: 14px; padding: 18px 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); }
+.ol-now.is-bad { border-color: var(--warning-border); }
+.ol-now-top { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; align-items: center; }
+.ol-now-tag { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.ol-now-tag i { width: 10px; height: 10px; border-radius: 50%; background: var(--series-neutral); }
+.ol-now.is-ok .ol-now-tag { color: var(--success); }
+.ol-now.is-ok .ol-now-tag i { background: var(--status-good); box-shadow: 0 0 0 5px var(--success-soft); }
+.ol-now.is-bad .ol-now-tag { color: var(--warning); }
+.ol-now.is-bad .ol-now-tag i { background: var(--status-warning); box-shadow: 0 0 0 5px var(--warning-soft); }
+.ol-now-auto { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.ol-switch { width: 44px; height: 26px; border-radius: 999px; border: 0; padding: 3px; display: flex; background: var(--border-strong); cursor: pointer; transition: background .15s; }
+.ol-switch i { width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.ol-switch.is-on { background: var(--accent); }
+.ol-switch.is-on i { transform: translateX(18px); }
+.ol-now-title { margin: 0; font-size: 21px; line-height: 1.25; }
+.ol-hops { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ol-hop { display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; position: relative; }
+.ol-hop + .ol-hop::before { content: "\2192"; position: absolute; left: -9px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-3); line-height: 1; }
+.ol-hop > small { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.ol-hop > b { font-size: 14.5px; min-width: 0; }
+.ol-hop > span { font-size: 12.5px; color: var(--text-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-hop > em { justify-self: start; font-style: normal; font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-hop > em.is-ok { background: var(--success-soft); color: var(--success); }
+.ol-hop > em.is-bad { background: var(--danger-soft); color: var(--danger); }
+.ol-servers { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.ol-server { cursor: default; }
+.ol-server-pick { display: grid; gap: 10px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.ol-server-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ol-server-stats > span { display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.ol-server-stats small { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.ol-server-stats b { font-size: 13.5px; font-weight: 600; }
+.ol-server-stats em { font-style: normal; font-size: 11.5px; color: var(--text-3); min-height: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-server-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ol-danger { color: var(--danger); }
+.ol-server-add { display: grid; place-items: center; align-content: center; gap: 6px; min-height: 170px; border-style: dashed; background: transparent; color: var(--text-2); cursor: pointer; text-align: center; }
+.ol-server-add b { color: var(--text); }
+.ol-server-add small { max-width: 34ch; font-size: 12.5px; }
+.ol-pgroup { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.ol-pgroup + .ol-pgroup { margin-top: 10px; }
+.ol-pgroup-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; min-height: 52px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ol-pgroup-head:hover { background: var(--surface-2); }
+.ol-pgroup-head .vn-card-name { flex: 1; min-width: 0; }
+.ol-pgroup-head svg { flex: none; color: var(--text-3); transition: transform .15s; }
+.ol-pgroup-head[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.ol-vlist { border-top: 1px solid var(--border); }
+.ol-vrow { display: grid; grid-template-columns: 22px minmax(0, 1.7fr) 120px minmax(0, 1.1fr) 130px 120px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.ol-vrow:first-child { border-top: 0; }
+.ol-vrow.is-main { background: var(--accent-soft); }
+.ol-vrow.is-missing { background: var(--warning-soft); }
+.ol-radio { width: 18px; height: 18px; border-radius: 50%; padding: 0; box-sizing: border-box; border: 2px solid var(--border-strong); background: transparent; cursor: pointer; }
+.ol-radio.is-on { border: 6px solid var(--accent); cursor: default; }
+.ol-radio:disabled:not(.is-on) { opacity: .4; cursor: default; }
+.ol-vname { display: grid; gap: 2px; min-width: 0; font-weight: 600; }
+.ol-vname small { font-weight: 400; color: var(--text-3); font-size: 11.5px; }
+.ol-tr { font-size: 12px; padding: 3px 8px; border-radius: 7px; background: var(--surface-3); }
+.ol-wlcell { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); min-width: 0; }
+.ol-wldot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--series-neutral); }
+.ol-wldot.is-ok { background: var(--status-good); }
+.ol-wldot.is-fail { background: var(--status-critical); }
+.ol-vstate { display: grid; gap: 2px; justify-items: start; min-width: 0; }
+.ol-vstate small { font-size: 11.5px; color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-vacts { display: flex; justify-content: flex-end; }
+.ol-vnote { grid-column: 2 / -1; margin: 0; font-size: 12.5px; color: var(--warning); }
+.ol-pempty { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+.ol-pempty span { flex: 1 1 280px; }
+.ol-rules { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 13px; color: var(--text-2); }
+.ol-drawer-back { position: fixed; inset: 0; z-index: 60; background: var(--overlay); display: flex; justify-content: flex-end; }
+.ol-drawer { width: min(760px, 100%); height: 100%; overflow-y: auto; background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 18px 20px 28px; box-sizing: border-box; display: grid; gap: 14px; align-content: start; }
+.ol-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: -18px; z-index: 1; background: var(--bg); padding: 4px 0 8px; }
+.ol-drawer-head b { font-size: 19px; }
+.ol-drawer .ol-layout { display: grid; grid-template-columns: minmax(0, 1fr); }
+.ol-drawer .ol-side, .ol-drawer .ol-steps, .ol-drawer .ol-form, .ol-drawer .ol-manual { flex: none; width: auto; }
+@media (max-width: 1100px) {
+  .ol-vrow { grid-template-columns: 22px minmax(0, 1.6fr) 110px 120px 110px; }
+  .ol-vrow > :nth-child(4) { display: none; }
+}
+@media (max-width: 900px) {
+  .ol-hops { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ol-hop + .ol-hop::before { display: none; }
+}
+@media (max-width: 640px) {
+  .ol-hops { grid-template-columns: minmax(0, 1fr); }
+  .ol-vrow { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .ol-vrow > :nth-child(3), .ol-vrow > :nth-child(4) { display: none; }
+  .ol-vrow > .ol-vacts { grid-column: 2 / -1; justify-content: flex-start; }
+  .ol-server-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ol-drawer { padding: 14px 16px 24px; }
+}

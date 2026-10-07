@@ -106,3 +106,23 @@ func TestOlcInstalledNeedsTheRoutersVersion(t *testing.T) {
 		t.Fatal("install without the service taken as complete")
 	}
 }
+
+func TestOlcNodeNamesUniqueWithFlag(t *testing.T) {
+	srv := &olcServer{Name: "VDSKA"}
+	// two Jitsi with the same first label used to share «meet» (NPM-59)
+	a := olcNodeName(srv, "jitsi", "meet.riddlerx.org", "datachannel", map[string]bool{})
+	b := olcNodeName(srv, "jitsi", "meet.egovm.ru", "datachannel", map[string]bool{a: true})
+	if a == b || a != "OLC VDSKA meet.riddlerx/datachannel" || b != "OLC VDSKA meet.egovm/datachannel" {
+		t.Fatalf("names: %q %q", a, b)
+	}
+	if n := olcNodeName(srv, "jitsi", "meet.egovm.ru", "datachannel", map[string]bool{b: true}); n != b+" 2" {
+		t.Fatalf("taken name must get a number: %q", n)
+	}
+	srv.Country = "nl"
+	if n := olcNodeName(srv, "telemost", "telemost.yandex.ru", "vp8channel", map[string]bool{}); n != "🇳🇱 OLC VDSKA telemost/vp8channel" {
+		t.Fatalf("flagged: %q", n)
+	}
+	if olcFlag("N1") != "" || olcFlag("") != "" || !olcHasFlag("🇩🇪 x") || olcHasFlag("OLC x") {
+		t.Fatal("flag helpers")
+	}
+}
