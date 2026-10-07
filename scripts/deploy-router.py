@@ -507,6 +507,14 @@ def main():
         result["activated"]=True;result["url"]=live;result["rollback"]=release+"/rollback.sh"
         (local/"last-deployment.json").write_text(json.dumps(result,indent=2),encoding="utf-8")
         print(json.dumps(result),flush=True)
+        # NPM-62: every deployment leaves a release (~100 MB) behind; on 07.10 157 of
+        # them filled the router's disk. Keep the newest RELEASES_KEEP, never this
+        # one. A failed cleanup must not roll back a good deployment.
+        try:
+            keep=int(os.environ.get("RELEASES_KEEP","10"))
+            router.run("cd /opt/etc/homenet/releases && ls -1 | grep -E '^[0-9]{8}-[0-9]{6}$' | sort -r | tail -n +"+str(keep+1)+" | grep -vxF "+q(stamp)+" | while read d; do rm -rf \"$d\"; done", timeout=300)
+        except Exception as error:
+            print("release cleanup skipped: "+str(error),file=sys.stderr,flush=True)
     except Exception:
         router.run("sh "+q(release+"/rollback.sh"))
         # Prevent the watchdog repeating a rollback already completed.
