@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOlcShellQuoting(t *testing.T) {
@@ -57,5 +58,19 @@ func TestParseOlcExistingFindsSrvShContainers(t *testing.T) {
 	}
 	if strings.Contains(olcMaskKeys(out), key) {
 		t.Fatal("key not masked")
+	}
+}
+
+func TestOlcMarksVariantsDuringWhitelist(t *testing.T) {
+	t.Setenv("MIHOMO_STATE_DIR", t.TempDir())
+	now := time.Now().Unix()
+	o := &olcState{path: olcStatePath(), st: olcStore{
+		Servers: []*olcServer{{ID: "a", Variants: []olcVariant{{Node: "good"}, {Node: "bad"}, {Node: "old"}}}},
+		Checks:  map[string]olcCheck{"good": {T: now, OK: true}, "bad": {T: now}, "old": {T: now - 3600, OK: true}},
+	}}
+	o.markWhitelist()
+	v := o.st.Servers[0].Variants
+	if v[0].WL != "ok" || v[1].WL != "fail" || v[2].WL != "" {
+		t.Fatalf("marks = %q %q %q", v[0].WL, v[1].WL, v[2].WL)
 	}
 }

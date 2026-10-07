@@ -277,9 +277,9 @@ export type ProbeState = { id: string; name: string; what: string; url: string; 
 export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[]; probes?: ProbeState[] };
 
 /** OLCRTC servers set up over SSH and the background pick of variants (NPM-56). */
-export type OlcVariant = { node: string; instance: string; transport: string; room: string; unit: string; external?: string };
+export type OlcVariant = { node: string; instance: string; transport: string; room: string; unit: string; external?: string; wl?: "ok" | "fail"; wl_at?: number };
 export type OlcFound = { container: string; status: string; dir: string; provider: string; room: string; transport: string; in_tmp: boolean; node?: string };
-export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; variants: OlcVariant[]; created: number };
+export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; mode?: "whitelist" | "normal"; variants: OlcVariant[]; created: number };
 export type OlcCheck = { t: number; ok: boolean; ms: number; error?: string };
 export type OlcStep = { id: string; title: string; status: "wait" | "run" | "ok" | "fail" | "skip"; detail?: string; log?: string[]; fix?: string; fix_label?: string; ms?: number };
 export type OlcTry = { label: string; state: "wait" | "run" | "ok" | "fail" | "skip"; result?: string };
@@ -294,8 +294,10 @@ export type OlcReport = {
   instances: string[];
   transports: string[];
   selected: string;
+  /** the uplink's mode now: whitelist | normal | offline | unknown */
+  channel: string;
 };
-export type OlcSetup = { id?: string; name?: string; host?: string; port?: number; user?: string; password?: string; instances?: string[]; transports?: string[]; keep?: number };
+export type OlcSetup = { id?: string; name?: string; host?: string; port?: number; user?: string; password?: string; instances?: string[]; transports?: string[]; keep?: number; mode?: "whitelist" | "normal" };
 
 export type InstallPlan = {
   asset: string;
