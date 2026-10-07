@@ -71,6 +71,9 @@ export type TailscalePeer = {
   lastSeen?: string;
   rxBytes: number;
   txBytes: number;
+  /** login and display name of the account the device belongs to (MIHOMO-9) */
+  user?: string;
+  userName?: string;
 };
 
 export type TailscaleStatus = {

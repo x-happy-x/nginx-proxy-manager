@@ -8,7 +8,8 @@ import { useMihomo } from "./context";
 import { Delay, lastDelay } from "./shared";
 import { HealthDots, NodeTiles, arrange, dotOfDelay, providerHealth, useNodePrefs, type NodePrefs, type NodeView } from "./NodeTiles";
 import { GROUP_TYPES, Nodes } from "./Nodes";
-import { OlcrtcTab, TailscaleTab } from "./Extras";
+import { OlcrtcTab } from "./Extras";
+import { TailscaleView } from "./TailscaleView";
 
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "url-test", Fallback: "fallback", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
 const ORDER_KEY = "homenet.mihomo.groupOrder";
@@ -139,14 +140,13 @@ function useAllProxies() {
 
 export function TailscalePage() {
   const { proxies, error } = useAllProxies();
-  const prefs = useNodePrefs();
   const nodes = Object.values(proxies).filter((x) => x.type.toLowerCase() === "tailscale");
   return (
     <div className="stack">
       <PageHeader page="tailscale" />
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
       {nodes.length ? (
-        <TailscaleTab nodes={nodes} prefs={prefs} />
+        <TailscaleView nodes={nodes} />
       ) : (
         <EmptyState icon="network" title="Узла Tailscale нет">
           Добавьте узел Tailscale в «Настройка → Свои узлы».
