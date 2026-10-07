@@ -344,8 +344,20 @@ def main():
         raise RuntimeError("An absolute router python3 path is required for rollback; no deployment started")
     router.run(q(router_python)+" -c "+q("import json, os, pathlib, signal, stat, tempfile, time; assert hasattr(os, 'replace')"))
     baseline=router.run("cat /tmp/nginx/nginx.pid; pidof mihomo").split()
-    internet_before=router.run("curl --noproxy '*' --max-time 12 -sS -o /dev/null -w '%{http_code}' https://example.com").strip()
-    if internet_before != "200": raise RuntimeError("Internet baseline probe did not return HTTP 200; no deployment started")
+    # NPM-62: the uplink may be in the operator's whitelist mode, where foreign
+    # sites (example.com) do not open at all: ask hosts that stay reachable
+    # there first. Any one answering 2xx/3xx means the internet is up.
+    def internet_probe():
+        for url in ("https://ya.ru/", "https://www.gosuslugi.ru/", "https://example.com/"):
+            try:
+                code=router.run("curl --noproxy '*' --max-time 12 -sS -o /dev/null -w '%{http_code}' "+q(url)).strip()
+            except Exception:
+                continue
+            if code[:1] in ("2","3"):
+                return "up"
+        return "down"
+    internet_before=internet_probe()
+    if internet_before != "up": raise RuntimeError("Internet baseline probe failed (ya.ru, gosuslugi.ru, example.com); no deployment started")
     stamp=time.strftime("%Y%m%d-%H%M%S")
     release="/opt/etc/homenet/releases/"+stamp
     result={"release":release,"activated":False}
@@ -501,7 +513,7 @@ def main():
             if code not in ["200","301","302","303","307","308","401","403"]: raise RuntimeError(f"Route probe failed for {host} via {ip}: {code}")
         if router.run("cat /tmp/nginx/nginx.pid; pidof mihomo").split() != baseline:
             raise RuntimeError("Core router process identities changed during deployment")
-        if router.run("curl --noproxy '*' --max-time 12 -sS -o /dev/null -w '%{http_code}' https://example.com").strip() != internet_before:
+        if internet_probe() != internet_before:
             raise RuntimeError("Internet health probe changed during deployment")
         router.run("touch "+q(release+"/COMMITTED"))
         result["activated"]=True;result["url"]=live;result["rollback"]=release+"/rollback.sh"
