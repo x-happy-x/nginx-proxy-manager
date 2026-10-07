@@ -3375,3 +3375,7 @@ button.vr-gchip { cursor: pointer; }
   .ol-server-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ol-drawer { padding: 14px 16px 24px; }
 }
+
+/* NPM-59: Tailscale exits with their country */
+.ts-exit-top .node-name { min-width: 0; flex: 1; }
+.ts-exit-cc { font-size: 13px; color: var(--text); min-width: 0; }
