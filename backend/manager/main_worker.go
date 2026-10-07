@@ -9,6 +9,7 @@ import (
 	flags "flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -59,6 +60,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	listen := strings.TrimSuffix(strings.TrimPrefix(manifest.Backend.Endpoint, "http://"), "/")
+	listener, err := net.Listen("tcp", listen)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
 	switch workerID {
 	case "proxy":
 		a.startTelemetry()
@@ -106,7 +113,6 @@ func main() {
 			http.Error(w, "method not allowed", 405)
 		}
 	})
-	listen := strings.TrimPrefix(manifest.Backend.Endpoint, "http://")
 	server := &http.Server{Addr: strings.TrimSuffix(listen, "/"), Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	done := make(chan struct{})
 	go func() {
@@ -118,7 +124,7 @@ func main() {
 		close(done)
 	}()
 	log.Print(fmt.Sprintf("HomeNet %s %s listening on %s", workerID, manifest.Version, server.Addr))
-	if err = server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err = server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 	<-done
