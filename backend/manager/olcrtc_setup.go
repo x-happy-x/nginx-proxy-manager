@@ -407,7 +407,7 @@ func (o *olcState) snapshot() map[string]any {
 	for _, s := range o.st.Servers {
 		cp := *s
 		cp.Key, cp.HostKey = "", ""
-		cp.Variants = append([]olcVariant(nil), s.Variants...)
+		cp.Variants = append([]olcVariant{}, s.Variants...)
 		servers = append(servers, cp)
 	}
 	checks := map[string]olcCheck{}
@@ -426,7 +426,10 @@ func (o *olcState) snapshot() map[string]any {
 		cp.Tries = append([]olcTry(nil), o.job.Tries...)
 		job = &cp
 	}
-	return map[string]any{"auto": o.st.Auto, "servers": servers, "events": append([]olcEvent(nil), o.st.Events...), "checks": checks, "job": job,
+	if job != nil && job.Tries == nil {
+		job.Tries = []olcTry{}
+	}
+	return map[string]any{"auto": o.st.Auto, "servers": servers, "events": append([]olcEvent{}, o.st.Events...), "checks": checks, "job": job,
 		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports}
 }
 

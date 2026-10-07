@@ -43,8 +43,8 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   const pull = useCallback(async () => {
     try {
       const [r, p] = await Promise.all([core.olcrtc(), mihomo.providerProxies("olcrtc").catch(() => ({ proxies: [] }))]);
-      setRep(r);
-      setCfg(p.proxies as NodeCfg[]);
+      setRep({ ...r, servers: (r.servers || []).map((x) => ({ ...x, variants: x.variants || [] })), events: r.events || [], checks: r.checks || {}, instances: r.instances || [], transports: r.transports || [] });
+      setCfg((p.proxies || []) as NodeCfg[]);
       setErr("");
     } catch (e) {
       setErr(errText(e));
@@ -64,7 +64,8 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
     setBusy(key);
     setErr("");
     try {
-      setRep(await core.olcrtcDo(action, body));
+      const r = await core.olcrtcDo(action, body);
+      setRep({ ...r, servers: (r.servers || []).map((x) => ({ ...x, variants: x.variants || [] })), events: r.events || [], checks: r.checks || {}, instances: r.instances || [], transports: r.transports || [] });
       await onReload();
       void pull();
     } catch (e) {
@@ -256,7 +257,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                       <span>{e.text}</span>
                     </div>
                   ))}
-                  {!rep?.events.length ? <p className="mh-muted">Пока ничего — события появятся здесь.</p> : null}
+                  {!rep?.events?.length ? <p className="mh-muted">Пока ничего — события появятся здесь.</p> : null}
                 </div>
               </section>
             </aside>
@@ -421,7 +422,7 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                   <span className={job.waiting ? "is-warn" : job.done && job.ok ? "is-ok" : job.done ? "is-bad" : ""} style={{ width: `${(doneSteps / job.steps.length) * 100}%` }} />
                 </div>
                 <div className="ol-steplist">
-                  {job.steps.map((s, i) => (
+                  {(job.steps || []).map((s, i) => (
                     <div key={s.id} className={`ol-step is-${s.status}`}>
                       <button type="button" className="ol-step-head" onClick={() => setOpen(open === s.id ? "" : s.id)} aria-expanded={open === s.id}>
                         <span className="ol-mark">{STEP_MARK[s.status] || i + 1}</span>
@@ -447,9 +448,9 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                           </button>
                         </div>
                       ) : null}
-                      {s.id === "pick" && job.tries.length && (s.status !== "wait" || open === s.id) ? (
+                      {s.id === "pick" && (job.tries || []).length && (s.status !== "wait" || open === s.id) ? (
                         <div className="ol-tries">
-                          {job.tries.map((t) => (
+                          {(job.tries || []).map((t) => (
                             <div key={t.label} className={`is-${t.state}`}>
                               <i className={`nx-dot ${t.state === "ok" ? "nx-ok" : t.state === "fail" ? "nx-reset" : t.state === "run" ? "nx-out" : ""}`} />
                               <span className="mono truncate">{t.label}</span>
