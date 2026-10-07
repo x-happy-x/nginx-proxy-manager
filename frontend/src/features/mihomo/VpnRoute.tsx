@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlagText } from "../../components/ui/Flag";
 import { PageHeader, type PageKey } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { analyzeTarget } from "../../api";
@@ -361,9 +362,9 @@ export function VpnRoute({ onNavigate }: { onNavigate: (p: PageKey) => void }) {
               <div key={m.name} className={`vr-member${m.now ? " is-now" : ""}`}>
                 <span className="vr-rule-no">{k + 1}</span>
                 <span className="vn-card-name">
-                  <b>{m.name === "DIRECT" ? "напрямую" : m.name}</b>
+                  <b>{m.name === "DIRECT" ? "напрямую" : <FlagText text={m.name} />}</b>
                   <small>
-                    {m.group ? `${m.leaf}` : "узел"}
+                    {m.group ? <FlagText text={m.leaf} /> : "узел"}
                     {m.delay == null ? "" : m.delay > 0 ? ` · ${ms(m.delay)}` : " · не отвечает"}
                   </small>
                 </span>

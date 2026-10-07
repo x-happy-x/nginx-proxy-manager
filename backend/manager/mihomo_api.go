@@ -69,6 +69,8 @@ var mihomoAllowed = mihomoRoutes(
 	"PUT /providers/proxies/{}",
 	"GET /providers/proxies/{}/healthcheck",
 	"GET /providers/proxies/{}/{}/healthcheck",
+	"GET /providers/proxies/{}/{}/exit",
+	"GET /proxies/{}/exit",
 	"GET /providers/proxies/{}/proxies",
 	"POST /providers/proxies/{}/proxies",
 	"PUT /providers/proxies/{}/proxies/{}",

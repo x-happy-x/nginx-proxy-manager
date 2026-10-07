@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FlagText } from "../../components/ui/Flag";
 import { PageHeader, useHashTab } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
@@ -252,7 +253,7 @@ export function Connections({ onAnalyze }: { onAnalyze: (host: string) => void }
                             .slice(0, 4)
                             .map(([exit, v]) => (
                               <span key={exit} className="badge">
-                                {exit} · {bytes(v)}
+                                <FlagText text={exit} /> · {bytes(v)}
                               </span>
                             ))}
                         </span>

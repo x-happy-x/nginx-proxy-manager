@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FlagText } from "../../components/ui/Flag";
 import { PageHeader, type PageKey } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
@@ -275,7 +276,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
           Войти в tailnet
         </a>
       ) : (
-        <a className="btn btn-sm" href="#/tailscale">
+        <a className="btn btn-sm" href="#/subs/tailscale">
           Открыть Tailscale
         </a>
       ),
@@ -422,7 +423,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
               <span className="vo-tile-bar">
                 <span className={`vo-fill vo-fill-${t.tone}`} style={{ width: `${Math.max(t.pct ? 3 : 0, t.pct)}%` }} />
               </span>
-              <span className="vo-tile-note">{t.note}</span>
+              <span className="vo-tile-note">{typeof t.note === "string" ? <FlagText text={t.note} /> : t.note}</span>
             </button>
           ))}
         </div>
@@ -508,7 +509,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
                     </span>
                     <span className="vn-card-name" title={`${s.name} — ${pathText(s)}`}>
                       <b>{s.name}</b>
-                      <small>{pathText(s)}</small>
+                      <small><FlagText text={pathText(s)} /></small>
                     </span>
                   </span>
                   <span className="vn-card-foot">
@@ -553,7 +554,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
                     <i className={`vn-dot vn-${it.tone}`} />
                     <span>
                       <b>{it.title}</b>
-                      <small>{it.sub}</small>
+                      <small>{typeof it.sub === "string" ? <FlagText text={it.sub} /> : it.sub}</small>
                       <span className="vo-issue-act">{it.action}</span>
                     </span>
                   </div>

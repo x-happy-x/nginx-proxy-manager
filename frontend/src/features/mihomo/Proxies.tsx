@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlagText } from "../../components/ui/Flag";
 import { PageHeader } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Alert, EmptyState } from "../../components/ui/controls";
@@ -138,12 +139,12 @@ function useAllProxies() {
   return { proxies, providers, error, load };
 }
 
-export function TailscalePage() {
+export function TailscalePage({ embedded }: { embedded?: boolean } = {}) {
   const { proxies, error } = useAllProxies();
   const nodes = Object.values(proxies).filter((x) => x.type.toLowerCase() === "tailscale");
   return (
     <div className="stack">
-      <PageHeader page="tailscale" />
+      {embedded ? null : <PageHeader page="subs" />}
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
       {nodes.length ? (
         <TailscaleView nodes={nodes} />
@@ -156,7 +157,7 @@ export function TailscalePage() {
   );
 }
 
-export function OlcrtcPage() {
+export function OlcrtcPage({ embedded }: { embedded?: boolean } = {}) {
   const { proxies, providers, error, load } = useAllProxies();
   const isOlc = (x: MProxy) => x.type.toLowerCase() === "olcrtc";
   const providerList = Object.values(providers).filter((p) => p.vehicleType !== "Compatible");
@@ -166,7 +167,7 @@ export function OlcrtcPage() {
   const groups = Object.values(proxies).filter((p) => GROUP_TYPES.has(p.type) && !p.hidden);
   return (
     <div className="stack">
-      <PageHeader page="olcrtc" />
+      {embedded ? null : <PageHeader page="subs" />}
       {error ? <Alert tone="danger" title="Нет данных от mihomo">{error}</Alert> : null}
       <OlcrtcView providers={olcProviders} proxies={proxies} groups={groups} onReload={load} />
     </div>
@@ -213,7 +214,7 @@ export function GroupCard({
             {g.fixed ? <span className="badge badge-warning" title="Узел закреплён вручную">закреплён</span> : null}
           </span>
           <span className="mh-ghead-now">
-            {g.now ? `→ ${g.now}` : "узел не выбран"} · {number((g.all || []).length)}
+            {g.now ? <>→ <FlagText text={g.now} /></> : "узел не выбран"} · {number((g.all || []).length)}
           </span>
         </button>
         <span className="mh-ghead-side">

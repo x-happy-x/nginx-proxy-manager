@@ -76,7 +76,7 @@ import { errText } from "./lib/format";
 import { MihomoProvider } from "./features/mihomo/context";
 import { CoreGate } from "./features/mihomo/shared";
 import { TopbarCore } from "./features/mihomo/TopbarCore";
-import { OlcrtcPage, Proxies, TailscalePage } from "./features/mihomo/Proxies";
+import { Proxies } from "./features/mihomo/Proxies";
 import { Checks } from "./features/mihomo/Checks";
 import { Connections } from "./features/mihomo/Connections";
 import { Rules } from "./features/mihomo/Rules";
@@ -643,8 +643,6 @@ export default function App({ onPortal }: { onPortal?: () => void } = {}) {
           {page === "vpn" ? <CoreGate><VpnOverview onNavigate={navigate} /></CoreGate> : null}
           {page === "vpnsvc" ? <CoreGate><VpnServices onNavigate={navigate} /></CoreGate> : null}
           {page === "subs" ? <CoreGate><Subscriptions /></CoreGate> : null}
-          {page === "tailscale" ? <CoreGate><TailscalePage /></CoreGate> : null}
-          {page === "olcrtc" ? <CoreGate><OlcrtcPage /></CoreGate> : null}
           {page === "vroute" ? <CoreGate><VpnRoute onNavigate={navigate} /></CoreGate> : null}
           {page === "why" ? <CoreGate><Why onNodes={() => navigate("proxies")} /></CoreGate> : null}
           {page === "releases" ? <Releases /> : null}
