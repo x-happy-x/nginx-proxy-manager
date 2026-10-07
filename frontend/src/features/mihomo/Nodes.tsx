@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "../../components/ui/Icon";
+import { Flag, FlagText, NodeName, useFlagMode } from "../../components/ui/Flag";
+import { countryName, nodeCC } from "../../lib/flags";
 import { errText, number } from "../../lib/format";
 import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeMeta } from "./api";
 import { useMihomo } from "./context";
@@ -124,6 +126,7 @@ export function Nodes({
   orderButton?: ReactNode;
 }) {
   const { act } = useMihomo();
+  const [flagMode] = useFlagMode();
   const [view, setView] = useStored<View>("homenet.nodes.view", "groups", (v): v is View => VIEWS.some(([k]) => k === v));
   const [sort, setSort] = useStored<Sort>("homenet.nodes.sort", "delay", (v): v is Sort => v === "delay" || v === "name");
   const [hideSilent, setHideSilent] = useStored<boolean>("homenet.mihomo.hideDead", false, isBool);
@@ -328,8 +331,9 @@ export function Nodes({
               {list.slice(0, 400).map((r) => (
                 <button key={r.name} type="button" className={`nx-tile nx-t-${r.state}${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)} title={r.note}>
                   <span className="nx-tile-top">
-                    {r.country ? <span className="nx-cc">{r.country}</span> : null}
-                    <b className="truncate">{r.name}</b>
+                    <b className="nx-tile-name">
+                      <NodeName name={r.name} cc={nodeCC(r.name, r.country, flagMode)} />
+                    </b>
                   </span>
                   <span className="nx-tile-foot">
                     <Pill state={r.state} />
@@ -361,13 +365,13 @@ export function Nodes({
                 <button key={r.name} type="button" role="row" className={`nx-row${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)}>
                   <span className="nx-name" role="cell">
                     <i className={`nx-dot nx-${r.state}`} />
-                    <span className="truncate">{r.name}</span>
+                    <NodeName name={r.name} cc={nodeCC(r.name, r.country, flagMode)} />
                   </span>
                   <span role="cell" className="nx-hm truncate">
                     {r.provider || "свой узел"}
                   </span>
-                  <span role="cell" className="mono">
-                    {r.country || "—"}
+                  <span role="cell" className="nx-exit">
+                    {r.country ? <Flag cc={r.country} /> : null} {r.country ? countryName(r.country) : "—"}
                   </span>
                   <span role="cell" className="mono">
                     {ms(r.delay)}
@@ -405,7 +409,7 @@ export function Nodes({
                       {(unfolded[key] ? nodes : nodes.slice(0, 12)).map((r) => (
                         <button key={r.name} type="button" className={`vn-chip nx-schip${selNode?.name === r.name ? " is-on" : ""}`} onClick={() => openNode(r.name)}>
                           <i className={`nx-dot nx-${r.state}`} />
-                          {r.name}
+                          <NodeName name={r.name} cc={nodeCC(r.name, r.country, flagMode)} />
                           <span className="vs-count">{r.delay && r.delay > 0 ? ms(r.delay) : ""}</span>
                         </button>
                       ))}
@@ -500,7 +504,7 @@ function GroupPanel({
       <div className="nx-pan-head">
         <span className="vn-eyebrow">Группа · {TYPE_LABEL[g.type] || g.type}</span>
         <b>{g.name}</b>
-        <small>сейчас {leaf === "DIRECT" ? "напрямую" : leaf}</small>
+        <small>сейчас {leaf === "DIRECT" ? "напрямую" : <FlagText text={leaf} />}</small>
       </div>
       <div className="nx-stats">
         <div>
@@ -537,8 +541,8 @@ function GroupPanel({
               <button type="button" className="nx-top-name" onClick={() => onOpen(sub || n)} title="Подробнее об узле">
                 <i className={`nx-dot nx-${stateOf(n)}`} />
                 <span className="truncate">
-                  {n}
-                  {sub ? <small className="nx-sub"> · {sub === "DIRECT" ? "напрямую" : sub}</small> : null}
+                  <FlagText text={n} />
+                  {sub ? <small className="nx-sub"> · {sub === "DIRECT" ? "напрямую" : <FlagText text={sub} />}</small> : null}
                 </span>
                 <span className="mono">{ms(delayOf(n))}</span>
               </button>
@@ -591,7 +595,9 @@ function NodePanel({
       <div className="nx-pan-head nx-pan-head-row">
         <span>
           <span className="vn-eyebrow">Узел{r.provider ? ` · ${r.provider}` : ""}</span>
-          <b>{r.name}</b>
+          <b>
+            <NodeName name={r.name} />
+          </b>
           <small>{r.note}</small>
         </span>
         <button type="button" className="btn btn-sm btn-icon" aria-label="Закрыть" onClick={onClose}>
@@ -618,7 +624,7 @@ function NodePanel({
           </>
         ) : null}
         <dt>Выход</dt>
-        <dd>{r.country ? `${r.country} · проверено по факту` : "не проверялся"}</dd>
+        <dd>{r.country ? <span className="node-name"><Flag cc={r.country} /> {countryName(r.country)} · проверено по факту</span> : "не проверялся"}</dd>
         <dt>Сервер</dt>
         <dd className="mono truncate">{r.meta?.server ? `${r.meta.server}${r.meta.port ? `:${r.meta.port}` : ""}` : "—"}</dd>
         <dt>SNI</dt>

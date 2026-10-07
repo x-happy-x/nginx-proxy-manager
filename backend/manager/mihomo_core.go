@@ -629,6 +629,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleCoreGroups(w, r)
 	case "/api/core/olcrtc":
 		a.handleOlcrtcGet(w)
+	case "/api/core/exits":
+		a.handleExitsGet(w)
 	case "/api/core/traffic":
 		a.handleCoreTraffic(w, r)
 	case "/api/core/traffic/bypass":
@@ -683,6 +685,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.handleBypassLimit(w, r)
 	case "/api/core/olcrtc/setup", "/api/core/olcrtc/repick", "/api/core/olcrtc/resume", "/api/core/olcrtc/auto", "/api/core/olcrtc/check", "/api/core/olcrtc/main", "/api/core/olcrtc/remove":
 		a.handleOlcrtcPost(w, r)
+	case "/api/core/exits/check":
+		a.handleExitsCheck(w, r)
 	case "/api/core/services/check":
 		a.handleServices(w, r)
 	case "/api/core/services/config":

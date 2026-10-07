@@ -1529,3 +1529,10 @@ body:has(.overlay) .toasts {
     gap: 2px;
   }
 }
+
+/* NPM-59: country flags as pictures — Windows draws flag emoji as letters */
+.flag { display: inline-block; width: 20px; height: 15px; flex: none; border-radius: 3px; object-fit: cover; vertical-align: -2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent); background: var(--surface-2); }
+.flag-code { width: auto; min-width: 20px; padding: 0 3px; box-sizing: border-box; font: 600 10px/15px var(--font-mono); text-align: center; color: var(--text-2); }
+.flag-none { box-shadow: none; border: 1px dashed var(--border-strong); box-sizing: border-box; }
+.node-name { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; }
+.node-name > .truncate { min-width: 0; }

@@ -401,6 +401,10 @@ export const mihomo = {
   upgrade: (channel: "release" | "alpha" | "auto") => call<unknown>(m(channel === "auto" ? "/upgrade" : `/upgrade?channel=${channel}`), json("POST")),
 };
 
+/** Where a node exits for the internet, asked through it (NPM-59, core /exit of MIHOMO-16). */
+export type ExitRecord = { provider?: string; cc?: string; country?: string; city?: string; ip?: string; isp?: string; as?: string; source?: string; ms?: number; t: number; ok: boolean; err?: string; seen: number };
+export type ExitsReport = { running?: boolean; done?: number; total?: number; reason?: string; started?: number; last_full?: number; nodes: Record<string, ExitRecord> };
+
 export const core = {
   status: () => call<{ status: CoreStatus }>("/api/core/status").then((r) => r.status),
   devices: () => call<{ devices: CoreDevice[]; warning?: string }>("/api/core/devices"),
@@ -428,6 +432,8 @@ export const core = {
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
   resetTraffic: () => call<unknown>("/api/core/traffic/reset", json("POST", {})),
   olcrtc: () => call<OlcReport>("/api/core/olcrtc"),
+  exits: () => call<ExitsReport>("/api/core/exits"),
+  exitsCheck: (body: { provider?: string; nodes?: string[] }) => call<ExitsReport>("/api/core/exits/check", json("POST", body)),
   olcrtcDo: (action: "setup" | "repick" | "resume" | "auto" | "check" | "main" | "remove", body: Record<string, unknown>) => call<OlcReport>(`/api/core/olcrtc/${action}`, json("POST", body)),
   installPlan: (xkeen: boolean) => call<{ plan: InstallPlan }>(`/api/core/install/plan${xkeen ? "?xkeen=1" : ""}`).then((r) => r.plan),
   install: (req: { subscription_url: string; provider: string; adaptive: boolean; xkeen: boolean }) =>

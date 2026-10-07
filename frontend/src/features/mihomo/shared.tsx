@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FlagText } from "../../components/ui/Flag";
 import { bytes } from "../../lib/format";
 import type { MProxy } from "./api";
 import { useMihomo } from "./context";
@@ -122,7 +123,7 @@ export function Chain({ chains }: { chains: string[] }) {
       {ordered.map((c, i) => (
         <span key={i}>
           {i ? <span className="mh-chain-arrow">→</span> : null}
-          {c}
+          <FlagText text={c} />
         </span>
       ))}
     </span>

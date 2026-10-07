@@ -40,6 +40,7 @@ func main() {
 	a.startMihomoTraffic()
 	a.startServiceChecks()
 	a.startOlcrtc()
+	a.startExits()
 
 	a.startMaintenance()
 	host, port := a.readUIBind()
