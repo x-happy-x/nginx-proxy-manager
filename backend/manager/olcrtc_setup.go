@@ -34,13 +34,13 @@ import (
 // Instructions followed: github.com/openlibrecommunity/olcrtc docs/manual.ru.md.
 
 const (
-	olcProvider   = "olcrtc"
-	olcGroup      = "OLCRTC"
-	olcGoVersion  = "1.26.3"
-	olcRepo       = "https://github.com/openlibrecommunity/olcrtc"
+	olcProvider  = "olcrtc"
+	olcGroup     = "OLCRTC"
+	olcGoVersion = "1.26.3"
+	olcRepo      = "https://github.com/openlibrecommunity/olcrtc"
 	// the olcrtc the router's core embeds (mihomo fork go.mod): builds with
 	// another wire format do not connect, so the server builds this one
-	olcCommit = "92b2332769c3dd5000584366201572efc448065f"
+	olcCommit     = "92b2332769c3dd5000584366201572efc448065f"
 	olcDir        = "/opt/olcrtc"
 	olcCheckURL   = "https://www.gstatic.com/generate_204"
 	olcKeepMax    = 3
@@ -54,7 +54,7 @@ var olcInstances = []string{
 	"meet.mirox.chat", "webinar.knomary.dev", "meet.playform.ru", "webinar.devknomarylms.ru", "zgn-y-vc01.zignotch.com",
 	"conf.expressmoney.com", "m.catonmoon.com", "conf.hyperia.space", "jitsi.etudevs.ru", "meet.riddlerx.org",
 }
-var olcTransports = []string{"datachannel", "vp8channel", "seichannel"}
+var olcTransports = []string{"datachannel", "vp8channel", "seichannel", "videochannel"}
 
 type olcVariant struct {
 	Provider  string `json:"provider,omitempty"` // jitsi | telemost | wbstream; empty — jitsi
@@ -518,9 +518,9 @@ type olcRoomReq struct {
 // What works where, from olcrtc's docs/settings.ru.md: Telemost dropped the
 // data channel, WB Stream's guests cannot publish data.
 var olcProviderTransports = map[string][]string{
-	"jitsi":    {"datachannel", "vp8channel", "seichannel"},
-	"telemost": {"vp8channel"},
-	"wbstream": {"vp8channel", "seichannel"},
+	"jitsi":    {"datachannel", "vp8channel", "seichannel", "videochannel"},
+	"telemost": {"vp8channel", "videochannel"},
+	"wbstream": {"vp8channel", "seichannel", "videochannel"},
 }
 
 // olcProviderHost is the address the router must reach directly for a provider.
@@ -582,6 +582,9 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 		}
 		if srv == nil {
 			return nil, errors.New("сервера нет в списке")
+		}
+		if req.Mode == "whitelist" || req.Mode == "normal" {
+			srv.Mode = req.Mode
 		}
 	} else {
 		req.Host = strings.TrimSpace(req.Host)
@@ -751,6 +754,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 	}
 
 	migrate := false
+	installed := false
 	var found []olcFound
 	if err := o.do(j, "existing", func() (string, error) {
 		out, err := x.root(olcExistingCmd, 40*time.Second)
@@ -760,6 +764,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		}
 		var own []string
 		found, own = parseOlcExisting(out)
+		installed = olcInstalled(out)
 		if nodes, err := olcNodes(); err == nil {
 			for i := range found {
 				for _, n := range nodes {
@@ -834,7 +839,32 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		o.mu.Unlock()
 	}
 
-	if j.Kind == "setup" {
+	if j.Kind == "repick" && !installed {
+		o.finish(j, false, "на сервере нет olcrtc от HomeNet нужной версии — один раз запустите полную настройку, дальше варианты меняются без неё")
+		return
+	}
+	if j.Kind == "setup" && installed && !migrate {
+		for _, id := range []string{"swap", "packages", "go", "source", "build", "service"} {
+			o.set(j, id, func(s *olcStep) {
+				s.Status, s.Detail = "skip", "уже установлено, версия совпадает с ядром роутера"
+			})
+		}
+		if err := o.do(j, "key", func() (string, error) {
+			out, err := x.root("cat "+olcDir+"/olcrtc.key", 20*time.Second)
+			key := strings.TrimSpace(out)
+			if err != nil || !olcKeyRe.MatchString(key) || len(key) != 64 {
+				return "", errors.New("не удалось прочитать ключ на сервере")
+			}
+			o.mu.Lock()
+			srv.Key = key
+			o.saveLocked()
+			o.mu.Unlock()
+			return "ключ уже есть на сервере", nil
+		}); err != nil {
+			o.finish(j, false, err.Error())
+			return
+		}
+	} else if j.Kind == "setup" {
 		// build needs ~4 GB: memory and swap together
 		if memMB+swapMB < 3500 {
 			o.set(j, "swap", func(s *olcStep) {
@@ -938,6 +968,14 @@ WantedBy=multi-user.target
 	}
 	if migrate {
 		o.migrate(j, x, srv)
+	}
+	if srv.Key == "" && installed {
+		if out, err := x.root("cat "+olcDir+"/olcrtc.key", 20*time.Second); err == nil && len(strings.TrimSpace(out)) == 64 {
+			o.mu.Lock()
+			srv.Key = strings.TrimSpace(out)
+			o.saveLocked()
+			o.mu.Unlock()
+		}
 	}
 	if srv.Key == "" {
 		o.finish(j, false, "у сервера нет ключа — настройте его заново")
@@ -1499,7 +1537,7 @@ func (a *app) handleOlcrtcPost(w http.ResponseWriter, r *http.Request) {
 
 // What may already run on the server: HomeNet's own install and olcrtc's
 // srv.sh containers with the config each one runs from.
-const olcExistingCmd = `echo "HOMENET:"; for f in /opt/olcrtc/olcrtc /opt/olcrtc/olcrtc.key; do [ -e "$f" ] && echo "F $f"; done
+const olcExistingCmd = `echo "HOMENET:"; for f in /opt/olcrtc/olcrtc /opt/olcrtc/olcrtc.key /etc/systemd/system/olcrtc@.service; do [ -e "$f" ] && echo "F $f"; done; [ -s /opt/olcrtc/.built ] && echo "B $(cat /opt/olcrtc/.built)"
 systemctl list-units --all 'olcrtc@*' --no-legend --plain 2>/dev/null | awk '{print "U", $1, $3}'
 echo "PODMAN:"
 if command -v podman >/dev/null; then for c in $(podman ps -a --filter name=olcrtc --format '{{.Names}}'); do
@@ -1510,6 +1548,18 @@ echo "END"`
 var olcKeyRe = regexp.MustCompile(`[0-9a-f]{64}`)
 
 func olcMaskKeys(s string) string { return olcKeyRe.ReplaceAllString(s, "<ключ>") }
+
+// olcInstalled: HomeNet's own olcrtc is there, built from the version the router embeds.
+func olcInstalled(out string) bool {
+	has := func(p string) bool { return strings.Contains(out, "F "+p+"\n") || strings.HasSuffix(out, "F "+p) }
+	built := ""
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "B ") {
+			built = strings.TrimSpace(l[2:])
+		}
+	}
+	return has("/opt/olcrtc/olcrtc") && has("/opt/olcrtc/olcrtc.key") && has("/etc/systemd/system/olcrtc@.service") && built != "" && strings.HasPrefix(olcCommit, built)
+}
 
 func parseOlcExisting(out string) ([]olcFound, []string) {
 	var found []olcFound
@@ -1543,6 +1593,10 @@ func parseOlcExisting(out string) ([]olcFound, []string) {
 		switch {
 		case strings.HasPrefix(line, "F /opt/olcrtc/olcrtc.key"):
 			own = append(own, "ключ")
+		case strings.HasPrefix(line, "F /etc/systemd/system/olcrtc@.service"):
+			own = append(own, "служба olcrtc@")
+		case strings.HasPrefix(line, "B "):
+			own = append(own, "версия "+strings.TrimSpace(line[2:]))
 		case strings.HasPrefix(line, "F /opt/olcrtc/olcrtc"):
 			own = append(own, "olcrtc собран")
 		case strings.HasPrefix(line, "U "):

@@ -93,3 +93,16 @@ func TestOlcRoomsOfOtherServices(t *testing.T) {
 		t.Fatal("provider host")
 	}
 }
+
+func TestOlcInstalledNeedsTheRoutersVersion(t *testing.T) {
+	full := "HOMENET:\nF /opt/olcrtc/olcrtc\nF /opt/olcrtc/olcrtc.key\nF /etc/systemd/system/olcrtc@.service\nB " + olcCommit[:7] + "\nPODMAN:\nEND"
+	if !olcInstalled(full) {
+		t.Fatal("full install not seen")
+	}
+	if olcInstalled(strings.Replace(full, "B "+olcCommit[:7], "B 1234567", 1)) {
+		t.Fatal("another olcrtc version taken as installed")
+	}
+	if olcInstalled(strings.Replace(full, "F /etc/systemd/system/olcrtc@.service\n", "", 1)) {
+		t.Fatal("install without the service taken as complete")
+	}
+}

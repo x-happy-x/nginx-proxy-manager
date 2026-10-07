@@ -39,6 +39,8 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
+  const [preset, setPreset] = useState<Preset | null>(null);
+  const [reconf, setReconf] = useState("");
 
   const pull = useCallback(async () => {
     try {
@@ -57,8 +59,8 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
     return () => clearInterval(t);
   }, [pull, running]);
   useEffect(() => {
-    if (running) setTab("setup");
-  }, [running]);
+    if (running && rep?.job?.kind === "setup") setTab("setup");
+  }, [running, rep?.job?.kind]);
 
   const act = async (action: Parameters<typeof core.olcrtcDo>[0], body: Record<string, unknown>, key: string = action) => {
     setBusy(key);
@@ -218,8 +220,20 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
               <div className="nx-actions">
                 {cur && cur.id !== NO_SERVER ? (
                   <>
-                    <button type="button" className="btn" disabled={running || busy === "repick"} onClick={() => void act("repick", { id: cur.id }, "repick").then(() => setTab("setup"))}>
-                      <Icon name="refresh" size={14} /> Подобрать варианты заново
+                    <button type="button" className={`btn${reconf === cur.id ? " btn-primary" : ""}`} aria-expanded={reconf === cur.id} onClick={() => setReconf(reconf === cur.id ? "" : cur.id)}>
+                      <Icon name="edit" size={14} /> Изменить варианты
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={running}
+                      onClick={() => {
+                        const sv = (rep?.servers || []).find((x) => x.id === cur.id);
+                        if (sv) setPreset({ name: sv.name, host: sv.host, port: sv.port, user: sv.user, mode: sv.mode });
+                        setTab("setup");
+                      }}
+                    >
+                      Переустановить
                     </button>
                     <button
                       type="button"
@@ -238,6 +252,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
                   </button>
                 )}
               </div>
+              {cur && reconf === cur.id ? <Reconfigure key={cur.id} server={(rep?.servers || []).find((x) => x.id === cur.id)!} rep={rep} busy={busy} act={act} /> : null}
               {editing ? <OlcrtcTab providers={providers.filter((p) => p.proxies.some((x) => x.type.toLowerCase() === "olcrtc"))} standalone={Object.values(proxies).filter((x) => x.type.toLowerCase() === "olcrtc" && !olcNodes.includes(x.name))} groups={groups} onReload={async () => (await onReload(), await pull())} prefs={prefs} /> : null}
             </section>
 
@@ -268,7 +283,7 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
           </div>
         </>
       ) : (
-        <Setup rep={rep} busy={busy} act={act} />
+        <Setup rep={rep} busy={busy} act={act} preset={preset} />
       )}
     </div>
   );
@@ -284,9 +299,9 @@ const ROOM_KINDS: Array<{ id: string; label: string; note: string; site: string;
     note: "в белом списке; комнату создаёте вы",
     site: "https://telemost.yandex.ru/",
     hint: "https://telemost.yandex.ru/j/…",
-    transports: ["vp8channel"],
+    transports: ["vp8channel", "videochannel"],
     steps: ["Откройте telemost.yandex.ru и войдите в Яндекс ID.", "«Создать видеовстречу» и скопируйте ссылку вида https://telemost.yandex.ru/j/…", "Вставьте ссылку ниже. Вкладку со встречей можно закрыть — сервер зайдёт в неё сам."],
-    transportNote: "Только vp8channel: datachannel Телемост убрал, seichannel не поддерживает, videochannel слишком медленный.",
+    transportNote: "vp8channel — стабильный; videochannel — самый медленный, запасной. datachannel Телемост убрал, seichannel не поддерживает.",
   },
   {
     id: "wbstream",
@@ -294,9 +309,9 @@ const ROOM_KINDS: Array<{ id: string; label: string; note: string; site: string;
     note: "комнату создаёте вы на stream.wb.ru",
     site: "https://stream.wb.ru/",
     hint: "ссылка на комнату или её ID",
-    transports: ["vp8channel", "seichannel"],
+    transports: ["vp8channel", "seichannel", "videochannel"],
     steps: ["Откройте stream.wb.ru и войдите.", "Создайте комнату и скопируйте её ссылку или ID.", "Вставьте ниже и выберите транспорт."],
-    transportNote: "vp8channel — рекомендуется; seichannel медленнее, но с меньшим пингом. datachannel у гостей WB Stream не передаёт данные, поэтому его нет.",
+    transportNote: "vp8channel — рекомендуется; seichannel медленнее, но с меньшим пингом; videochannel — самый медленный, запасной. datachannel у гостей WB Stream не передаёт данные, поэтому его нет.",
   },
   {
     id: "jitsi",
@@ -304,125 +319,48 @@ const ROOM_KINDS: Array<{ id: string; label: string; note: string; site: string;
     note: "любой Jitsi Meet, которого нет в списке",
     site: "",
     hint: "https://ваш-jitsi/имя-комнаты",
-    transports: ["datachannel", "vp8channel", "seichannel"],
+    transports: ["datachannel", "vp8channel", "seichannel", "videochannel"],
     steps: ["Укажите адрес Jitsi Meet и любое имя комнаты: https://host/имя.", "Проверьте, что адрес открывается из дома без VPN — иначе вариант не пройдёт проверку."],
     transportNote: "datachannel — самый быстрый; vp8channel и seichannel — если datachannel на этом Jitsi не идёт.",
   },
 ];
 type RoomRow = { provider: string; room: string; transport: string };
 
-function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (a: Parameters<typeof core.olcrtcDo>[0], b: Record<string, unknown>, k?: string) => Promise<void> }) {
-  const [mode, setMode] = useState<Mode>("auto");
-  const [auth, setAuth] = useState<"key" | "pass">("key");
-  const [form, setForm] = useState({ name: "", host: "", port: "22", user: "root", password: "" });
+type Act = (a: Parameters<typeof core.olcrtcDo>[0], b: Record<string, unknown>, k?: string) => Promise<void>;
+export type Preset = { name: string; host: string; port: number; user: string; mode?: "whitelist" | "normal" };
+
+/** The variants to pick: shared by a new server's setup and «Изменить варианты». */
+function useVariants(rep: OlcReport | null, initialMode: "whitelist" | "normal" = "whitelist") {
   const [inst, setInst] = useState<Record<string, boolean>>({});
   const [tr, setTr] = useState<Record<string, boolean>>({ datachannel: true, vp8channel: true });
   const [keep, setKeep] = useState(2);
-  const [mode2, setMode2] = useState<"whitelist" | "normal">("whitelist");
+  const [mode2, setMode2] = useState<"whitelist" | "normal">(initialMode);
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [openGroup, setOpenGroup] = useState("jitsi");
   const kindOf = (id: string) => ROOM_KINDS.find((k) => k.id === id) || ROOM_KINDS[0];
   const setRoom = (i: number, patch: Partial<RoomRow>) => setRooms(rooms.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   const wlNow = rep?.channel === "whitelist";
   useEffect(() => setKeep(mode2 === "whitelist" && !wlNow ? 3 : 2), [mode2, wlNow]);
-  const [open, setOpen] = useState<string>("");
-  const [copied, setCopied] = useState("");
   const instances = rep?.instances || [];
   useEffect(() => {
     if (instances.length && !Object.keys(inst).length) setInst(Object.fromEntries(instances.slice(0, 6).map((i) => [i, true])));
   }, [instances, inst]);
-  const job: OlcJob | null | undefined = rep?.job;
   const jitsiCount = instances.filter((i) => inst[i]).length;
   const jitsiTr = (rep?.transports || []).filter((t) => tr[t]);
-  const copy = (key: string, text: string) => {
-    void navigator.clipboard?.writeText(text).then(() => setCopied(key));
-  };
-  const start = () =>
-    void act(
-      "setup",
-      {
-        name: form.name,
-        host: form.host,
-        port: Number(form.port) || 22,
-        user: form.user,
-        password: auth === "pass" ? form.password : "",
-        instances: instances.filter((i) => inst[i]),
-        transports: (rep?.transports || []).filter((t) => tr[t]),
-        keep,
-        mode: mode2,
-        rooms: rooms.filter((r) => r.room.trim()),
-      },
-      "setup",
-    ).then(() => setForm((f) => ({ ...f, password: "" })));
-  const doneSteps = job ? job.steps.filter((s) => s.status === "ok" || s.status === "skip").length : 0;
-  const serverName = (rep?.servers || []).find((s) => s.id === job?.server)?.name;
+  const body = () => ({
+    instances: instances.filter((i) => inst[i]),
+    transports: (rep?.transports || []).filter((t) => tr[t]),
+    keep,
+    mode: mode2,
+    rooms: rooms.filter((r) => r.room.trim()),
+  });
+  return { inst, setInst, tr, setTr, keep, setKeep, mode2, setMode2, rooms, setRooms, openGroup, setOpenGroup, kindOf, setRoom, wlNow, instances, jitsiCount, jitsiTr, body };
+}
 
+function VariantPicker({ v, rep }: { v: ReturnType<typeof useVariants>; rep: OlcReport | null }) {
+  const { inst, setInst, tr, setTr, keep, setKeep, mode2, setMode2, rooms, setRooms, openGroup, setOpenGroup, kindOf, setRoom, wlNow, instances, jitsiCount, jitsiTr } = v;
   return (
-    <div className="stack">
-      <div className="ol-modebar">
-        <div className="nx-views" role="group" aria-label="Способ">
-          <button type="button" className={mode === "auto" ? "is-on" : ""} aria-pressed={mode === "auto"} onClick={() => setMode("auto")}>
-            Автоматически по SSH
-          </button>
-          <button type="button" className={mode === "manual" ? "is-on" : ""} aria-pressed={mode === "manual"} onClick={() => setMode("manual")}>
-            Вручную
-          </button>
-        </div>
-        <small className="mh-muted">Нужен VPS вне России с Debian, Ubuntu, Fedora или Arch и systemd: 1 ядро, от 1 ГБ памяти (меньше 4 ГБ — добавим swap).</small>
-      </div>
-
-      {mode === "auto" ? (
-        <div className="ol-layout">
-          <section className="vo-panel ol-form" aria-label="Сервер">
-            <span className="vn-eyebrow">Сервер</span>
-            <label className="su-field">
-              <span>Название</span>
-              <input className="input" placeholder="например, VPS Хельсинки" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </label>
-            <div className="ol-addr">
-              <label className="su-field">
-                <span>Адрес</span>
-                <input className="input mono" placeholder="203.0.113.40" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
-              </label>
-              <label className="su-field">
-                <span>Порт</span>
-                <input className="input mono" inputMode="numeric" value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} />
-              </label>
-            </div>
-            <label className="su-field">
-              <span>Пользователь</span>
-              <input className="input mono" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} />
-            </label>
-            <span className="su-field">
-              <span>Вход</span>
-            </span>
-            <div className="nx-views ol-auth" role="group" aria-label="Вход">
-              <button type="button" className={auth === "key" ? "is-on" : ""} aria-pressed={auth === "key"} onClick={() => setAuth("key")}>
-                Ключ HomeNet
-              </button>
-              <button type="button" className={auth === "pass" ? "is-on" : ""} aria-pressed={auth === "pass"} onClick={() => setAuth("pass")}>
-                Пароль один раз
-              </button>
-            </div>
-            {auth === "key" ? (
-              <div className="su-field">
-                <span>
-                  Добавьте ключ на сервер в <span className="mono">~/.ssh/authorized_keys</span>:
-                </span>
-                <div className="ol-code">
-                  <pre>{rep?.pubkey || "…"}</pre>
-                  <button type="button" className="btn btn-sm" disabled={!rep?.pubkey} onClick={() => copy("key", rep?.pubkey || "")}>
-                    {copied === "key" ? "Скопировано" : "Копировать"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <label className="su-field">
-                <span>Пароль</span>
-                <input className="input" type="password" autoComplete="off" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                <small className="mh-muted">Нужен один раз: HomeNet войдёт и положит на сервер свой ключ. Пароль нигде не сохраняется.</small>
-              </label>
-            )}
+    <>
             <span className="vn-eyebrow">Для какого случая</span>
             <div className="ol-modes" role="radiogroup" aria-label="Режим">
               <button type="button" role="radio" aria-checked={mode2 === "whitelist"} className={`ol-mode${mode2 === "whitelist" ? " is-on" : ""}`} onClick={() => setMode2("whitelist")}>
@@ -486,7 +424,7 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                         </button>
                       ))}
                     </span>
-                    <small className="mh-muted">datachannel — самый быстрый и рекомендуемый. Сначала пробуется первый выбранный транспорт на всех площадках, потом следующий.</small>
+                    <small className="mh-muted">По скорости: datachannel → vp8channel → seichannel → videochannel. Сначала пробуется первый выбранный транспорт на всех площадках, потом следующий.</small>
                   </span>
                   <label className="su-field">
                     <span>Оставить рабочих из этого списка</span>
@@ -561,13 +499,17 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
               })}
             </div>
             <small className="mh-muted">Свои комнаты остаются, если заработали, — в дополнение к подобранным Jitsi.</small>
-            <button type="button" className="btn btn-primary" disabled={!rep || !form.host.trim() || !!job?.running || busy === "setup" || (auth === "pass" && !form.password)} onClick={start}>
-              {job?.running ? "Настраиваю…" : "Начать настройку"}
-            </button>
-          </section>
+    </>
+  );
+}
 
-          <section className="ol-steps" aria-label="Шаги настройки">
-            {job ? (
+/** One job: its steps, decisions, tries and the whole log folded under them. */
+function JobView({ job, rep, busy, act }: { job: OlcJob; rep: OlcReport | null; busy: string; act: Act }) {
+  const [open, setOpen] = useState<string>("");
+  const doneSteps = job.steps.filter((s) => s.status === "ok" || s.status === "skip").length;
+  const serverName = (rep?.servers || []).find((s) => s.id === job.server)?.name;
+  const lines = job.steps.flatMap((s) => (s.log || []).map((l) => `[${s.title}] ${l}`));
+  return (
               <div className="vo-panel">
                 <div className="vn-section-head">
                   <h3>
@@ -644,6 +586,12 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                     </div>
                   ))}
                 </div>
+                <details className="ol-log">
+                  <summary>
+                    Журнал настройки <span className="vs-count">{lines.length} строк</span>
+                  </summary>
+                  <pre>{lines.length ? lines.join("\n") : "пока пусто"}</pre>
+                </details>
                 {job.done ? (
                   <div className={`ol-done ${job.ok ? "is-ok" : "is-bad"}`}>
                     <b>{job.ok ? "Связь через свой сервер работает" : "Настройка не закончилась"}</b>
@@ -651,6 +599,115 @@ function Setup({ rep, busy, act }: { rep: OlcReport | null; busy: string; act: (
                   </div>
                 ) : null}
               </div>
+  );
+}
+
+function Setup({ rep, busy, act, preset }: { rep: OlcReport | null; busy: string; act: Act; preset?: Preset | null }) {
+  const [mode, setMode] = useState<Mode>("auto");
+  const [auth, setAuth] = useState<"key" | "pass">("key");
+  const [form, setForm] = useState({ name: "", host: "", port: "22", user: "root", password: "" });
+  const v = useVariants(rep, preset?.mode || "whitelist");
+  useEffect(() => {
+    if (preset) {
+      setForm({ name: preset.name, host: preset.host, port: String(preset.port), user: preset.user, password: "" });
+      v.setMode2(preset.mode || "whitelist");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
+  const [copied, setCopied] = useState("");
+  const job: OlcJob | null | undefined = rep?.job;
+  const copy = (key: string, text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => setCopied(key));
+  };
+  const start = () =>
+    void act(
+      "setup",
+      {
+        name: form.name,
+        host: form.host,
+        port: Number(form.port) || 22,
+        user: form.user,
+        password: auth === "pass" ? form.password : "",
+        ...v.body(),
+      },
+      "setup",
+    ).then(() => setForm((f) => ({ ...f, password: "" })));
+
+  return (
+    <div className="stack">
+      <div className="ol-modebar">
+        <div className="nx-views" role="group" aria-label="Способ">
+          <button type="button" className={mode === "auto" ? "is-on" : ""} aria-pressed={mode === "auto"} onClick={() => setMode("auto")}>
+            Автоматически по SSH
+          </button>
+          <button type="button" className={mode === "manual" ? "is-on" : ""} aria-pressed={mode === "manual"} onClick={() => setMode("manual")}>
+            Вручную
+          </button>
+        </div>
+        <small className="mh-muted">Нужен VPS вне России с Debian, Ubuntu, Fedora или Arch и systemd: 1 ядро, от 1 ГБ памяти (меньше 4 ГБ — добавим swap).</small>
+      </div>
+
+      {mode === "auto" ? (
+        <div className="ol-layout">
+          <section className="vo-panel ol-form" aria-label="Сервер">
+            <span className="vn-eyebrow">Сервер</span>
+            <label className="su-field">
+              <span>Название</span>
+              <input className="input" placeholder="например, VPS Хельсинки" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </label>
+            <div className="ol-addr">
+              <label className="su-field">
+                <span>Адрес</span>
+                <input className="input mono" placeholder="203.0.113.40" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+              </label>
+              <label className="su-field">
+                <span>Порт</span>
+                <input className="input mono" inputMode="numeric" value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} />
+              </label>
+            </div>
+            <label className="su-field">
+              <span>Пользователь</span>
+              <input className="input mono" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} />
+            </label>
+            <span className="su-field">
+              <span>Вход</span>
+            </span>
+            <div className="nx-views ol-auth" role="group" aria-label="Вход">
+              <button type="button" className={auth === "key" ? "is-on" : ""} aria-pressed={auth === "key"} onClick={() => setAuth("key")}>
+                Ключ HomeNet
+              </button>
+              <button type="button" className={auth === "pass" ? "is-on" : ""} aria-pressed={auth === "pass"} onClick={() => setAuth("pass")}>
+                Пароль один раз
+              </button>
+            </div>
+            {auth === "key" ? (
+              <div className="su-field">
+                <span>
+                  Добавьте ключ на сервер в <span className="mono">~/.ssh/authorized_keys</span>:
+                </span>
+                <div className="ol-code">
+                  <pre>{rep?.pubkey || "…"}</pre>
+                  <button type="button" className="btn btn-sm" disabled={!rep?.pubkey} onClick={() => copy("key", rep?.pubkey || "")}>
+                    {copied === "key" ? "Скопировано" : "Копировать"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="su-field">
+                <span>Пароль</span>
+                <input className="input" type="password" autoComplete="off" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <small className="mh-muted">Нужен один раз: HomeNet войдёт и положит на сервер свой ключ. Пароль нигде не сохраняется.</small>
+              </label>
+            )}
+            <VariantPicker v={v} rep={rep} />
+            <button type="button" className="btn btn-primary" disabled={!rep || !form.host.trim() || !!job?.running || busy === "setup" || (auth === "pass" && !form.password)} onClick={start}>
+              {job?.running ? "Настраиваю…" : "Начать настройку"}
+            </button>
+          </section>
+
+          <section className="ol-steps" aria-label="Шаги настройки">
+            {job ? (
+              <JobView job={job} rep={rep} busy={busy} act={act} />
             ) : (
               <div className="vo-panel">
                 <h3>Шаги настройки</h3>
@@ -742,5 +799,24 @@ function Manual() {
         </section>
       </aside>
     </div>
+  );
+}
+
+/** «Изменить варианты» of a server HomeNet has set up: no address, no password, no install — only the pick. */
+function Reconfigure({ server, rep, busy, act }: { server: OlcReport["servers"][number]; rep: OlcReport | null; busy: string; act: Act }) {
+  const v = useVariants(rep, server.mode || "whitelist");
+  const job = rep?.job && rep.job.server === server.id ? rep.job : null;
+  return (
+    <section className="vo-panel ol-reconf" aria-label={`Варианты ${server.name}`}>
+      <div className="vn-section-head">
+        <h3>Изменить варианты · {server.name}</h3>
+        <small className="mh-muted">Без установки: HomeNet зайдёт по SSH, проверит, что olcrtc на месте, и подберёт варианты. Рабочие остаются.</small>
+      </div>
+      <VariantPicker v={v} rep={rep} />
+      <button type="button" className="btn btn-primary" disabled={!!rep?.job?.running || busy === "repick"} onClick={() => void act("repick", { id: server.id, ...v.body() }, "repick")}>
+        {job?.running ? "Подбираю…" : "Подобрать варианты"}
+      </button>
+      {job ? <JobView job={job} rep={rep} busy={busy} act={act} /> : null}
+    </section>
   );
 }
