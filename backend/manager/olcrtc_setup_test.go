@@ -41,3 +41,21 @@ func TestOlcSetupRejectsBadInput(t *testing.T) {
 		t.Fatal("repick of an unknown server accepted")
 	}
 }
+
+func TestParseOlcExistingFindsSrvShContainers(t *testing.T) {
+	key := strings.Repeat("ab", 32)
+	out := "HOMENET:\nF /opt/olcrtc/olcrtc\nU olcrtc@v1-datachannel.service active\nPODMAN:\nC olcrtc-server-x running /tmp/olcrtc-deploy-x\n  mode: srv\n  auth:\n    provider: \"jitsi\"\n  room:\n    id: \"https://meet.example.ru/room-1\"\n  crypto:\n    key: \"" + key + "\"\n  net:\n    transport: \"datachannel\"\nEND"
+	found, own := parseOlcExisting(out)
+	if len(found) != 1 || found[0].Room != "https://meet.example.ru/room-1" || found[0].Transport != "datachannel" || !found[0].InTmp || found[0].key != key {
+		t.Fatalf("found = %+v", found)
+	}
+	if len(own) != 2 {
+		t.Fatalf("own = %v", own)
+	}
+	if !olcSameRoom("meet.example.ru/room-1/", "https://MEET.example.ru/room-1") || olcSameRoom("", "") {
+		t.Fatal("room comparison")
+	}
+	if strings.Contains(olcMaskKeys(out), key) {
+		t.Fatal("key not masked")
+	}
+}

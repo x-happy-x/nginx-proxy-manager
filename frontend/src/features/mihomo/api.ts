@@ -277,12 +277,13 @@ export type ProbeState = { id: string; name: string; what: string; url: string; 
 export type ServicesReport = { checked: number; interval: number; slow_ms: number; services: ServiceState[]; config: ServiceConfig; catalog: ServiceDef[]; probes?: ProbeState[] };
 
 /** OLCRTC servers set up over SSH and the background pick of variants (NPM-56). */
-export type OlcVariant = { node: string; instance: string; transport: string; room: string; unit: string };
+export type OlcVariant = { node: string; instance: string; transport: string; room: string; unit: string; external?: string };
+export type OlcFound = { container: string; status: string; dir: string; provider: string; room: string; transport: string; in_tmp: boolean; node?: string };
 export type OlcServer = { id: string; name: string; host: string; port: number; user: string; arch?: string; variants: OlcVariant[]; created: number };
 export type OlcCheck = { t: number; ok: boolean; ms: number; error?: string };
 export type OlcStep = { id: string; title: string; status: "wait" | "run" | "ok" | "fail" | "skip"; detail?: string; log?: string[]; fix?: string; fix_label?: string; ms?: number };
 export type OlcTry = { label: string; state: "wait" | "run" | "ok" | "fail" | "skip"; result?: string };
-export type OlcJob = { id: string; server: string; kind: "setup" | "repick"; running: boolean; done: boolean; ok: boolean; error?: string; waiting?: string; started: number; ended?: number; steps: OlcStep[]; tries: OlcTry[]; result?: OlcCheck[] };
+export type OlcJob = { id: string; server: string; kind: "setup" | "repick"; running: boolean; done: boolean; ok: boolean; error?: string; waiting?: string; started: number; ended?: number; steps: OlcStep[]; tries: OlcTry[]; result?: OlcCheck[]; found?: OlcFound[] };
 export type OlcReport = {
   auto: boolean;
   servers: OlcServer[];

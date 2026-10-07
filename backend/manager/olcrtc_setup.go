@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"gopkg.in/yaml.v3"
 )
 
 // OLCRTC servers (NPM-56). HomeNet sets up the user's own server over SSH:
@@ -58,6 +59,23 @@ type olcVariant struct {
 	Transport string `json:"transport"`
 	Room      string `json:"room"`
 	Unit      string `json:"unit"`
+	// External: a container set up by olcrtc's own srv.sh; HomeNet keeps it
+	// but never stops it. Key: the variant's key when not the server's one.
+	External string `json:"external,omitempty"`
+	Key      string `json:"key,omitempty"`
+}
+
+// olcFound is an olcrtc already running on the server (olcrtc's srv.sh).
+type olcFound struct {
+	Container string `json:"container"`
+	Status    string `json:"status"`
+	Dir       string `json:"dir"`
+	Provider  string `json:"provider"`
+	Room      string `json:"room"`
+	Transport string `json:"transport"`
+	InTmp     bool   `json:"in_tmp"`
+	Node      string `json:"node,omitempty"` // the router's node with the same room
+	key       string
 }
 
 type olcServer struct {
@@ -124,6 +142,7 @@ type olcJob struct {
 	Steps   []*olcStep `json:"steps"`
 	Tries   []olcTry   `json:"tries"`
 	Result  []olcCheck `json:"result,omitempty"`
+	Found   []olcFound `json:"found"`
 	resume  chan string
 }
 
@@ -381,8 +400,9 @@ func (x *olcSSH) run(cmd string, timeout time.Duration) (string, error) {
 		return "", err
 	}
 	defer sess.Close()
-	var out bytes.Buffer
-	sess.Stdout, sess.Stderr = &out, &out
+	// stdout and stderr are copied by two goroutines: one buffer needs a lock
+	out := &lockedBuffer{}
+	sess.Stdout, sess.Stderr = out, out
 	done := make(chan error, 1)
 	go func() { done <- sess.Run("sh -c " + shq(cmd)) }()
 	select {
@@ -392,6 +412,23 @@ func (x *olcSSH) run(cmd string, timeout time.Duration) (string, error) {
 		err = fmt.Errorf("команда не закончилась за %s", timeout)
 	}
 	return strings.TrimSpace(out.String()), err
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 func (x *olcSSH) root(cmd string, timeout time.Duration) (string, error) {
@@ -408,6 +445,9 @@ func (o *olcState) snapshot() map[string]any {
 		cp := *s
 		cp.Key, cp.HostKey = "", ""
 		cp.Variants = append([]olcVariant{}, s.Variants...)
+		for i := range cp.Variants {
+			cp.Variants[i].Key = ""
+		}
 		servers = append(servers, cp)
 	}
 	checks := map[string]olcCheck{}
@@ -424,6 +464,7 @@ func (o *olcState) snapshot() map[string]any {
 			cp.Steps[i] = &c
 		}
 		cp.Tries = append([]olcTry(nil), o.job.Tries...)
+		cp.Found = append([]olcFound{}, o.job.Found...)
 		job = &cp
 	}
 	if job != nil && job.Tries == nil {
@@ -500,7 +541,7 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 		srv.Name, srv.Host, srv.Port, srv.User = name, req.Host, req.Port, req.User
 	}
 	j := &olcJob{ID: randHex(6), Server: srv.ID, Kind: kind, Running: true, Started: time.Now().Unix(), resume: make(chan string, 1)}
-	steps := [][2]string{{"ssh", "SSH-подключение"}, {"check", "Проверка сервера"}}
+	steps := [][2]string{{"ssh", "SSH-подключение"}, {"check", "Проверка сервера"}, {"existing", "Что уже установлено"}}
 	if kind == "setup" {
 		steps = append(steps, [][2]string{{"swap", "Память для сборки"}, {"packages", "git, curl и openssl"}, {"go", "Go " + olcGoVersion}, {"source", "Исходники olcrtc"}, {"build", "Сборка olcrtc"}, {"key", "Ключ шифрования"}, {"service", "Служба olcrtc@"}}...)
 	}
@@ -636,6 +677,90 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		return
 	}
 
+	migrate := false
+	var found []olcFound
+	if err := o.do(j, "existing", func() (string, error) {
+		out, err := x.root(olcExistingCmd, 40*time.Second)
+		o.logf(j, "existing", olcMaskKeys(out))
+		if err != nil {
+			return "", fmt.Errorf("%s: %s", err, olcLast(out))
+		}
+		var own []string
+		found, own = parseOlcExisting(out)
+		if nodes, err := olcNodes(); err == nil {
+			for i := range found {
+				for _, n := range nodes {
+					if olcSameRoom(n.Room, found[i].Room) {
+						found[i].Node = n.Name
+					}
+				}
+			}
+		}
+		o.mu.Lock()
+		j.Found = append([]olcFound{}, found...)
+		o.mu.Unlock()
+		parts := []string{}
+		if len(own) > 0 {
+			parts = append(parts, "прошлая установка HomeNet: "+strings.Join(own, ", "))
+		}
+		for _, f := range found {
+			p := fmt.Sprintf("olcrtc из srv.sh — контейнер %s (%s), %s %s · %s", f.Container, f.Status, f.Provider, olcHost(f.Room), f.Transport)
+			if f.Node != "" {
+				p += " = узел «" + f.Node + "» на роутере"
+			}
+			if f.InTmp {
+				p += "; файлы лежат в /tmp"
+			}
+			parts = append(parts, p)
+		}
+		if len(parts) == 0 {
+			return "ничего не установлено — ставим с нуля", nil
+		}
+		return strings.Join(parts, "; "), nil
+	}); err != nil {
+		o.finish(j, false, err.Error())
+		return
+	}
+	inTmp := false
+	for _, f := range found {
+		inTmp = inTmp || f.InTmp
+	}
+	if j.Kind == "setup" && inTmp {
+		switch o.wait(j, "existing", "migrate", "Перенести в службу HomeNet") {
+		case "cancel":
+			o.finish(j, false, "настройка отменена")
+			return
+		case "fix":
+			migrate = true
+		}
+	}
+	// what already runs becomes a variant of this server, not a stranger to pick around
+	for _, f := range found {
+		if f.Room == "" || f.Provider != "jitsi" {
+			continue
+		}
+		known := false
+		for _, v := range srv.Variants {
+			known = known || olcSameRoom(v.Room, f.Room)
+		}
+		if known {
+			continue
+		}
+		v := olcVariant{Node: f.Node, Instance: olcHost(f.Room), Transport: f.Transport, Room: f.Room, External: f.Container, Key: f.key}
+		if v.Node == "" {
+			v.Node = fmt.Sprintf("OLC %s %s/%s", srv.Name, strings.SplitN(v.Instance, ".", 2)[0], v.Transport)
+			node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": "jitsi", "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+			if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
+				o.logf(j, "existing", "узел для "+f.Container+" не добавлен: "+shortErr(err))
+				continue
+			}
+		}
+		o.mu.Lock()
+		srv.Variants = append(srv.Variants, v)
+		o.saveLocked()
+		o.mu.Unlock()
+	}
+
 	if j.Kind == "setup" {
 		// build needs ~4 GB: memory and swap together
 		if memMB+swapMB < 3500 {
@@ -678,7 +803,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			{"packages", `if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates openssl tar; elif command -v dnf >/dev/null; then dnf install -y -q git curl ca-certificates openssl tar; elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed git curl ca-certificates openssl tar; else echo "нет apt-get, dnf или pacman" >&2; exit 1; fi; git --version`, 10 * time.Minute, "git, curl, openssl установлены"},
 			{"go", fmt.Sprintf(`if /usr/local/go/bin/go version 2>/dev/null | grep -q 'go%[1]s'; then /usr/local/go/bin/go version; else curl -fsSL https://go.dev/dl/go%[1]s.linux-%[2]s.tar.gz -o /tmp/go.tgz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz && /usr/local/go/bin/go version; fi`, olcGoVersion, srv.Arch), 10 * time.Minute, "Go " + olcGoVersion},
 			{"source", fmt.Sprintf(`mkdir -p %[1]s && if [ -d %[1]s/src/.git ]; then cd %[1]s/src && git fetch -q --depth 1 origin && git reset -q --hard FETCH_HEAD; else git clone -q --depth 1 %[2]s %[1]s/src; fi && cd %[1]s/src && git log -1 --format='%%h %%cs'`, olcDir, olcRepo), 5 * time.Minute, "исходники olcrtc"},
-			{"build", fmt.Sprintf(`cd %[1]s/src && CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && ls -la %[1]s/olcrtc`, olcDir), 30 * time.Minute, "olcrtc собран"},
+			{"build", fmt.Sprintf(`cd %[1]s/src && h=$(git rev-parse --short HEAD) && if [ -x %[1]s/olcrtc ] && [ "$(cat %[1]s/.built 2>/dev/null)" = "$h" ]; then echo "уже собран из этой версии $h"; else CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && echo "$h" > %[1]s/.built && echo "собран $h"; fi`, olcDir), 30 * time.Minute, "olcrtc"},
 		}
 		for _, st := range steps {
 			st := st
@@ -698,7 +823,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			}
 		}
 		if err := o.do(j, "key", func() (string, error) {
-			out, err := x.root(fmt.Sprintf(`[ -s %[1]s/olcrtc.key ] || (umask 077 && openssl rand -hex 32 > %[1]s/olcrtc.key); cat %[1]s/olcrtc.key`, olcDir), 30*time.Second)
+			out, err := x.root(fmt.Sprintf(`[ -s %[1]s/olcrtc.key ] || (umask 077 && if [ -s ~/.olcrtc_key ]; then tr -dc 0-9a-f < ~/.olcrtc_key | head -c 64 > %[1]s/olcrtc.key; else openssl rand -hex 32 > %[1]s/olcrtc.key; fi); cat %[1]s/olcrtc.key`, olcDir), 30*time.Second)
 			key := strings.TrimSpace(out)
 			if err != nil || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(key) {
 				return "", errors.New("не удалось создать ключ шифрования")
@@ -707,7 +832,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			srv.Key = key
 			o.saveLocked()
 			o.mu.Unlock()
-			return "ключ 64 hex — только на сервере и роутере", nil
+			return "ключ 64 hex — только на сервере и роутере; уже существующий ключ olcrtc сохранён", nil
 		}); err != nil {
 			o.finish(j, false, err.Error())
 			return
@@ -737,6 +862,9 @@ WantedBy=multi-user.target
 			o.finish(j, false, err.Error())
 			return
 		}
+	}
+	if migrate {
+		o.migrate(j, x, srv)
 	}
 	if srv.Key == "" {
 		o.finish(j, false, "у сервера нет ключа — настройте его заново")
@@ -837,6 +965,8 @@ func (o *olcState) pick(j *olcJob, x *olcSSH, srv *olcServer, req olcSetupReq) [
 			if c.OK {
 				kept = append(kept, v)
 				o.logf(j, "pick", "оставлен рабочий "+v.Node)
+			} else if v.External != "" {
+				o.logf(j, "pick", "не отвечает контейнер "+v.External+" ("+v.Node+"): оставлен как есть, в подборе не участвует")
 			} else {
 				o.dropVariant(x, v)
 				o.logf(j, "pick", "убран нерабочий "+v.Node+": "+c.Err)
@@ -919,6 +1049,9 @@ func (o *olcState) tryVariant(x *olcSSH, srv *olcServer, inst, tr string) (olcVa
 }
 
 func (o *olcState) dropVariant(x *olcSSH, v olcVariant) {
+	if v.External != "" {
+		return // olcrtc's own container: not ours to stop or forget on the router
+	}
 	_ = mihomoDo(http.MethodDelete, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies/"+url.PathEscape(v.Node), nil, nil, 10*time.Second)
 	if x != nil && v.Unit != "" {
 		_, _ = x.root(fmt.Sprintf("systemctl disable --now olcrtc@%[2]s >/dev/null 2>&1; rm -f %[1]s/%[2]s.yaml", olcDir, v.Unit), 30*time.Second)
@@ -1165,4 +1298,133 @@ func (a *app) handleOlcrtcPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.handleOlcrtcGet(w)
+}
+
+// What may already run on the server: HomeNet's own install and olcrtc's
+// srv.sh containers with the config each one runs from.
+const olcExistingCmd = `echo "HOMENET:"; for f in /opt/olcrtc/olcrtc /opt/olcrtc/olcrtc.key; do [ -e "$f" ] && echo "F $f"; done
+systemctl list-units --all 'olcrtc@*' --no-legend --plain 2>/dev/null | awk '{print "U", $1, $3}'
+echo "PODMAN:"
+if command -v podman >/dev/null; then for c in $(podman ps -a --filter name=olcrtc --format '{{.Names}}'); do
+d=$(podman inspect "$c" --format '{{range .Mounts}}{{if eq .Destination "/app"}}{{.Source}}{{end}}{{end}}'); st=$(podman inspect "$c" --format '{{.State.Status}}')
+echo "C $c $st $d"; if [ -f "$d/config.yaml" ]; then sed 's/^/  /' "$d/config.yaml"; fi; done; fi
+echo "END"`
+
+var olcKeyRe = regexp.MustCompile(`[0-9a-f]{64}`)
+
+func olcMaskKeys(s string) string { return olcKeyRe.ReplaceAllString(s, "<ключ>") }
+
+func parseOlcExisting(out string) ([]olcFound, []string) {
+	var found []olcFound
+	own := []string{}
+	var cur *olcFound
+	var cfg []string
+	flush := func() {
+		if cur == nil {
+			return
+		}
+		var c struct {
+			Auth struct {
+				Provider string `yaml:"provider"`
+			} `yaml:"auth"`
+			Room struct {
+				ID string `yaml:"id"`
+			} `yaml:"room"`
+			Crypto struct {
+				Key string `yaml:"key"`
+			} `yaml:"crypto"`
+			Net struct {
+				Transport string `yaml:"transport"`
+			} `yaml:"net"`
+		}
+		_ = yaml.Unmarshal([]byte(strings.Join(cfg, "\n")), &c)
+		cur.Provider, cur.Room, cur.Transport, cur.key = c.Auth.Provider, c.Room.ID, c.Net.Transport, c.Crypto.Key
+		found = append(found, *cur)
+		cur, cfg = nil, nil
+	}
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "F /opt/olcrtc/olcrtc.key"):
+			own = append(own, "ключ")
+		case strings.HasPrefix(line, "F /opt/olcrtc/olcrtc"):
+			own = append(own, "olcrtc собран")
+		case strings.HasPrefix(line, "U "):
+			if f := strings.Fields(line); len(f) >= 3 {
+				own = append(own, f[1]+" "+f[2])
+			}
+		case strings.HasPrefix(line, "C "):
+			flush()
+			if f := strings.Fields(line); len(f) >= 3 {
+				cur = &olcFound{Container: f[1], Status: f[2]}
+				if len(f) >= 4 {
+					cur.Dir = f[3]
+					cur.InTmp = strings.HasPrefix(f[3], "/tmp/") || strings.HasPrefix(f[3], "/var/tmp/")
+				}
+			}
+		case strings.HasPrefix(line, "  ") && cur != nil:
+			cfg = append(cfg, line[2:])
+		case line == "END":
+			flush()
+		}
+	}
+	flush()
+	return found, own
+}
+
+func olcHost(room string) string {
+	if u, err := url.Parse(room); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return strings.SplitN(strings.TrimPrefix(room, "//"), "/", 2)[0]
+}
+
+func olcSameRoom(a, b string) bool {
+	norm := func(s string) string {
+		s = strings.TrimSuffix(strings.TrimSpace(strings.ToLower(s)), "/")
+		return strings.TrimPrefix(strings.TrimPrefix(s, "https://"), "http://")
+	}
+	return a != "" && norm(a) == norm(b)
+}
+
+// migrate moves srv.sh containers that live in /tmp into HomeNet's own
+// services: same room, transport and key, so the router's node keeps working.
+func (o *olcState) migrate(j *olcJob, x *olcSSH, srv *olcServer) {
+	o.mu.Lock()
+	vars := append([]olcVariant(nil), srv.Variants...)
+	o.mu.Unlock()
+	for i, v := range vars {
+		if v.External == "" || v.Key == "" {
+			continue
+		}
+		unit := fmt.Sprintf("m%s-%s", randHex(3), v.Transport)
+		cfg := fmt.Sprintf("mode: srv\nauth:\n  provider: jitsi\nroom:\n  id: %q\ncrypto:\n  key_file: %q\nnet:\n  transport: %s\n  dns: \"8.8.8.8:53\"\n", v.Room, olcDir+"/"+unit+".key", v.Transport)
+		cmd := fmt.Sprintf("umask 077 && printf %%s %[1]s > %[2]s/%[3]s.key && cat > %[2]s/%[3]s.yaml <<'EOF'\n%[4]sEOF\npodman stop %[5]s >/dev/null && systemctl enable --now olcrtc@%[3]s >/dev/null 2>&1 && sleep 6 && systemctl is-active olcrtc@%[3]s", shq(v.Key), olcDir, unit, cfg, shq(v.External))
+		out, err := x.root(cmd, time.Minute)
+		ok := err == nil
+		if ok {
+			var c olcCheck
+			for attempt := 0; attempt < 3 && !c.OK; attempt++ {
+				if attempt > 0 {
+					time.Sleep(4 * time.Second)
+				}
+				c = olcNodeCheck(v.Node, 15*time.Second)
+			}
+			ok = c.OK
+			if !ok {
+				out = "узел не ответил после переноса: " + c.Err
+			}
+		}
+		if !ok {
+			_, _ = x.root(fmt.Sprintf("systemctl disable --now olcrtc@%[2]s >/dev/null 2>&1; rm -f %[1]s/%[2]s.yaml %[1]s/%[2]s.key; podman start %[3]s >/dev/null", olcDir, unit, shq(v.External)), time.Minute)
+			o.logf(j, "service", "перенос "+v.External+" не удался, контейнер запущен обратно: "+olcLast(olcMaskKeys(out)))
+			continue
+		}
+		_, _ = x.root("podman rm "+shq(v.External)+" >/dev/null", 30*time.Second)
+		o.logf(j, "service", fmt.Sprintf("контейнер %s перенесён в olcrtc@%s — та же комната и ключ, узел на роутере не менялся", v.External, unit))
+		vars[i].External, vars[i].Unit = "", unit
+	}
+	o.mu.Lock()
+	srv.Variants = vars
+	o.saveLocked()
+	o.mu.Unlock()
 }
