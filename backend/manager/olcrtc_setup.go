@@ -643,7 +643,7 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 	}
 	o.job = j
 	o.saveLocked()
-	go o.runJob(j, srv, req)
+	managedGo(func() { o.runJob(j, srv, req) })
 	return j, nil
 }
 
@@ -1047,7 +1047,7 @@ WantedBy=multi-user.target
 	})
 	o.finish(j, true, "")
 	o.event("ok", fmt.Sprintf("%s: %s, рабочих вариантов %d", srv.Name, map[string]string{"setup": "сервер настроен", "repick": "варианты подобраны заново"}[j.Kind], len(kept)))
-	go o.tidy()
+	managedGo(o.tidy)
 }
 
 func olcLast(s string) string {

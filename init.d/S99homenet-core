@@ -1,0 +1,47 @@
+#!/bin/sh
+# Core owns only integration workers. nginx, mihomo, Account and DMS are separate.
+CORE_ROOT="${HOMENET_CORE_ROOT:-/opt/share/homenet/core/current}"
+CORE_CONFIG="${HOMENET_CORE_CONFIG:-/opt/etc/homenet/core/config.json}"
+CORE_PID="${HOMENET_CORE_PID:-/opt/var/run/homenet-core.pid}"
+CORE_LOG="${HOMENET_CORE_LOG:-/opt/var/log/homenet-core.log}"
+LEGACY_PID="${HOME_NET_UI_PID:-/opt/var/run/nginx-manager-lite.pid}"
+
+running() {
+ [ -f "$CORE_PID" ] || return 1
+ PID="$(cat "$CORE_PID")"
+ case "$PID" in ''|*[!0-9]*) return 1 ;; esac
+ [ "$(readlink "/proc/$PID/exe" 2>/dev/null)" = "$(readlink -f "$CORE_ROOT/core")" ] && kill -0 "$PID" 2>/dev/null
+}
+start() {
+ running && return 0
+ [ -f "$CORE_CONFIG" ] || { echo "Prepare Core configuration first" >&2; return 1; }
+ if [ -f "$LEGACY_PID" ]; then
+  OLD="$(cat "$LEGACY_PID")"
+  case "$OLD" in ''|*[!0-9]*) ;; *)
+   if kill -0 "$OLD" 2>/dev/null; then echo "Stop the legacy manager before starting Core" >&2; return 1; fi ;;
+  esac
+ fi
+ mkdir -p "$(dirname "$CORE_PID")" "$(dirname "$CORE_LOG")" || return 1
+ nohup "$CORE_ROOT/core" -config "$CORE_CONFIG" >>"$CORE_LOG" 2>&1 &
+ PID=$!
+ echo "$PID" > "$CORE_PID"
+ sleep 1
+ running || { echo "Core failed to start; inspect its log" >&2; return 1; }
+}
+stop() {
+ running || return 0
+ kill "$PID" || return 1
+ COUNT=0
+ while running; do
+  COUNT=$((COUNT+1))
+  [ "$COUNT" -lt 180 ] || { echo "Core shutdown still pending; refusing to force-kill configuration writers" >&2; return 1; }
+  sleep 1
+ done
+ rm -f "$CORE_PID"
+}
+case "$1" in
+ start) start ;;
+ stop) stop ;;
+ restart) stop && start ;;
+ *) echo "Usage: $0 start|stop|restart" >&2; exit 2 ;;
+esac

@@ -17,6 +17,10 @@ func newManager() (*app, error) {
 	loadRuntimeEnv(baseDir)
 	debug.SetMemoryLimit(int64(atoiDefault(getenv("MANAGER_MEMORY_MB", "64"), 64)) << 20)
 	nginxConfRoot := getenv("NGINX_CONF_ROOT", "/etc/nginx")
+	defaultRoutesPath := "/opt/etc/homenet/nginx/routes.v2.1.yml"
+	if moduleKind != "" {
+		defaultRoutesPath = filepath.Join(baseDir, "routes.yml")
+	}
 	return &app{
 		baseDir:          baseDir,
 		staticDir:        resolvePath(baseDir, getenv("STATIC_ROOT", filepath.Join("frontend", "static"))),
@@ -29,6 +33,6 @@ func newManager() (*app, error) {
 		ndmcBin:          getenv("NDMC_BIN", "ndmc"),
 		ipHostDeleteMode: getenv("IP_HOST_DELETE_MODE", "no-host"),
 		genRoutesPath:    getenv("GEN_ROUTES_PATH", filepath.Join(baseDir, "bin", runtime.GOOS+"-"+runtime.GOARCH, "nginx")),
-		activeRoutesPath: getenv("ROUTES_PATH", "/opt/etc/homenet/nginx/routes.v2.1.yml"),
+		activeRoutesPath: getenv("ROUTES_PATH", defaultRoutesPath),
 	}, nil
 }

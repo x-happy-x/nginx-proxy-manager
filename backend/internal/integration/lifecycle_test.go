@@ -49,7 +49,7 @@ func lifecycleFixture(t *testing.T) (*Lifecycle, *fakeRuntime) {
 			if err := AtomicJSON(filepath.Join(root, "manifest.json"), m); err != nil {
 				t.Fatal(err)
 			}
-			for _, name := range []string{"worker", "ui/entry.js"} {
+			for _, name := range []string{"worker", "nginx", "ui/entry.js"} {
 				if err := os.WriteFile(filepath.Join(root, name), []byte("fixture"), 0700); err != nil {
 					t.Fatal(err)
 				}

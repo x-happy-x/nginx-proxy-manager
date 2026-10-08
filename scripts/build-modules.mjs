@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arch = process.argv[2] || 'arm64';
 if (!['amd64', 'arm64', 'arm', 'mipsle', 'mips'].includes(arch)) throw new Error('Unsupported GOARCH');
-const version = '1.0.0';
+const version = process.argv[3] || '1.0.0';
+if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Invalid package version');
 const output = path.join(root, '.runtime', 'modules', `linux-${arch}`);
 const catalog = JSON.parse(await readFile(path.join(root, 'integrations/catalog.json'), 'utf8'));
 function run(command, args, cwd, env = {}) {
@@ -16,16 +17,25 @@ function run(command, args, cwd, env = {}) {
 }
 const goEnv = { CGO_ENABLED: '0', GOOS: 'linux', GOARCH: arch, GOARM: '7', GOMIPS: 'softfloat' };
 const frontend = path.join(root, 'frontend');
+const reuseUI=process.argv.includes('--reuse-ui');
+if(!reuseUI){
 run(process.execPath, ['node_modules/typescript/bin/tsc', '-b'], frontend);
 run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'vite.core.config.ts', '--logLevel', 'warn'], frontend);
+}
 await mkdir(path.join(output, 'core'), { recursive: true });
 run('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path.join(output, 'core/core'), './core'], path.join(root, 'backend'), goEnv);
+run('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', path.join(output, 'core/platformctl'), './platformctl'], path.join(root, 'backend'), goEnv);
 await cp(path.join(frontend, 'static/core'), path.join(output, 'core/ui'), { recursive: true });
+await cp(path.join(root,'init.d/S99homenet-core'),path.join(output,'core/S99homenet-core'));
+await cp(path.join(root,'scripts/activate-modular.sh'),path.join(output,'core/activate-modular.sh'));
 for (const item of catalog) {
   const destination = path.join(output, item.id, version);
   await mkdir(destination, { recursive: true });
   run('go', ['build', '-trimpath', '-tags=integration_worker', `-ldflags=-s -w -X main.workerID=${item.id}`, '-o', path.join(destination, 'worker'), './manager'], path.join(root, 'backend'), goEnv);
+  if(item.id==='proxy')run('go',['build','-trimpath','-ldflags=-s -w','-o',path.join(destination,'nginx'),'./nginx'],path.join(root,'backend'),goEnv);
+  if(!reuseUI){
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'vite.integration.config.ts', '--mode', item.id, '--logLevel', 'warn'], frontend);
+  }
   await cp(path.join(frontend, 'static/integrations', item.id), path.join(destination, 'ui'), { recursive: true });
   const manifest = {
     schema: 1, id: item.id, name: item.name, description: item.description, version, arch, core_api: 1, ui_api: 1,

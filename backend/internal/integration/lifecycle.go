@@ -52,6 +52,22 @@ type Lifecycle struct {
 
 func (l *Lifecycle) Stable(fn func()) { l.mu.Lock(); defer l.mu.Unlock(); fn() }
 
+func (l *Lifecycle) Ready() error {
+	if err := l.transactionsPending(); err != nil {
+		return err
+	}
+	ops, err := l.History()
+	if err != nil {
+		return err
+	}
+	for _, op := range ops {
+		if op.Status == "running" || op.Status == "recovering" || op.Status == "recovery_required" {
+			return fmt.Errorf("unfinished operation %s", op.ID)
+		}
+	}
+	return nil
+}
+
 func (l *Lifecycle) transactionsPending() error {
 	files, err := os.ReadDir(filepath.Join(l.StateDir, "transactions"))
 	if os.IsNotExist(err) {
@@ -187,7 +203,11 @@ func (l *Lifecycle) Candidate(id, v string) (Manifest, error) {
 	if err = m.Validate(l.Arch); err != nil {
 		return m, err
 	}
-	for _, name := range append([]string{"worker", filepath.Join("ui", m.UI.Entry)}, cssFiles(m.UI.CSS)...) {
+	artifacts := []string{"manifest.json", "worker", filepath.Join("ui", m.UI.Entry)}
+	if m.ID == "proxy" {
+		artifacts = append(artifacts, "nginx")
+	}
+	for _, name := range append(artifacts, cssFiles(m.UI.CSS)...) {
 		p := filepath.Join(root, name)
 		info, err := os.Lstat(p)
 		if err != nil || !info.Mode().IsRegular() {
@@ -494,6 +514,12 @@ func (l *Lifecycle) rollback(ctx context.Context, op *Operation) error {
 		return err
 	}
 	var errs []error
+	for _, i := range op.Before {
+		hash, err := l.packageHash(i.Manifest)
+		if err != nil || hash != op.Packages[i.Manifest.ID+"/"+i.Manifest.Version] {
+			errs = append(errs, fmt.Errorf("previous package changed; restore trusted artifacts before recovery: %s", i.Manifest.ID))
+		}
+	}
 	for _, i := range ordered(changed(op.After, op.Before), true) {
 		if i.Enabled {
 			if err := l.Runtime.Stop(ctx, i.Manifest); err != nil {

@@ -74,7 +74,7 @@ func (s *torrentState) run(targets []exitTarget) bool {
 	}
 	s.running, s.done, s.total = true, 0, len(targets)
 	s.mu.Unlock()
-	go func() {
+	managedGo(func() {
 		jobs := make(chan exitTarget)
 		var wg sync.WaitGroup
 		for i := 0; i < exitParallel; i++ {
@@ -105,7 +105,7 @@ func (s *torrentState) run(targets []exitTarget) bool {
 			}
 		}
 		s.mu.Unlock()
-	}()
+	})
 	return true
 }
 

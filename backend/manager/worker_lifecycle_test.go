@@ -32,3 +32,16 @@ func TestWorkerCancellationStopsAndJoinsSampler(t *testing.T) {
 		t.Fatal("sampler ran after cancellation")
 	}
 }
+
+func TestAnalyzerWithoutVPNDoesNotProbeProxy(t *testing.T) {
+	t.Setenv("HOMENET_PLATFORM_STATE", t.TempDir())
+	result, err := analyze("127.0.0.1", []string{"mihomo"})
+	if err != nil || len(result.Paths) != 1 || result.Paths[0].Verdict != "skip" {
+		t.Fatalf("missing optional VPN must be skipped: %+v %v", result, err)
+	}
+	var summary analysis
+	summarize(&summary, map[string]probePath{"direct": {Verdict: "ok"}, "mihomo": {Verdict: "skip"}})
+	if summary.Verdict != "open" {
+		t.Fatalf("missing VPN must not report proxy failure: %+v", summary)
+	}
+}

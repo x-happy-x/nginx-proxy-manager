@@ -43,6 +43,16 @@ func (s *Server) portalDocument(id Identity, policy access.Config) (PortalDocume
 			return doc, nil, nil, err
 		}
 	}
+	known := map[string]bool{}
+	for _, app := range doc.Apps {
+		known[app.ID] = true
+	}
+	for _, app := range s.dmsCatalog() {
+		if !known[app.ID] {
+			doc.Apps = append(doc.Apps, app)
+			known[app.ID] = true
+		}
+	}
 	cfg, err := s.launcher().Load()
 	if err != nil {
 		return doc, nil, nil, err

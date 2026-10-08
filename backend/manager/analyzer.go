@@ -177,7 +177,12 @@ func analyze(target string, paths []string) (analysis, error) {
 		}()
 	}
 	run("direct", func() probePath { return probeDirect(host, port, path, ip, res.DNS) })
-	run("mihomo", func() probePath { return probeMihomo(host, port, path, res.DNS) })
+	run("mihomo", func() probePath {
+		if !moduleEnabled("vpn") {
+			return probePath{ID: "mihomo", Title: "mihomo", Verdict: "skip", Summary: "Интеграция VPN недоступна", Steps: []probeStep{}}
+		}
+		return probeMihomo(host, port, path, res.DNS)
+	})
 	run("mikrotik", func() probePath { return probeMikrotik(host, port, path, ip, res.DNS) })
 	wg.Wait()
 	for _, id := range []string{"direct", "mihomo", "mikrotik"} {
@@ -185,7 +190,9 @@ func analyze(target string, paths []string) (analysis, error) {
 			res.Paths = append(res.Paths, p)
 		}
 	}
-	res.Clients = clientRouteFor(ip, results["mihomo"])
+	if moduleEnabled("vpn") {
+		res.Clients = clientRouteFor(ip, results["mihomo"])
+	}
 	summarize(&res, results)
 	res.MS = msSince(started)
 	return res, nil
@@ -209,6 +216,9 @@ func resolveAll(host string) []dnsAnswer {
 		}},
 		{"yandex", "77.88.8.8", "UDP напрямую через оператора", func() ([]string, string, error) { return udpResolve("77.88.8.8:53", host, true) }},
 		{"cloudflare", "1.1.1.1", "UDP напрямую через оператора", func() ([]string, string, error) { return udpResolve("1.1.1.1:53", host, true) }},
+	}
+	if !moduleEnabled("vpn") {
+		jobs = jobs[2:]
 	}
 	out := make([]dnsAnswer, len(jobs))
 	var wg sync.WaitGroup
@@ -1101,9 +1111,12 @@ var verdictWords = map[string]string{
 func summarize(res *analysis, paths map[string]probePath) {
 	direct, hasDirect := paths["direct"]
 	mihomo, hasMihomo := paths["mihomo"]
+	hasMihomo = hasMihomo && mihomo.Verdict != "skip"
 	directOK := hasDirect && direct.Verdict == "ok"
 	mihomoOK := hasMihomo && mihomo.Verdict == "ok"
 	switch {
+	case !hasDirect && !hasMihomo:
+		res.Verdict, res.Summary = "unavailable", "Выбранный источник диагностики недоступен"
 	case hasDirect && hasMihomo && directOK && mihomoOK:
 		res.Verdict, res.Summary = "open", "Открыт и напрямую, и через mihomo"
 	case hasDirect && hasMihomo && !directOK && mihomoOK:

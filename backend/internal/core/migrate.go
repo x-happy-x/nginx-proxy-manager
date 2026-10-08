@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,20 @@ type MigrationPlan struct {
 	Sources      map[string]string       `json:"sources"`
 	Integrations []integration.Installed `json:"integrations"`
 	Catalog      PortalDocument          `json:"catalog"`
+}
+
+func VerifyMigration(plan MigrationPlan) error {
+	for p, hash := range plan.Sources {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		actual := sha256.Sum256(b)
+		if hex.EncodeToString(actual[:]) != hash {
+			return fmt.Errorf("legacy source changed after migration planning: %s", p)
+		}
+	}
+	return nil
 }
 
 // PlanMigration reads the legacy installation without executing its shell file
@@ -61,6 +76,9 @@ func PlanMigration(in MigrationInput) (MigrationPlan, error) {
 		return fallback
 	}
 	routesPath := value("ROUTES_PATH", filepath.Join(in.LegacyDir, "routes.yml"))
+	if _, err := os.ReadFile(routesPath); err != nil {
+		return plan, fmt.Errorf("legacy routes required: %w", err)
+	}
 	routes, err := schema.LoadRoutes(routesPath)
 	if err != nil {
 		return plan, err
@@ -187,10 +205,41 @@ func PrepareMigration(plan MigrationPlan) error {
 		if err = os.MkdirAll(filepath.Join(temp, "backup"), 0700); err != nil {
 			return err
 		}
-		if err = os.WriteFile(filepath.Join(temp, "backup", fmt.Sprintf("%d-%s", index, filepath.Base(p))), body, 0600); err != nil {
+		backup, err := os.OpenFile(filepath.Join(temp, "backup", fmt.Sprintf("%d-%s", index, filepath.Base(p))), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		_, err = backup.Write(body)
+		if err == nil {
+			err = backup.Sync()
+		}
+		closeErr := backup.Close()
+		if err == nil {
+			err = closeErr
+		}
+		if err != nil {
 			return err
 		}
 		index++
 	}
-	return os.Rename(temp, state)
+	syncDir := func(path string) error {
+		if runtime.GOOS != "linux" {
+			return nil
+		}
+		dir, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer dir.Close()
+		return dir.Sync()
+	}
+	for _, dir := range []string{filepath.Join(temp, "backup"), temp} {
+		if err := syncDir(dir); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(temp, state); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(state))
 }

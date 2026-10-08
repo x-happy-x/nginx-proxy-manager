@@ -19,7 +19,7 @@ import (
 func main() {
 	file := flag.String("config", "/opt/etc/homenet/core/config.json", "Core configuration")
 	flag.Parse()
-	config := core.Config{Listen: "127.0.0.1:18490", StateDir: "/opt/etc/homenet/core", StaticDir: "/opt/share/homenet/core", PackagesDir: "/opt/share/homenet/integrations", AccountURL: "http://127.0.0.1:63415", DMSURL: "http://127.0.0.1:63416", DMSTokenFile: "/opt/dms/token"}
+	config := core.Config{Listen: "127.0.0.1:18490", StateDir: "/opt/etc/homenet/core", StaticDir: "/opt/share/homenet/core/current/ui", PackagesDir: "/opt/share/homenet/integrations", AccountURL: "http://127.0.0.1:63415", DMSURL: "http://127.0.0.1:63416", DMSTokenFile: "/opt/dms/token"}
 	config.ManageWorkers = true
 	config.WorkerEnv = "/opt/etc/homenet/nginx/config/runtime.env"
 	b, err := os.ReadFile(*file)
@@ -70,11 +70,19 @@ func main() {
 	go func() {
 		defer close(stopped)
 		<-ctx.Done()
-		deadline, stop := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer stop()
-		_ = server.Shutdown(deadline)
+		_ = server.Shutdown(context.Background())
+		handler.WaitOperations()
 		if config.ManageWorkers {
-			_ = handler.Lifecycle.Shutdown(deadline)
+			for {
+				drain, finish := context.WithTimeout(context.Background(), 2*time.Minute)
+				err := handler.Lifecycle.Shutdown(drain)
+				finish()
+				if err == nil {
+					break
+				}
+				log.Printf("waiting for workers before releasing Core ownership: %v", err)
+				time.Sleep(time.Second)
+			}
 		}
 	}()
 	log.Printf("HomeNet Core listening on %s", config.Listen)

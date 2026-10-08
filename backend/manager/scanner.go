@@ -269,7 +269,7 @@ func (a *app) handleNetworkPost(w http.ResponseWriter, r *http.Request) {
 		running := scan.running
 		scan.mu.Unlock()
 		if !running {
-			go scan.runAll()
+			managedGo(scan.runAll)
 		}
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "running": true})
 	default:

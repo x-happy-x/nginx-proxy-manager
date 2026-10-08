@@ -161,7 +161,7 @@ func (s *installState) start(req installRequest) error {
 	s.Log = []installLine{}
 	run := s.runSteps
 	s.mu.Unlock()
-	go func() {
+	managedGo(func() {
 		err := run(s, req)
 		s.mu.Lock()
 		s.Running, s.Done, s.OK = false, true, err == nil
@@ -171,7 +171,7 @@ func (s *installState) start(req installRequest) error {
 		} else {
 			s.logf("ok", "готово")
 		}
-	}()
+	})
 	return nil
 }
 

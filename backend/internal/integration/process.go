@@ -177,6 +177,9 @@ func (p *Processes) Start(ctx context.Context, m Manifest) error {
 	for key, value := range p.Defaults {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
+	if m.ID == "proxy" {
+		cmd.Env = append(cmd.Env, "GEN_ROUTES_PATH="+filepath.Join(root, "nginx"))
+	}
 	if p.ConfigEnv != "" {
 		cmd.Env = append(cmd.Env, "CONFIG_ENV_PATH="+p.ConfigEnv)
 	}
@@ -222,29 +225,16 @@ func (p *Processes) Stop(ctx context.Context, m Manifest) error {
 	if err = proc.Signal(syscall.SIGTERM); err != nil && err != os.ErrProcessDone {
 		return err
 	}
-	deadline := time.NewTimer(30 * time.Second)
+	deadline := time.NewTimer(2 * time.Minute)
 	defer deadline.Stop()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
-	killed := false
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			if killed {
-				return fmt.Errorf("worker did not exit after kill")
-			}
-			// Revalidate identity before escalating; never kill a reused PID.
-			if _, alive, e := p.record(m); e != nil {
-				return e
-			} else if alive {
-				if e = proc.Kill(); e != nil && e != os.ErrProcessDone {
-					return e
-				}
-			}
-			killed = true
-			deadline.Reset(5 * time.Second)
+			return fmt.Errorf("worker is still draining; refusing to kill configuration or device jobs")
 		case <-tick.C:
 			if _, alive, e := p.record(m); e != nil {
 				return e

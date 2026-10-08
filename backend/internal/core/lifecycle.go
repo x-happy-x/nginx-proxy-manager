@@ -12,6 +12,19 @@ import (
 
 func (s *Server) lifecycle(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.Method == "POST" && r.URL.Path == "/api/platform/recover":
+		if !s.Config.ManageWorkers {
+			http.Error(w, "Worker management is disabled", 409)
+			return
+		}
+		s.operations.Add(1)
+		go func() {
+			defer s.operations.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			_ = s.Lifecycle.Recover(ctx)
+		}()
+		jsonReply(w, 202, map[string]bool{"ok": true})
 	case r.Method == "GET" && r.URL.Path == "/api/platform/packages":
 		items, err := s.Lifecycle.Available()
 		if err != nil {
@@ -69,7 +82,9 @@ func (s *Server) lifecycle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if op.Status == "planned" {
+			s.operations.Add(1)
 			go func() {
+				defer s.operations.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 				defer cancel()
 				_, _ = s.Lifecycle.Apply(ctx, req.ID)
@@ -80,3 +95,6 @@ func (s *Server) lifecycle(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}
 }
+
+// WaitOperations is called after HTTP requests have drained.
+func (s *Server) WaitOperations() { s.operations.Wait() }

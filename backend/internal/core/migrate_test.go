@@ -37,7 +37,7 @@ func TestMigrationPreservesPathsAndIsIdempotent(t *testing.T) {
 		if err := integration.AtomicJSON(filepath.Join(dir, "manifest.json"), m); err != nil {
 			t.Fatal(err)
 		}
-		for _, file := range []string{"worker", "ui/entry.js"} {
+		for _, file := range []string{"worker", "nginx", "ui/entry.js"} {
 			if err := os.WriteFile(filepath.Join(dir, file), []byte("fixture"), 0700); err != nil {
 				t.Fatal(err)
 			}

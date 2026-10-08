@@ -194,7 +194,7 @@ func (e *exitState) run(targets []exitTarget, reason string, full bool) bool {
 	}
 	e.running, e.done, e.total, e.reason, e.started = true, 0, len(targets), reason, time.Now().Unix()
 	e.mu.Unlock()
-	go func() {
+	managedGo(func() {
 		jobs := make(chan exitTarget)
 		var wg sync.WaitGroup
 		for i := 0; i < exitParallel; i++ {
@@ -226,7 +226,7 @@ func (e *exitState) run(targets []exitTarget, reason string, full bool) bool {
 		}
 		e.saveLocked()
 		e.mu.Unlock()
-	}()
+	})
 	return true
 }
 

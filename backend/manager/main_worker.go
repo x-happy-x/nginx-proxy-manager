@@ -94,6 +94,10 @@ func main() {
 			a.handleVPNDNSTransaction(w, r)
 			return
 		}
+		if r.URL.Path == "/internal/connection" && r.Method == "GET" {
+			a.writeJSON(w, 200, response{"connection": a.moduleConnection()})
+			return
+		}
 		if !manifest.Allows(r.URL.Path) {
 			http.NotFound(w, r)
 			return
@@ -128,9 +132,8 @@ func main() {
 	done := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		shutdown, stop := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stop()
-		_ = server.Shutdown(shutdown)
+		// Finish active requests and their device jobs before releasing ownership.
+		_ = server.Shutdown(context.Background())
 		workerTasks.Wait()
 		close(done)
 	}()

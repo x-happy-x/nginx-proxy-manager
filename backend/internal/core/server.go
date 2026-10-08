@@ -2,6 +2,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/access"
@@ -34,10 +36,11 @@ type Config struct {
 	ManageWorkers  bool              `json:"manage_workers"`
 }
 type Server struct {
-	Config    Config
-	Registry  *integration.Registry
-	Client    *http.Client
-	Lifecycle *integration.Lifecycle
+	operations sync.WaitGroup
+	Config     Config
+	Registry   *integration.Registry
+	Client     *http.Client
+	Lifecycle  *integration.Lifecycle
 }
 type Identity struct {
 	Login string `json:"login"`
@@ -45,6 +48,9 @@ type Identity struct {
 }
 
 func New(cfg Config, arch string) (*Server, error) {
+	if cfg.WorkerAppDir == "" {
+		cfg.WorkerAppDir = "/opt/etc/homenet/nginx"
+	}
 	for _, raw := range []string{cfg.AccountURL, cfg.DMSURL} {
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "http" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" {
@@ -60,8 +66,14 @@ func New(cfg Config, arch string) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{Config: cfg, Registry: r, Client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
-	_, port, _ := net.SplitHostPort(cfg.Listen)
-	s.Lifecycle = &integration.Lifecycle{Registry: r, PackagesDir: cfg.PackagesDir, StateDir: cfg.StateDir, Arch: arch, Runtime: &integration.Processes{StateDir: cfg.StateDir, PackagesDir: cfg.PackagesDir, ConfigEnv: cfg.WorkerEnv, AppDir: cfg.WorkerAppDir, CoreURL: "http://127.0.0.1:" + port, Defaults: cfg.WorkerDefaults}}
+	host, port, _ := net.SplitHostPort(cfg.Listen)
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	if host == "::" {
+		host = "::1"
+	}
+	s.Lifecycle = &integration.Lifecycle{Registry: r, PackagesDir: cfg.PackagesDir, StateDir: cfg.StateDir, Arch: arch, Runtime: &integration.Processes{StateDir: cfg.StateDir, PackagesDir: cfg.PackagesDir, ConfigEnv: cfg.WorkerEnv, AppDir: cfg.WorkerAppDir, CoreURL: "http://" + net.JoinHostPort(host, port), Defaults: cfg.WorkerDefaults}}
 	return s, nil
 }
 func jsonReply(w http.ResponseWriter, status int, v any) {
@@ -121,6 +133,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		jsonReply(w, 200, map[string]any{"status": "ok", "component": "homenet-core", "protocol": 1})
 		return
 	}
+	if r.URL.Path == "/health/ready" && r.Method == "GET" {
+		if s.Lifecycle.Ready() != nil {
+			jsonReply(w, 503, map[string]string{"status": "not_ready"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		for _, item := range s.Registry.Snapshot() {
+			if item.Enabled {
+				if err := s.Lifecycle.Runtime.Check(ctx, item.Manifest); err != nil {
+					jsonReply(w, 503, map[string]string{"status": "not_ready"})
+					return
+				}
+			}
+		}
+		jsonReply(w, 200, map[string]string{"status": "ready"})
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/internal/") {
 		s.internal(w, r)
 		return
@@ -165,7 +195,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/platform" && r.Method == "GET" {
-		jsonReply(w, 200, map[string]any{"identity": id, "protocol": 1, "integrations": s.Registry.Snapshot()})
+		jsonReply(w, 200, map[string]any{"identity": id, "protocol": 1, "integrations": s.connections(r.Context())})
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/integrations/") {
