@@ -69,7 +69,7 @@ function ModuleView({ item, notify }: { item: Installed; notify: (text: string) 
 function App({onPortal}: {onPortal: () => void}) {
   const [data, setData] = useState<Platform>();
   const [error, setError] = useState("");
-  const [page, setPage] = useState(location.hash.replace(/^#\/?/, "") || "overview");
+  const [page, setPage] = useState(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview");
   const [tab, setTab] = useState("installed");
   const [detail, setDetail] = useState<string>();
   const dialog = useRef<HTMLElement>(null);
@@ -94,7 +94,7 @@ function App({onPortal}: {onPortal: () => void}) {
   const [theme, setTheme] = useState(() => localStorage.getItem("homenet-theme") || "light");
   const notify = React.useCallback((message: string) => setNotice(message), []);
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("homenet-theme", theme); }, [theme]);
-  useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "") || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
+  useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
   useEffect(() => {
     let alive = true;
     request("/api/platform").then(r => r.json()).then(p => { if (alive) setData(p); }).catch(e => { if (alive) setError(String(e)); });
