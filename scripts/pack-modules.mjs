@@ -16,7 +16,7 @@ const dms=path.resolve(dmsRoot);release.sources.dms=gitRevision(dms);
 const dmsFile=path.join(output,'dms-service');
 const built=spawnSync('go',['build','-trimpath','-ldflags=-s -w','-o',dmsFile,'./cmd/dms-service'],{cwd:dms,env:{...process.env,CGO_ENABLED:'0',GOOS:'linux',GOARCH:arch,GOARM:'7',GOMIPS:'softfloat'},stdio:'inherit'});
 if(built.error)throw built.error;if(built.status!==0)throw new Error('DMS build failed');
-const dmsBody=await readFile(dmsFile);release.packages.push({id:'dms',version:'0.4.0',type:'service-binary',file:'dms-service',bytes:dmsBody.length,sha256:createHash('sha256').update(dmsBody).digest('hex')});
+const dmsBody=await readFile(dmsFile);release.packages.push({id:'dms',version:'0.4.1',type:'service-binary',file:'dms-service',bytes:dmsBody.length,sha256:createHash('sha256').update(dmsBody).digest('hex')});
 // Core is staged without restarting it: first migration needs an explicit
 // guarded cutover. DMS remains available throughout that separate operation.
 const coreManifest={version:'1',app:'homenet-core',metadata:{name:'HomeNet Core',version,os:'linux',arch},artifacts:[{source:'core',destination:`/opt/share/homenet/core/releases/${version}`,mode:493}]};
