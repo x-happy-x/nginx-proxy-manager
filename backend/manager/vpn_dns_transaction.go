@@ -125,7 +125,7 @@ func (a *app) prepareDNSTransaction(req vpnDNSRequest) (vpnDNSTransaction, error
 	if err != nil {
 		return tx, err
 	}
-	if s.mode == "config-reload" {
+	if s.mode == "config-reload" && !bytes.Equal(tx.Before, tx.Candidate) {
 		staged, err := mihomoPrivateFile(filepath.Dir(tx.Target), ".vpn-dns-check-*", tx.Candidate)
 		if err != nil {
 			return tx, err
@@ -214,7 +214,7 @@ func (a *app) transitionDNSTransaction(id, action string) (vpnDNSTransaction, er
 				return tx, err
 			}
 		}
-		if s.mode == "config-reload" {
+		if s.mode == "config-reload" && !bytes.Equal(tx.Before, tx.Candidate) {
 			if s.secret == "" {
 				_, _, s.secret, _ = a.mihomoHostsCandidate(wanted, schema.Routes{})
 			}
