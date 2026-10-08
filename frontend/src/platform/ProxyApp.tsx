@@ -452,7 +452,7 @@ export default function ProxyApp({ host }: { host: Host }) {
     setApplyState("idle");
     setApplyOutput("");
     try {
-      const response = await fetch("/api/apply/check", { method: "POST" });
+      const response = await fetch("/api/apply/check", { method: "POST", headers: {"X-HomeNet-UI":"1"} });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || data.output || "Проверка не пройдена");
       setCheckState("passed");
@@ -686,6 +686,7 @@ export default function ProxyApp({ host }: { host: Host }) {
           ) : null}
           {page === "advanced" ? (
             <Routing
+              platformManaged
               doc={doc}
               busy={busy}
               onChange={setDoc}

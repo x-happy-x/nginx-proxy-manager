@@ -21,6 +21,6 @@ export async function request(path: string, init?: RequestInit): Promise<Respons
   const headers = new Headers(init?.headers);
   headers.set("X-HomeNet-UI", "1");
   const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
-  if (!response.ok) throw new Error(response.status === 401 ? "Требуется вход в Account" : response.status === 503 ? "Служба временно недоступна" : `Ошибка запроса (${response.status})`);
+  if (!response.ok) { const text=await response.text();let detail="";try{detail=JSON.parse(text).error||"";}catch{detail=text.slice(0,500);}throw new Error(response.status === 401 ? "Требуется вход в Account" : detail||`Ошибка запроса (${response.status})`); }
   return response;
 }
