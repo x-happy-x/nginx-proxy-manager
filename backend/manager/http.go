@@ -296,6 +296,8 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 	switch path {
 	case "/api/launcher":
 		a.handleLauncherSave(w, r)
+	case "/api/routes/import":
+		a.importDMSRoutes(w, r)
 	case "/api/routes":
 		var routes schema.Routes
 		if err := json.NewDecoder(r.Body).Decode(&routes); err != nil {

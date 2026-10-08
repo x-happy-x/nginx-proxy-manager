@@ -193,7 +193,7 @@ func (a *app) startOlcrtc() {
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" || os.Getenv("MIHOMO_TRAFFIC_DISABLED") == "1" {
 		return
 	}
-	go olc.autoLoop()
+	managedGo(olc.autoLoop)
 }
 
 func (o *olcState) saveLocked() {
@@ -643,7 +643,7 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 	}
 	o.job = j
 	o.saveLocked()
-	go o.runJob(j, srv, req)
+	managedGo(func() { o.runJob(j, srv, req) })
 	return j, nil
 }
 
@@ -1047,7 +1047,7 @@ WantedBy=multi-user.target
 	})
 	o.finish(j, true, "")
 	o.event("ok", fmt.Sprintf("%s: %s, рабочих вариантов %d", srv.Name, map[string]string{"setup": "сервер настроен", "repick": "варианты подобраны заново"}[j.Kind], len(kept)))
-	go o.tidy()
+	managedGo(o.tidy)
 }
 
 func olcLast(s string) string {
@@ -1580,12 +1580,12 @@ func olcHasFlag(name string) bool {
 // moves to the first working variant; every ten minutes it checks them all;
 // with none working on the user's own server it picks new ones over SSH.
 func (o *olcState) autoLoop() {
-	time.Sleep(90 * time.Second)
-	tick := time.NewTicker(time.Minute)
-	defer tick.Stop()
+	if !workerWait(90 * time.Second) {
+		return
+	}
 	n := 0
 	lastRepick := map[string]time.Time{}
-	for range tick.C {
+	for workerWait(time.Minute) {
 		n++
 		o.mu.Lock()
 		auto := o.st.Auto

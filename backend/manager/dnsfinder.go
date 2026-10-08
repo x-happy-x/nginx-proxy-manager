@@ -218,6 +218,9 @@ func (s *dnsFinderState) start() bool {
 	var jobs []dnsJob
 	for _, p := range dnsProviders {
 		for _, path := range []string{"direct", "mihomo"} {
+			if path == "mihomo" && !moduleEnabled("vpn") {
+				continue
+			}
 			for _, ip := range p.UDP {
 				jobs = append(jobs, dnsJob{p, "udp", path, ip})
 			}
@@ -243,14 +246,14 @@ func (s *dnsFinderState) start() bool {
 	jobs = append(jobs, dnsJob{dnsProvider{ID: "mikrotik", Name: "MikroTik", Note: "кэш MikroTik → оператор"}, "udp", "direct", "192.168.188.1"})
 
 	s.running, s.started, s.finished, s.progress, s.total, s.checks = true, time.Now().Unix(), 0, 0, len(jobs), nil
-	go s.run(jobs)
+	managedGo(func() { s.run(jobs) })
 	return true
 }
 
 func (s *dnsFinderState) run(jobs []dnsJob) {
 	ref := map[string][]string{}
 	for _, d := range dnsProbeDomains {
-		if ips, _, err := dohResolve(d.Host, true); err == nil && len(ips) > 0 {
+		if ips, _, err := dohResolve(d.Host, moduleEnabled("vpn")); err == nil && len(ips) > 0 {
 			ref[d.Host] = ips
 		} else if ips, _, err := dohResolve(d.Host, false); err == nil {
 			ref[d.Host] = ips

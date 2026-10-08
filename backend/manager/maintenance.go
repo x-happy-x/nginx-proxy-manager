@@ -103,6 +103,9 @@ func (a *app) checkNewListeners(routes schema.Routes) error {
 }
 
 func (a *app) applyManagedRoutes() (bool, string) {
+	if err := a.recoverProxyOperation(); err != nil {
+		return false, "Pending transaction recovery: " + err.Error()
+	}
 	routes, err := schema.LoadRoutes(a.routesPath())
 	if err != nil {
 		return false, err.Error()
@@ -143,8 +146,33 @@ func (a *app) applyManagedRoutes() (bool, string) {
 		return false, err.Error()
 	}
 	journal := managedRouterJournal{}
+	proxyOp, err := a.beginProxyOperation(previous, routes, before, dnsAdds, cleanup)
+	if err != nil {
+		return false, err.Error()
+	}
+	txID := ""
+	if proxyOp != nil {
+		txID = proxyOp.DNSID
+		if txID != "" {
+			if err = moduleRPC("vpn-dns/prepare", vpnDNSRequest{ID: txID, Routes: routes}, nil); err != nil {
+				return false, "VPN prepare pending recovery: " + err.Error()
+			}
+		}
+		proxyOp.Status = "applying"
+		if err = saveProxyOperation(*proxyOp); err != nil {
+			return false, err.Error()
+		}
+	}
+	proxyDNSTransactionID = txID
+	defer func() { proxyDNSTransactionID = "" }()
 	mihomoAttempted := false
 	rollback := func(cause string) (bool, string) {
+		if proxyOp != nil {
+			if err := a.recoverProxyOperation(); err != nil {
+				return false, cause + "; recovery required: " + err.Error()
+			}
+			return false, cause + "; previous state restored"
+		}
 		messages := []string{cause}
 		if out, err := runCommand(a.genRoutesPath, "--config", rollbackPath); err != nil {
 			messages = append(messages, "NGINX ROLLBACK FAILED: "+out)
@@ -152,7 +180,11 @@ func (a *app) applyManagedRoutes() (bool, string) {
 			messages = append(messages, "Previous proxy listeners restored")
 		}
 		messages = append(messages, a.rollbackManagedRouter(journal, before)...)
-		if mihomoAttempted {
+		if txID != "" {
+			if err := finishVPNDNS(txID, "rollback"); err != nil {
+				messages = append(messages, "VPN ROLLBACK FAILED: "+err.Error())
+			}
+		} else if mihomoAttempted {
 			if ok, msg := a.syncMihomoDNS(previous); !ok {
 				messages = append(messages, "SYSTEM HOSTS ROLLBACK FAILED: "+msg)
 			}
@@ -161,7 +193,7 @@ func (a *app) applyManagedRoutes() (bool, string) {
 	}
 	ok, out := a.applyRoutes()
 	if !ok {
-		return false, out
+		return rollback(out)
 	}
 	outputs := []string{out}
 	if err := a.addManagedDNS(dnsAdds, &journal); err != nil {
@@ -181,6 +213,16 @@ func (a *app) applyManagedRoutes() (bool, string) {
 		return rollback(err.Error())
 	}
 	outputs = append(outputs, fmt.Sprintf("managed router records: %d public entries removed, %d exact DNS records removed", len(cleanup.proxies), len(cleanup.dns)))
+	if proxyOp != nil {
+		proxyOp.Status = "commit-decided"
+		if err = saveProxyOperation(*proxyOp); err != nil {
+			return false, "Commit decision requires recovery: " + err.Error()
+		}
+		if err = a.recoverProxyOperation(); err != nil {
+			return false, "Applied transaction requires commit recovery: " + err.Error()
+		}
+		return true, strings.Join(outputs, "\n")
+	}
 	if err := schema.SaveRoutes(a.appliedRoutesPath(), routes); err != nil {
 		return rollback("Cannot save applied snapshot: " + err.Error())
 	}
@@ -210,13 +252,11 @@ func (a *app) startMaintenance() {
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" {
 		return
 	}
-	go func() {
+	managedGo(func() {
 		client := &http.Client{Timeout: 3 * time.Second}
 		fingerprintPath := filepath.Join(filepath.Dir(a.appliedRoutesPath()), "keenetic.sha256")
 		fingerprint, _ := os.ReadFile(fingerprintPath)
 		lastCertificate := string(fingerprint)
-		tick := time.NewTicker(time.Minute)
-		defer tick.Stop()
 		iterations := 0
 		for {
 			// Apply only the last successfully generated routes, never an un-applied UI draft.
@@ -227,6 +267,14 @@ func (a *app) startMaintenance() {
 			}
 			if healthy {
 				a.operationMu.Lock()
+				if err := a.recoverProxyOperation(); err != nil {
+					log.Printf("proxy recovery pending: %v", err)
+					a.operationMu.Unlock()
+					if !workerWait(time.Minute) {
+						return
+					}
+					continue
+				}
 				if _, err := os.Stat(a.appliedRoutesPath()); err == nil {
 					if routes, err := schema.LoadRoutes(a.appliedRoutesPath()); err == nil {
 						if ok, msg := a.syncMihomoDNS(routes); !ok {
@@ -253,7 +301,9 @@ func (a *app) startMaintenance() {
 				a.operationMu.Unlock()
 			}
 			iterations++
-			<-tick.C
+			if !workerWait(time.Minute) {
+				return
+			}
 		}
-	}()
+	})
 }

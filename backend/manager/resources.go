@@ -162,27 +162,13 @@ func (a *app) startResources() {
 	if url := strings.TrimSpace(os.Getenv("PROXMOX_URL")); url != "" {
 		resources.pve = newPVEClient(url, getenv("PROXMOX_TOKEN_FILE", "/opt/etc/homenet/secrets/proxmox.token"), os.Getenv("PROXMOX_FINGERPRINT"))
 	}
-	go func() {
-		for {
-			resources.sample()
-			time.Sleep(sampleEvery)
-		}
-	}()
+	every(sampleEvery, resources.sample)
 	// Remote sources each get their own loop, so a slow one does not stall
 	// the local sampler or the others.
 	every(2*sampleEvery, resources.pollMesh)
 	if resources.pve != nil {
 		every(2*sampleEvery, resources.pollProxmox)
 	}
-}
-
-func every(interval time.Duration, fn func()) {
-	go func() {
-		for {
-			fn()
-			time.Sleep(interval)
-		}
-	}()
 }
 
 func (m *resourceMonitor) pollMesh() {

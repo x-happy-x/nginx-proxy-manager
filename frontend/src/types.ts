@@ -173,6 +173,7 @@ export type ConsoleItem = {
 };
 
 export type DmsApp = {
+  pending_routes?: {apps?: RouteApp[];hosts?: RouteHost[];remove_apps?: string[];remove_hosts?: string[]};
 	name?: string;
 	version?: string;
 	description?: string;

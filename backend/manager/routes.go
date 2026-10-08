@@ -62,7 +62,7 @@ func (a *app) backupRoutesFile() (bool, string, string) {
 		return false, err.Error(), ""
 	}
 	dst := filepath.Join(backupDir, fmt.Sprintf("%s.%s.bak%s", base, time.Now().Format("20060102-150405"), ext))
-	if err := osWriteFile(dst, body, 0o644); err != nil {
+	if err := osWriteFile(dst, body, 0o600); err != nil {
 		return false, err.Error(), ""
 	}
 	return true, "backup created", dst

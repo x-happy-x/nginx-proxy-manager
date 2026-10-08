@@ -24,8 +24,11 @@ func Path() string {
 	return "/opt/etc/homenet/access.json"
 }
 func Load() (Config, error) {
+	return LoadFile(Path())
+}
+func LoadFile(path string) (Config, error) {
 	c := Config{Apps: map[string]Rule{}}
-	b, e := os.ReadFile(Path())
+	b, e := os.ReadFile(path)
 	if os.IsNotExist(e) {
 		return c, nil
 	}

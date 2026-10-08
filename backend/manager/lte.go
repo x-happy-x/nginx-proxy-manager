@@ -315,7 +315,7 @@ func (t *lteTools) startLoad(seconds int) error {
 	}
 	t.loadUntil, t.loadErr = time.Now().Unix()+int64(seconds), ""
 	t.mu.Unlock()
-	go func() {
+	managedGo(func() {
 		url, err := lteLoadURL()
 		var conn *rosConn
 		if err == nil {
@@ -332,7 +332,7 @@ func (t *lteTools) startLoad(seconds int) error {
 			t.loadErr = err.Error()
 		}
 		t.mu.Unlock()
-	}()
+	})
 	return nil
 }
 
@@ -346,7 +346,7 @@ func (t *lteTools) startSurvey(bands []int, label string) (*lteSurvey, error) {
 	}
 	s := &lteSurvey{ID: time.Now().UnixMilli(), Label: label, Started: time.Now().Unix(), Bands: bands, Results: []lteSurveyBand{}}
 	t.survey, t.busy = s, true
-	go t.runSurvey(s)
+	managedGo(func() { t.runSurvey(s) })
 	return s, nil
 }
 

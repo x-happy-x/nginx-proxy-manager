@@ -38,6 +38,7 @@ type Props = {
   onApplyStub: () => void;
   onUploadStub: (content: string) => void;
   onRestartUi: () => void;
+  platformManaged?: boolean;
 };
 
 type Editor = { type: "app" | "host"; idx: number } | null;
@@ -102,7 +103,7 @@ function endpointLabel(ep: HostEndpoint): string {
   return ep.behavior?.ndns_profile ? `KeenDNS ${port}` : `${ep.listen.protocol.toUpperCase()} ${port}`;
 }
 
-export function Routing({ doc, busy, onChange, onApplyStub, onUploadStub, onRestartUi }: Props) {
+export function Routing({ doc, busy, onChange, onApplyStub, onUploadStub, onRestartUi, platformManaged }: Props) {
   const [tab, setTab] = useState<"apps" | "hosts" | "listen">("apps");
   const [editor, setEditor] = useState<Editor>(null);
   const [remove, setRemove] = useState<{ type: "app" | "host"; idx: number; title: string } | null>(null);
@@ -369,6 +370,7 @@ export function Routing({ doc, busy, onChange, onApplyStub, onUploadStub, onRest
           onApplyStub={onApplyStub}
           onUploadStub={onUploadStub}
           onRestartUi={onRestartUi}
+          platformManaged={platformManaged}
         />
       ) : null}
 
@@ -767,6 +769,7 @@ function ListenSettings({
   onApplyStub,
   onUploadStub,
   onRestartUi,
+  platformManaged,
 }: {
   doc: RoutesDocument;
   busy: boolean;
@@ -774,6 +777,7 @@ function ListenSettings({
   onApplyStub: () => void;
   onUploadStub: (content: string) => void;
   onRestartUi: () => void;
+  platformManaged?: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { ports, ui, stub } = doc.globals;
@@ -848,7 +852,7 @@ function ListenSettings({
           </div>
         </section>
 
-        <section className="card">
+        {platformManaged ? <section className="card"><div className="card-body"><h2>Интерфейс HomeNet</h2><p>Параметры общей панели находятся в ядре HomeNet.</p><a href="#/system">Открыть систему →</a></div></section> : <section className="card">
           <div className="card-header">
             <div className="card-title">
               <h2>Интерфейс менеджера</h2>
@@ -874,7 +878,7 @@ function ListenSettings({
               </button>
             </div>
           </div>
-        </section>
+        </section>}
       </div>
     </div>
   );

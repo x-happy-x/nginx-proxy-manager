@@ -329,7 +329,7 @@ export type InstallState = {
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
-    headers: init?.body ? { "Content-Type": "application/json", ...(init?.headers || {}) } : init?.headers,
+    headers: { "X-HomeNet-UI": "1", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(init?.headers || {}) },
   });
   const text = await res.text();
   let data: unknown = null;

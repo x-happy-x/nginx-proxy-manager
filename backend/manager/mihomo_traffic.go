@@ -136,13 +136,16 @@ func (a *app) startMihomoTraffic() {
 		return
 	}
 	traffic = newTrafficCollector(trafficStatePath(), time.Now())
-	go func() {
+	managedGo(func() {
 		tick := time.NewTicker(trafficPoll)
 		save := time.NewTicker(time.Minute)
 		defer tick.Stop()
 		defer save.Stop()
 		for {
 			select {
+			case <-workerContext.Done():
+				traffic.save()
+				return
 			case <-tick.C:
 				var body struct {
 					DownloadTotal int64        `json:"downloadTotal"`
@@ -169,7 +172,7 @@ func (a *app) startMihomoTraffic() {
 				traffic.save()
 			}
 		}
-	}()
+	})
 }
 
 func connHost(c mihomoConn) string {

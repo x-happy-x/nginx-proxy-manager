@@ -1,0 +1,20 @@
+[
+  {
+    "id": "proxy", "name": "Прокси и домены", "description": "Домены, HTTPS, nginx, DNS и KeenDNS", "port": 63501,
+    "pages": ["servers", "stats", "logs", "certs", "dns", "advanced", "routing", "proxy-system"],
+    "paths": ["/api/routes", "/api/routes/", "/api/nginx/", "/api/ca/", "/api/cert/", "/api/dns/", "/api/ip-hosts", "/api/ip-hosts/", "/api/ndns/", "/api/apply", "/api/apply/", "/api/stub/"],
+    "data": ["/opt/etc/homenet/nginx", "/opt/etc/homenet/proxy"]
+  },
+  {
+    "id": "network", "name": "Мониторинг связи", "description": "Интернет, LTE, диагностика и ресурсы устройств", "port": 63502,
+    "pages": ["network", "scheme", "antenna", "netdns", "analyzer", "scan", "resources"],
+    "paths": ["/api/network", "/api/network/", "/api/resources"],
+    "data": ["/opt/etc/homenet/network"]
+  },
+  {
+    "id": "vpn", "name": "VPN и маршрутизация", "description": "mihomo, XKeen, подписки, Tailscale и OLCRTC", "port": 63503,
+    "pages": ["vpn", "vpnsvc", "subs", "torrents", "vroute", "why", "proxies", "checks", "connections", "traffic", "rules", "corelog", "coreconfig", "core"],
+    "paths": ["/api/core/", "/api/mihomo/"],
+    "data": ["/opt/etc/homenet/mihomo"]
+  }
+]

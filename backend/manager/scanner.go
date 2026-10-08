@@ -83,7 +83,7 @@ func startScanner() {
 			scan.lastRun = r.History[len(r.History)-1].At
 		}
 	}
-	go scan.loop()
+	managedGo(scan.loop)
 }
 
 func (s *scanner) loop() {
@@ -101,6 +101,8 @@ func (s *scanner) loop() {
 			s.runAll()
 		}
 		select {
+		case <-workerContext.Done():
+			return
 		case <-s.wake:
 		case <-time.After(30 * time.Second):
 		}
@@ -267,7 +269,7 @@ func (a *app) handleNetworkPost(w http.ResponseWriter, r *http.Request) {
 		running := scan.running
 		scan.mu.Unlock()
 		if !running {
-			go scan.runAll()
+			managedGo(scan.runAll)
 		}
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "running": true})
 	default:

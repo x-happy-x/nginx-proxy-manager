@@ -89,14 +89,7 @@ func (a *app) ensureTelemetry() *telemetryStore {
 }
 func (a *app) startTelemetry() {
 	store := a.ensureTelemetry()
-	go func() {
-		_ = store.poll(time.Now())
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for now := range ticker.C {
-			_ = store.poll(now)
-		}
-	}()
+	every(2*time.Second, func() { _ = store.poll(time.Now()) })
 }
 func newTelemetryStore(path, statePath string, now time.Time) *telemetryStore {
 	s := &telemetryStore{path: path, statePath: statePath, buckets: map[telemetryKey]*telemetryBucket{}, hostNames: map[string]string{}, checkpoint: telemetryCheckpoint{Version: telemetryStateVersion, LogPath: path, CoverageFrom: now}}

@@ -89,7 +89,7 @@ func (a *app) startExits() {
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" || os.Getenv("MIHOMO_TRAFFIC_DISABLED") == "1" {
 		return
 	}
-	go exits.loop()
+	managedGo(exits.loop)
 }
 
 func (e *exitState) saveLocked() {
@@ -194,7 +194,7 @@ func (e *exitState) run(targets []exitTarget, reason string, full bool) bool {
 	}
 	e.running, e.done, e.total, e.reason, e.started = true, 0, len(targets), reason, time.Now().Unix()
 	e.mu.Unlock()
-	go func() {
+	managedGo(func() {
 		jobs := make(chan exitTarget)
 		var wg sync.WaitGroup
 		for i := 0; i < exitParallel; i++ {
@@ -226,7 +226,7 @@ func (e *exitState) run(targets []exitTarget, reason string, full bool) bool {
 		}
 		e.saveLocked()
 		e.mu.Unlock()
-	}()
+	})
 	return true
 }
 
@@ -259,7 +259,9 @@ func (e *exitState) pending(targets []exitTarget, now int64) []exitTarget {
 
 // loop: new nodes every 10 minutes, everything once a night (3–5 h local).
 func (e *exitState) loop() {
-	time.Sleep(2 * time.Minute)
+	if !workerWait(2 * time.Minute) {
+		return
+	}
 	for {
 		if targets, err := exitTargets(); err == nil {
 			now := time.Now()
@@ -273,7 +275,9 @@ func (e *exitState) loop() {
 				e.run(fresh, "новые узлы", false)
 			}
 		}
-		time.Sleep(10 * time.Minute)
+		if !workerWait(10 * time.Minute) {
+			return
+		}
 	}
 }
 

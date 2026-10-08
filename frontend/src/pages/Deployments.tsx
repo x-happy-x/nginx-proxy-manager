@@ -40,7 +40,7 @@ export function Deployments({
     setWorking(true); setMessage(""); setPlan(null);
     try {
       const endpoint = file ? `/api/dms/packages${dryRun ? "?dry_run=true" : ""}` : "/api/dms/install";
-      const res = await fetch(endpoint, {method: "POST", headers: {"Content-Type": file ? "application/gzip" : "application/json"}, body: file || JSON.stringify({url, sha256: checksum, dry_run: dryRun})});
+      const res = await fetch(endpoint, {method: "POST", headers: {"X-HomeNet-UI":"1", "Content-Type": file ? "application/gzip" : "application/json"}, body: file || JSON.stringify({url, sha256: checksum, dry_run: dryRun})});
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       if (dryRun) setPlan(data.plan);
@@ -53,7 +53,7 @@ export function Deployments({
     if (!window.confirm(`Восстановить ${app} из релиза ${release}? Сервис будет перезапущен.`)) return;
     setWorking(true);
     try {
-      const res = await fetch("/api/dms/rollback", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({app, release})});
+      const res = await fetch("/api/dms/rollback", {method: "POST", headers: {"X-HomeNet-UI":"1", "Content-Type": "application/json"}, body: JSON.stringify({app, release})});
       const data = await res.json(); if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setMessage(`Восстановление принято: ${data.id}`); await refreshJobs();
     } catch (err) { setMessage(err instanceof Error ? err.message : "Ошибка восстановления"); }

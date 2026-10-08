@@ -14,6 +14,9 @@ func loadRuntimeEnv(baseDir string) {
 }
 
 func resolveBaseDir() (string, error) {
+	if base := strings.TrimSpace(os.Getenv("HOMENET_APP_DIR")); base != "" {
+		return filepath.Abs(base)
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
