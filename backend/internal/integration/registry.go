@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 )
 
@@ -94,32 +93,7 @@ func (r *Registry) Replace(items []Installed) error {
 	if err := r.validate(items); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(r.path), 0700); err != nil {
-		return err
-	}
-	body, err := json.MarshalIndent(registryFile{Protocol, items}, "", "  ")
-	if err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(r.path), ".registry-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if err = f.Chmod(0600); err == nil {
-		_, err = f.Write(body)
-	}
-	if err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = os.Rename(f.Name(), r.path); err != nil {
+	if err := AtomicJSON(r.path, registryFile{Protocol, items}); err != nil {
 		return err
 	}
 	r.items = items

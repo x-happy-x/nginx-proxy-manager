@@ -10,8 +10,12 @@ import (
 )
 
 func fixture(id string) Manifest {
+	port := map[string]string{"proxy": "64001", "network": "64002", "vpn": "64003"}[id]
+	if port == "" {
+		port = "64004"
+	}
 	return Manifest{Schema: 1, ID: id, Name: id, Version: "1.0.0", Arch: "amd64", CoreAPI: 1, UIAPI: 1, Package: "homenet-" + id, DataSchema: 1,
-		UI: UI{Entry: "entry.js", Pages: []Page{{ID: id, Title: id}}}, Backend: Backend{Endpoint: "http://127.0.0.1:64001", Health: "/health", Paths: []string{"/api/items/", "/api/status"}, Service: "S90homenet-" + id}}
+		UI: UI{Entry: "entry.js", Pages: []Page{{ID: id, Title: id}}}, Backend: Backend{Endpoint: "http://127.0.0.1:" + port, Health: "/health", Paths: []string{"/api/items/", "/api/status"}, Service: "S90homenet-" + id}}
 }
 func TestAllCombinationsAndPersistence(t *testing.T) {
 	for mask := 0; mask < 8; mask++ {

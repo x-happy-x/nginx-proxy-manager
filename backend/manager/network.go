@@ -83,20 +83,21 @@ type pingLite struct {
 }
 
 type netSample struct {
-	T     int64               `json:"t"`
-	API   bool                `json:"api"` // MikroTik API answered
-	LTE   string              `json:"lte,omitempty"`
-	RSRP  int                 `json:"rsrp,omitempty"`
-	RSRQ  int                 `json:"rsrq,omitempty"`
-	SINR  int                 `json:"sinr,omitempty"`
-	Q     int                 `json:"q,omitempty"`
-	MT    map[string]pingLite `json:"mt"`
-	NC    map[string]pingLite `json:"nc"`
-	Proxy pingLite            `json:"proxy"`
-	LTERx float64             `json:"lte_rx"`
-	LTETx float64             `json:"lte_tx"`
-	WANRx float64             `json:"wan_rx"`
-	WANTx float64             `json:"wan_tx"`
+	T              int64               `json:"t"`
+	API            bool                `json:"api"` // MikroTik API answered
+	LTE            string              `json:"lte,omitempty"`
+	RSRP           int                 `json:"rsrp,omitempty"`
+	RSRQ           int                 `json:"rsrq,omitempty"`
+	SINR           int                 `json:"sinr,omitempty"`
+	Q              int                 `json:"q,omitempty"`
+	MT             map[string]pingLite `json:"mt"`
+	NC             map[string]pingLite `json:"nc"`
+	Proxy          pingLite            `json:"proxy"`
+	ProxyAvailable *bool               `json:"proxy_available,omitempty"`
+	LTERx          float64             `json:"lte_rx"`
+	LTETx          float64             `json:"lte_tx"`
+	WANRx          float64             `json:"wan_rx"`
+	WANTx          float64             `json:"wan_tx"`
 }
 
 type netCheck struct {
@@ -143,7 +144,7 @@ func (m *netMonitor) checks() []netCheck {
 		{ID: "mt-domain", Name: "Домены · MikroTik", Group: "summary", test: func(s netSample) (bool, bool) { return allPing(s.MT, m.targets, "domain"), s.API }},
 		{ID: "nc-internet", Name: "Интернет · Netcraze", Group: "summary", test: func(s netSample) (bool, bool) { return anyPing(s.NC, m.targets, "internet"), true }},
 		{ID: "nc-domain", Name: "Домены · Netcraze", Group: "summary", test: func(s netSample) (bool, bool) { return allPing(s.NC, m.targets, "domain"), true }},
-		{ID: "proxy", Name: "Интернет через mihomo", Group: "summary", test: func(s netSample) (bool, bool) { return s.Proxy.OK, true }},
+		{ID: "proxy", Name: "Интернет через mihomo", Group: "summary", test: func(s netSample) (bool, bool) { return s.Proxy.OK, s.ProxyAvailable == nil || *s.ProxyAvailable }},
 	}
 	for _, t := range m.targets {
 		id := t.ID
@@ -201,6 +202,16 @@ func (m *netMonitor) poll() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		available := moduleEnabled("vpn")
+		mu.Lock()
+		sample.ProxyAvailable = &available
+		mu.Unlock()
+		if !available {
+			mu.Lock()
+			details["proxy_error"] = "Интеграция VPN недоступна"
+			mu.Unlock()
+			return
+		}
 		started := time.Now()
 		ok, err := proxyReachable("www.gstatic.com", 80, 8*time.Second)
 		mu.Lock()

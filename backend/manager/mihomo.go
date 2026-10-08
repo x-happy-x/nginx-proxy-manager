@@ -94,6 +94,14 @@ func mihomoEnvironment() (mihomoSettings, bool, error) {
 }
 
 func (a *app) previewMihomoDNS(routes schema.Routes) (mihomoDNSPlan, error) {
+	if moduleKind == "proxy" {
+		plan := mihomoDNSPlan{Changes: []mihomoDNSChange{}, Message: "Интеграция VPN не включена; её DNS не изменяется"}
+		if !moduleEnabled("vpn") {
+			return plan, nil
+		}
+		err := moduleRPC("vpn-dns/preview", vpnDNSRequest{Routes: routes}, &plan)
+		return plan, err
+	}
 	s, enabled, err := mihomoEnvironment()
 	plan := mihomoDNSPlan{Enabled: enabled, Mode: s.mode, Changes: []mihomoDNSChange{}, Message: "Mihomo DNS synchronization is disabled; configure system-hosts mode to publish local hosts without reloading Mihomo"}
 	if err != nil || !enabled {
@@ -302,6 +310,9 @@ func mihomoPrivateFile(dir, pattern string, body []byte) (string, error) {
 // syncMihomoDNS never removes pre-existing user hosts. System-hosts mode may
 // prune stale entries only inside the manager's explicitly marked block.
 func (a *app) syncMihomoDNS(routes schema.Routes) (bool, string) {
+	if moduleKind == "proxy" {
+		return a.syncVPNDNSContract(routes)
+	}
 	mihomoSyncMu.Lock()
 	defer mihomoSyncMu.Unlock()
 	s, enabled, err := mihomoEnvironment()
@@ -537,6 +548,11 @@ func (a *app) applyMihomoHosts(s mihomoSettings, routes schema.Routes, validate 
 // replaces target and reloads Mihomo. A failed reload restores the original
 // file and runtime unless someone else changed the file meanwhile.
 func mihomoSwapConfig(s mihomoSettings, target string, original, candidate []byte, what string, validate func(mihomoSettings, string) error, reload func(mihomoSettings) error) (string, error) {
+	if moduleKind == "vpn" {
+		if err := vpnDNSPending(""); err != nil {
+			return "", err
+		}
+	}
 	staged, err := mihomoPrivateFile(filepath.Dir(target), ".homenet-staged-*.yaml", candidate)
 	if err != nil {
 		return "", fmt.Errorf("stage Mihomo %s: %v", what, err)

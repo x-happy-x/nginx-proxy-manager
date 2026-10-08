@@ -68,6 +68,9 @@ func (m Manifest) Validate(arch string) error {
 	if !ValidID(m.ID) || !ValidID(m.Package) || !version.MatchString(m.Version) || strings.TrimSpace(m.Name) == "" {
 		return fmt.Errorf("invalid integration identity")
 	}
+	if m.ID == "core" || m.ID == "dms" || m.ID == "account" {
+		return fmt.Errorf("reserved baseline component")
+	}
 	if m.Arch != arch {
 		return fmt.Errorf("package architecture %q does not match %q", m.Arch, arch)
 	}
@@ -101,6 +104,9 @@ func (m Manifest) Validate(arch string) error {
 	seen := map[string]bool{}
 	for _, p := range m.UI.Pages {
 		for _, id := range append([]string{p.ID}, p.Aliases...) {
+			if id == "overview" || id == "integrations" || id == "system" || id == "access" {
+				return fmt.Errorf("reserved Core page")
+			}
 			if !ValidID(id) || seen[id] {
 				return fmt.Errorf("invalid or duplicate page %q", id)
 			}
@@ -146,6 +152,7 @@ func (m Manifest) Allows(p string) bool {
 func ValidateSet(items []Manifest, arch string) error {
 	byID := map[string]Manifest{}
 	routes := map[string]string{}
+	endpoints := map[string]bool{}
 	for _, m := range items {
 		if err := m.Validate(arch); err != nil {
 			return fmt.Errorf("%s: %w", m.ID, err)
@@ -154,6 +161,10 @@ func ValidateSet(items []Manifest, arch string) error {
 			return fmt.Errorf("duplicate integration %s", m.ID)
 		}
 		byID[m.ID] = m
+		if endpoints[m.Backend.Endpoint] {
+			return fmt.Errorf("duplicate worker endpoint")
+		}
+		endpoints[m.Backend.Endpoint] = true
 		for _, p := range m.UI.Pages {
 			for _, id := range append([]string{p.ID}, p.Aliases...) {
 				if owner, ok := routes[id]; ok {

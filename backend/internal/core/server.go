@@ -19,18 +19,25 @@ import (
 )
 
 type Config struct {
-	Listen       string `json:"listen"`
-	StateDir     string `json:"state_dir"`
-	StaticDir    string `json:"static_dir"`
-	PackagesDir  string `json:"packages_dir"`
-	AccountURL   string `json:"account_url"`
-	DMSURL       string `json:"dms_url"`
-	DMSTokenFile string `json:"dms_token_file"`
+	Listen         string            `json:"listen"`
+	StateDir       string            `json:"state_dir"`
+	StaticDir      string            `json:"static_dir"`
+	PackagesDir    string            `json:"packages_dir"`
+	AccountURL     string            `json:"account_url"`
+	DMSURL         string            `json:"dms_url"`
+	DMSTokenFile   string            `json:"dms_token_file"`
+	WorkerEnv      string            `json:"worker_env"`
+	WorkerAppDir   string            `json:"worker_app_dir"`
+	AccessPath     string            `json:"access_path,omitempty"`
+	LauncherPath   string            `json:"launcher_path,omitempty"`
+	WorkerDefaults map[string]string `json:"worker_defaults,omitempty"`
+	ManageWorkers  bool              `json:"manage_workers"`
 }
 type Server struct {
-	Config   Config
-	Registry *integration.Registry
-	Client   *http.Client
+	Config    Config
+	Registry  *integration.Registry
+	Client    *http.Client
+	Lifecycle *integration.Lifecycle
 }
 type Identity struct {
 	Login string `json:"login"`
@@ -52,7 +59,10 @@ func New(cfg Config, arch string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Config: cfg, Registry: r, Client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	s := &Server{Config: cfg, Registry: r, Client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	_, port, _ := net.SplitHostPort(cfg.Listen)
+	s.Lifecycle = &integration.Lifecycle{Registry: r, PackagesDir: cfg.PackagesDir, StateDir: cfg.StateDir, Arch: arch, Runtime: &integration.Processes{StateDir: cfg.StateDir, PackagesDir: cfg.PackagesDir, ConfigEnv: cfg.WorkerEnv, AppDir: cfg.WorkerAppDir, CoreURL: "http://127.0.0.1:" + port, Defaults: cfg.WorkerDefaults}}
+	return s, nil
 }
 func jsonReply(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -111,6 +121,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		jsonReply(w, 200, map[string]any{"status": "ok", "component": "homenet-core", "protocol": 1})
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/internal/") {
+		s.internal(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/_gate/") {
 		target, _ := url.Parse(s.Config.AccountURL)
 		proxy := httputil.NewSingleHostReverseProxy(target)
@@ -147,12 +161,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "same-origin UI request required", 403)
 		return
 	}
+	if s.portalAdmin(w, r) {
+		return
+	}
 	if r.URL.Path == "/api/platform" && r.Method == "GET" {
 		jsonReply(w, 200, map[string]any{"identity": id, "protocol": 1, "integrations": s.Registry.Snapshot()})
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/integrations/") {
+
 		integration.Gateway{Registry: s.Registry, Token: s.workerToken}.ServeHTTP(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/platform/") {
+		s.lifecycle(w, r)
 		return
 	}
 	if owner := legacyOwner(r.URL.Path); owner != "" {
@@ -259,7 +281,7 @@ type CatalogEntry struct {
 }
 
 func (s *Server) portal(w http.ResponseWriter, r *http.Request, id Identity) {
-	policy, err := access.Load()
+	policy, err := access.LoadFile(s.accessPath())
 	if err != nil {
 		http.Error(w, "Access policy unavailable", 503)
 		return
@@ -286,5 +308,10 @@ func (s *Server) portal(w http.ResponseWriter, r *http.Request, id Identity) {
 			visible = append(visible, entry)
 		}
 	}
-	jsonReply(w, 200, map[string]any{"identity": id, "items": visible})
+	doc, launcher, links, err := s.portalDocument(id, policy)
+	if err != nil {
+		http.Error(w, "Portal unavailable", 503)
+		return
+	}
+	jsonReply(w, 200, map[string]any{"identity": id, "items": visible, "login": id.Login, "admin": id.Admin, "doc": doc, "launcher": launcher, "links": links})
 }

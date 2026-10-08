@@ -56,6 +56,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	workerContext = ctx
+	moduleKind, moduleTokenFile = workerID, *tokenFile
 	a, err := newManager()
 	if err != nil {
 		log.Fatal(err)
@@ -89,9 +90,19 @@ func main() {
 			a.writeJSON(w, 200, response{"status": "ok", "integration": workerID, "version": manifest.Version})
 			return
 		}
+		if workerID == "vpn" && strings.HasPrefix(r.URL.Path, "/internal/vpn-dns/") {
+			a.handleVPNDNSTransaction(w, r)
+			return
+		}
 		if !manifest.Allows(r.URL.Path) {
 			http.NotFound(w, r)
 			return
+		}
+		if workerID == "vpn" && r.Method != "GET" {
+			if err := vpnDNSPending(""); err != nil {
+				http.Error(w, err.Error(), 409)
+				return
+			}
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 		if strings.HasPrefix(r.URL.Path, mihomoAPIPrefix+"/") {
