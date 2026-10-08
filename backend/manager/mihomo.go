@@ -32,6 +32,7 @@ type mihomoDNSChange struct {
 
 type mihomoDNSPlan struct {
 	Enabled    bool              `json:"enabled"`
+	Changed    bool              `json:"changed"`
 	Mode       string            `json:"mode,omitempty"`
 	ConfigPath string            `json:"config_path,omitempty"`
 	Changes    []mihomoDNSChange `json:"changes"`
@@ -109,7 +110,12 @@ func (a *app) previewMihomoDNS(routes schema.Routes) (mihomoDNSPlan, error) {
 	}
 	plan.ConfigPath = s.config
 	if s.mode == "system-hosts" {
-		_, changes, err := a.mihomoSystemHostsCandidate(s, routes)
+		candidate, changes, err := a.mihomoSystemHostsCandidate(s, routes)
+		original, readErr := os.ReadFile(s.hostsPath)
+		if err == nil {
+			err = readErr
+		}
+		plan.Changed = err == nil && !bytes.Equal(candidate, original)
 		plan.Changes = changes
 		plan.Message = "Update only the HomeNet block in system hosts; Mihomo reads it within five seconds without reload"
 		return plan, err
@@ -118,7 +124,8 @@ func (a *app) previewMihomoDNS(routes schema.Routes) (mihomoDNSPlan, error) {
 	if err != nil {
 		return plan, fmt.Errorf("read Mihomo configuration: %w", err)
 	}
-	_, changes, _, err := a.mihomoHostsCandidate(body, routes)
+	candidate, changes, _, err := a.mihomoHostsCandidate(body, routes)
+	plan.Changed = err == nil && !bytes.Equal(candidate, body)
 	if err != nil {
 		return plan, err
 	}

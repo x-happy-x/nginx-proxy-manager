@@ -85,6 +85,14 @@ func (a *app) syncVPNDNSContract(routes schema.Routes) (bool, string) {
 	if !moduleEnabled("vpn") {
 		return true, "VPN integration is disabled; DNS capability unavailable"
 	}
+	// Avoid a durable snapshot every minute when DNS is already current.
+	var preview mihomoDNSPlan
+	if err := moduleRPC("vpn-dns/preview", vpnDNSRequest{Routes: routes}, &preview); err != nil {
+		return false, err.Error()
+	}
+	if !preview.Enabled || !preview.Changed {
+		return true, "VPN DNS is already current"
+	}
 	id, err := newContractID()
 	if err != nil {
 		return false, err.Error()
