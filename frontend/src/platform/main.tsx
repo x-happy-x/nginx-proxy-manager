@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import * as ReactDOM from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { request, type Installed, type IntegrationModule, type Host } from "./sdk";
+import "../styles/tokens.css";
 import "./style.css";
 
 declare global { var __HOMENET_RUNTIME__: { React: typeof React; ReactDOM: typeof ReactDOM; ReactDOMClient: { createRoot: typeof createRoot }; portalTarget?: Element | DocumentFragment }; }
@@ -91,7 +92,7 @@ function App({onPortal}: {onPortal: () => void}) {
   const [dms, setDms] = useState<"loading" | "available" | "unavailable">("loading");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [notice, setNotice] = useState("");
-  const [theme, setTheme] = useState(() => localStorage.getItem("homenet-theme") || "light");
+  const [theme, setTheme] = useState(() => { try { const t = localStorage.getItem("homenet-theme"); if (t === "dark" || t === "light") return t; } catch { /* storage may be unavailable */ } return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; });
   const notify = React.useCallback((message: string) => setNotice(message), []);
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("homenet-theme", theme); }, [theme]);
   useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
@@ -116,7 +117,7 @@ function App({onPortal}: {onPortal: () => void}) {
   if (!data) return <main className="hn-boot"><div className="hn-logo">H</div><h1>HomeNet</h1><p role="status">{error || "Подключение к HomeNet…"}</p>{error && <a className="hn-primary" href="/_gate/login?return=/">Войти через Account</a>}</main>;
   return <div className="hn-layout">
     <aside className="hn-sidebar"><a className="hn-brand" href="#/overview"><span className="hn-logo">H</span><span>HomeNet<small>Ваша домашняя сеть</small></span></a><div className="hn-nav-label">УПРАВЛЕНИЕ</div>
-      <button onClick={onPortal}>← Приложения</button><nav>{[{ id: "overview", title: "Обзор" }, ...active.map(i => ({ id: i.manifest.ui.pages[0]?.id || "integrations", title: i.manifest.name })), { id: "integrations", title: "Интеграции" }, { id: "system", title: "Система" }].map(n => <a key={n.id} className={page === n.id ? "active" : ""} href={`#/${n.id}`}>{n.title}{n.id === "integrations" && <span>{installed.length}</span>}</a>)}</nav>
+      <button onClick={onPortal}>← Приложения</button><nav>{[{ id: "overview", title: "Обзор" }, ...active.map(i => ({ id: i.manifest.ui.pages[0]?.id || "integrations", title: i.manifest.name, sub: i.manifest.description, mod: i.manifest.id })), { id: "integrations", title: "Интеграции" }, { id: "system", title: "Система" }].map((n: { id: string; title: string; sub?: string; mod?: string }) => <a key={n.id} className={page === n.id || (!!n.mod && module?.manifest.id === n.mod) ? "active" : ""} aria-current={page === n.id || (!!n.mod && module?.manifest.id === n.mod) ? "page" : undefined} href={`#/${n.id}`}>{n.title}{n.sub && <small>{n.sub}</small>}{n.id === "integrations" && <span>{installed.length}</span>}</a>)}</nav>
       <div className="hn-sidebar-bottom"><span className="hn-dot" /> HomeNet Core<small>Базовая платформа · API 1</small></div>
     </aside>
     <div className="hn-workspace"><header className="hn-header"><span>Домашняя сеть <b>/</b> {page === "integrations" ? "Интеграции" : page === "overview" ? "Обзор" : page === "system" ? "Система" : module?.manifest.name || "Раздел"}</span><div><button aria-label="Сменить тему" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "◐"}</button><span>{data.identity.login || "Администратор"}</span></div></header>
