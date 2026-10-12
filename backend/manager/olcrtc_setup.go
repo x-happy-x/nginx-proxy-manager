@@ -107,6 +107,9 @@ type olcServer struct {
 	ISP       string `json:"isp,omitempty"`
 	CountryAt int64  `json:"country_at,omitempty"`
 	Created   int64  `json:"created"`
+	// UDP relay beside olcrtc (olcrtc_udp.go); UDPKey never goes to the browser
+	UDPPort int    `json:"udp_port,omitempty"`
+	UDPKey  string `json:"udp_key,omitempty"`
 }
 
 type olcEvent struct {
@@ -466,7 +469,7 @@ func (o *olcState) snapshot() map[string]any {
 	servers := make([]olcServer, 0, len(o.st.Servers))
 	for _, s := range o.st.Servers {
 		cp := *s
-		cp.Key, cp.HostKey = "", ""
+		cp.Key, cp.HostKey, cp.UDPKey = "", "", ""
 		cp.Variants = append([]olcVariant{}, s.Variants...)
 		for i := range cp.Variants {
 			cp.Variants[i].Key = ""
@@ -638,7 +641,7 @@ func (o *olcState) start(kind string, req olcSetupReq) (*olcJob, error) {
 	if kind == "setup" {
 		steps = append(steps, [][2]string{{"swap", "Память для сборки"}, {"packages", "git, curl и openssl"}, {"go", "Go " + olcGoVersion}, {"source", "Исходники olcrtc"}, {"build", "Сборка olcrtc"}, {"key", "Ключ шифрования"}, {"service", "Служба olcrtc@"}}...)
 	}
-	steps = append(steps, [][2]string{{"pick", "Подбор вариантов"}, {"final", "Проверка связи"}}...)
+	steps = append(steps, [][2]string{{"udp", "UDP-реле"}, {"pick", "Подбор вариантов"}, {"final", "Проверка связи"}}...)
 	for _, s := range steps {
 		j.Steps = append(j.Steps, &olcStep{ID: s[0], Title: s[1], Status: "wait"})
 	}
@@ -844,7 +847,7 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 		v := olcVariant{Provider: f.Provider, Node: f.Node, Instance: olcProviderHost(f.Provider, f.Room), Transport: f.Transport, Room: f.Room, External: f.Container, Key: f.key}
 		if v.Node == "" {
 			v.Node = olcNodeName(srv, f.Provider, v.Instance, v.Transport, o.olcTaken())
-			node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": f.Provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+			node := olcWithRelay(map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": f.Provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": f.key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}, srv)
 			if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
 				o.logf(j, "existing", "узел для "+f.Container+" не добавлен: "+shortErr(err))
 				continue
@@ -882,25 +885,37 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			return
 		}
 	} else if j.Kind == "setup" {
-		// build needs ~4 GB: memory and swap together
+		// build needs ~3.5 GB of memory and swap together; the missing part is
+		// a swap file for the build only: off and deleted once it is done, so
+		// a small disk is not left with gigabytes of unused swap
+		tmpSwap := false
+		dropSwap := func() {
+			if tmpSwap {
+				out, _ := x.root(`swapoff /swapfile-homenet 2>/dev/null; rm -f /swapfile-homenet; free -m | awk '/Swap/{print $2}'`, 2*time.Minute)
+				o.logf(j, "build", "временный swap снят: "+olcLast(out))
+				tmpSwap = false
+			}
+		}
 		if memMB+swapMB < 3500 {
+			need := (3500 - memMB - swapMB + 511) / 512 * 512
 			o.set(j, "swap", func(s *olcStep) {
 				s.Status = "fail"
 				s.Detail = fmt.Sprintf("%d МБ памяти и %d МБ swap — сборка olcrtc на таком сервере обрывается", memMB, swapMB)
 			})
-			act := o.wait(j, "swap", "swap", "Включить swap 4 ГБ и продолжить")
+			act := o.wait(j, "swap", "swap", fmt.Sprintf("Включить swap %d МБ на время сборки и продолжить", need))
 			if act == "cancel" {
 				o.finish(j, false, "настройка отменена")
 				return
 			}
 			if act == "fix" {
 				if err := o.do(j, "swap", func() (string, error) {
-					out, err := x.root(`[ -f /swapfile ] || (fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096) && chmod 600 /swapfile && (swapon --show | grep -q /swapfile || (mkswap /swapfile && swapon /swapfile)) && (grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab) && free -m | awk '/Swap/{print $2}'`, 5*time.Minute)
+					out, err := x.root(fmt.Sprintf(`a=$(df -Pm / | awk 'NR==2{print $4}'); [ "$a" -ge %[1]d ] || { echo "на диске $a МБ: на swap %[2]d МБ и сборку нужно %[1]d" >&2; exit 1; }; [ -f /swapfile-homenet ] || (fallocate -l %[2]dM /swapfile-homenet || dd if=/dev/zero of=/swapfile-homenet bs=1M count=%[2]d) && chmod 600 /swapfile-homenet && (swapon --show | grep -q /swapfile-homenet || (mkswap /swapfile-homenet >/dev/null && swapon /swapfile-homenet)) && free -m | awk '/Swap/{print $2}'`, need+3000, need), 5*time.Minute)
 					o.logf(j, "swap", out)
 					if err != nil {
-						return "", err
+						return "", fmt.Errorf("%s: %s", err, olcLast(out))
 					}
-					return "swap 4 ГБ включён и прописан в /etc/fstab", nil
+					tmpSwap = true
+					return fmt.Sprintf("swap %d МБ включён на время сборки, потом будет удалён", need), nil
 				}); err != nil {
 					o.finish(j, false, err.Error())
 					return
@@ -923,7 +938,8 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			{"packages", `if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates openssl tar; elif command -v dnf >/dev/null; then dnf install -y -q git curl ca-certificates openssl tar; elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed git curl ca-certificates openssl tar; else echo "нет apt-get, dnf или pacman" >&2; exit 1; fi; git --version`, 10 * time.Minute, "git, curl, openssl установлены"},
 			{"go", fmt.Sprintf(`if /usr/local/go/bin/go version 2>/dev/null | grep -q 'go%[1]s'; then /usr/local/go/bin/go version; else curl -fsSL https://go.dev/dl/go%[1]s.linux-%[2]s.tar.gz -o /tmp/go.tgz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz && /usr/local/go/bin/go version; fi`, olcGoVersion, srv.Arch), 10 * time.Minute, "Go " + olcGoVersion},
 			{"source", fmt.Sprintf(`mkdir -p %[1]s/src && cd %[1]s/src && ([ -d .git ] || git init -q) && (git remote get-url origin >/dev/null 2>&1 || git remote add origin %[2]s) && git fetch -q --depth 1 origin %[3]s && git reset -q --hard FETCH_HEAD && git log -1 --format='%%h %%cs'`, olcDir, olcRepo, olcCommit), 5 * time.Minute, "исходники olcrtc той же версии, что в ядре роутера"},
-			{"build", fmt.Sprintf(`cd %[1]s/src && h=$(git rev-parse --short HEAD) && if [ -x %[1]s/olcrtc ] && [ "$(cat %[1]s/.built 2>/dev/null)" = "$h" ]; then echo "уже собран из этой версии $h"; else CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && echo "$h" > %[1]s/.built && echo "собран $h"; fi`, olcDir), 30 * time.Minute, "olcrtc"},
+			// Go's module and build caches (~2 GB) are not kept: one build per version
+			{"build", fmt.Sprintf(`cd %[1]s/src && h=$(git rev-parse --short HEAD) && if [ -x %[1]s/olcrtc ] && [ "$(cat %[1]s/.built 2>/dev/null)" = "$h" ]; then echo "уже собран из этой версии $h"; else a=$(df -Pm / | awk 'NR==2{print $4}'); [ "$a" -ge 2500 ] || { echo "на диске $a МБ, для сборки нужно 2500" >&2; exit 1; }; CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && echo "$h" > %[1]s/.built && echo "собран $h"; fi; rc=$?; /usr/local/go/bin/go clean -cache -modcache >/dev/null 2>&1; exit $rc`, olcDir), 30 * time.Minute, "olcrtc"},
 		}
 		for _, st := range steps {
 			st := st
@@ -938,10 +954,12 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 				}
 				return st.detail + " · " + olcLast(out), nil
 			}); err != nil {
+				dropSwap()
 				o.finish(j, false, err.Error())
 				return
 			}
 		}
+		dropSwap()
 		if err := o.do(j, "key", func() (string, error) {
 			out, err := x.root(fmt.Sprintf(`[ -s %[1]s/olcrtc.key ] || (umask 077 && if [ -s ~/.olcrtc_key ]; then tr -dc 0-9a-f < ~/.olcrtc_key | head -c 64 > %[1]s/olcrtc.key; else openssl rand -hex 32 > %[1]s/olcrtc.key; fi); cat %[1]s/olcrtc.key`, olcDir), 30*time.Second)
 			key := strings.TrimSpace(out)
@@ -997,6 +1015,10 @@ WantedBy=multi-user.target
 	if srv.Key == "" {
 		o.finish(j, false, "у сервера нет ключа — настройте его заново")
 		return
+	}
+	// without the relay the link still works, for TCP only: not a reason to stop
+	if err := o.do(j, "udp", func() (string, error) { return o.ensureRelay(x, srv) }); err != nil {
+		o.event("warn", srv.Name+": UDP-реле не поставлено — "+err.Error())
 	}
 
 	kept := o.pick(j, x, srv, req)
@@ -1233,7 +1255,7 @@ func (o *olcState) tryVariantIn(x *olcSSH, srv *olcServer, provider, room, tr st
 		o.dropUnit(x, v)
 		return v, "служба не запустилась: " + olcLast(out), false
 	}
-	node := map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": room, "transport": tr, "encryption-key": srv.Key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+	node := olcWithRelay(map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": room, "transport": tr, "encryption-key": srv.Key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}, srv)
 	if err := mihomoDo(http.MethodPost, "/providers/proxies/"+url.PathEscape(olcProvider)+"/proxies", node, nil, 15*time.Second); err != nil {
 		o.dropUnit(x, v)
 		return v, "роутер не принял узел: " + shortErr(err), false
@@ -1384,7 +1406,7 @@ func olcNodeConfig(srv *olcServer, v olcVariant) map[string]any {
 	if provider == "" {
 		provider = "jitsi"
 	}
-	return map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}
+	return olcWithRelay(map[string]any{"name": v.Node, "type": "olcrtc", "auth-provider": provider, "room-id": v.Room, "transport": v.Transport, "encryption-key": key, "dns-server": "127.0.0.1:1053", "idle-timeout": "10m"}, srv)
 }
 
 // tidy: the servers' exit countries, flags in their node names, and nodes
@@ -1402,6 +1424,7 @@ func (o *olcState) tidy() {
 	servers := append([]*olcServer(nil), o.st.Servers...)
 	o.mu.Unlock()
 	for _, srv := range servers {
+		o.learnRelay(srv)
 		o.mu.Lock()
 		variants := append([]olcVariant(nil), srv.Variants...)
 		known := srv.Country != "" && time.Since(time.Unix(srv.CountryAt, 0)) < 24*time.Hour
