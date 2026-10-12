@@ -184,7 +184,10 @@ export function OlcrtcView({ providers, proxies, groups, onReload }: { providers
             <div className="ol-hop">
               <small>Дом</small>
               <b>Роутер</b>
-              <span>канал: {channelText(rep?.channel)}</span>
+              <span title={rep?.channel_error || undefined}>
+                канал: {channelText(rep?.channel)}
+                {rep?.channel_error && rep.channel === "unknown" ? ` — ${rep.channel_error}` : ""}
+              </span>
               <em className="is-ok">сокеты мимо правил</em>
             </div>
             <div className="ol-hop">

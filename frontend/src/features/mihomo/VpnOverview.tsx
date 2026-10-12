@@ -4,7 +4,7 @@ import { PageHeader, type PageKey } from "../../navigation";
 import { Icon } from "../../components/ui/Icon";
 import { Modal } from "../../components/ui/Modal";
 import { errText, number } from "../../lib/format";
-import { core, mihomo, type HealthPoint, type MProvider, type MProxy, type ServiceState, type ServicesReport } from "./api";
+import { core, mihomo, type Channel, type HealthPoint, type MProvider, type MProxy, type ServiceState, type ServicesReport } from "./api";
 import { useMihomo } from "./context";
 import { useTailscaleIssues } from "./Extras";
 import { useBypassStatus } from "./BypassTraffic";
@@ -89,6 +89,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
   const [proxies, setProxies] = useState<Record<string, MProxy>>({});
   const [providers, setProviders] = useState<Record<string, MProvider>>({});
   const [day, setDay] = useState<HealthPoint[]>([]);
+  const [channel, setChannel] = useState<Channel | null>(null);
   const [svc, setSvc] = useState<ServicesReport | null>(null);
   const [open, setOpen] = useState<string>("");
   const [seg, setSeg] = useState(-1);
@@ -108,6 +109,7 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
       .health("", "24h")
       .then((r) => {
         setDay(r.series);
+        setChannel(r.channel || null);
       })
       .catch(() => undefined);
     void core.services().then(setSvc).catch(() => undefined);
@@ -166,9 +168,11 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
     }
     return out;
   }, [day]);
-  const mode: Mode = modes.length ? modes[modes.length - 1] : "unknown";
+  // now: the core's answer; the history only says since when
+  const mode: Mode = channel && channel.mode !== "unknown" ? channel.mode : modes.length ? modes[modes.length - 1] : "unknown";
   let since = day.length ? day[day.length - 1].t : 0;
   for (let i = modes.length - 1; i >= 0 && modes[i] === mode; i--) since = day[i].t;
+  if (!since && channel?.since && channel.mode === mode) since = Math.floor(Date.parse(channel.since) / 1000) || 0;
   const lastPoint = day[day.length - 1];
   // the core's own direct probes that decide the mode (NPM-53): Yandex from
   // the whitelist, Google and Cloudflare from outside it
@@ -335,7 +339,9 @@ export function VpnOverview({ onNavigate }: { onNavigate: (p: PageKey) => void }
       unit: since ? `с ${hhmm(since)}` : "",
       pct: normalShare * 100,
       tone: modeTone,
-      note: directProbes.length ? (
+      note: mode === "unknown" && channel?.error ? (
+        channel.error
+      ) : directProbes.length ? (
         <span className="vn-probes" aria-label="Прямые проверки ядра">
           {directProbes.map((p) => (
             <span key={p.url} className={`vn-probe ${p.ok ? "is-ok" : "is-bad"}`} title={`${p.url} · ${p.allowed ? "из белого списка" : "зарубежный"}${p.error ? ` · ${p.error}` : ""}`}>
