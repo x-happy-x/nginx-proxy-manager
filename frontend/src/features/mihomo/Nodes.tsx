@@ -546,12 +546,17 @@ function GroupPanel({
   // a Selector is chosen by hand in its own order; the automatic ones are
   // pinned, the working and fast first (NPM-60: every member, not 8 fast ones)
   const manual = g.type === "Selector";
+  // a Fallback takes the first alive member in its own order: that order is
+  // the point, so it is shown as it is, numbered; url-test by speed
+  const ordered = g.type === "Fallback";
   const [mq, setMq] = useState("");
   const [more, setMore] = useState(false);
   const isGroup = (n: string) => !!proxies[n] && GROUP_TYPES.has(proxies[n].type);
   const order: Record<NodeState, number> = { ok: 0, slow: 1, none: 2, out: 3, reset: 4, silent: 5 };
   const sorted = manual
     ? [...all].sort((a, b) => Number(isGroup(b) || b === "DIRECT") - Number(isGroup(a) || a === "DIRECT"))
+    : ordered
+    ? all
     : [...all].sort((a, b) => order[stateOf(a)] - order[stateOf(b)] || (delayOf(a) || 9e9) - (delayOf(b) || 9e9));
   const mquery = mq.trim().toLowerCase();
   const members = sorted.filter((n) => !mquery || n.toLowerCase().includes(mquery));
@@ -593,7 +598,7 @@ function GroupPanel({
           </button>
         </div>
       ) : null}
-      <span className="vn-eyebrow">{manual ? "Участники — выберите, куда пойдёт трафик" : pinnable ? "Участники — закрепите, чтобы группа не переключалась сама" : "Участники"}</span>
+      <span className="vn-eyebrow">{manual ? "Участники — выберите, куда пойдёт трафик" : ordered ? "Участники по порядку: первый живой несёт трафик" : pinnable ? "Участники — закрепите, чтобы группа не переключалась сама" : "Участники"}</span>
       {all.length > 15 ? (
         <>
           <label className="sr-only" htmlFor="nx-mq">
@@ -611,6 +616,7 @@ function GroupPanel({
             <div key={n} className={`nx-top-row${on ? " is-fixed" : ""}${g.now === n ? " is-now" : ""}`}>
               <button type="button" className="nx-top-name" onClick={() => (grp ? onGroup(n) : onOpen(n))} title={grp ? "Открыть группу" : "Подробнее об узле"}>
                 <i className={`nx-dot nx-${stateOf(n)}`} />
+                {ordered ? <span className="mono mh-muted">{all.indexOf(n) + 1}.</span> : null}
                 <span className="truncate">
                   {n === "DIRECT" ? "напрямую" : <FlagText text={n} />}
                   {grp ? <small className="nx-sub"> · группа{sub ? <> · сейчас {sub === "DIRECT" ? "напрямую" : <FlagText text={sub} />}</> : null}</small> : null}
