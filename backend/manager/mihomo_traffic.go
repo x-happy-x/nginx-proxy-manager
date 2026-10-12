@@ -77,6 +77,8 @@ type trafficState struct {
 	Closed   []closedConn   `json:"closed"`
 	// Adaptive health per provider (NPM-29).
 	Health map[string]*providerHealth `json:"health,omitempty"`
+	// the channel's own mode by minute and hour, one for all subscriptions
+	Uplink *providerHealth `json:"uplink,omitempty"`
 	// delay of each group's node by minute and hour, subscription updates (NPM-51)
 	Groups  map[string]*groupHistory `json:"groups,omitempty"`
 	ProvLog map[string][]provUpdate  `json:"prov_log,omitempty"`
@@ -162,6 +164,7 @@ func (a *app) startMihomoTraffic() {
 				if err := mihomoGet("/providers/proxies", &body); err == nil {
 					now := time.Now()
 					traffic.observeHealth(now, body.Providers)
+					traffic.observeUplink(now, channelNow(body.Providers).Mode)
 					var px struct {
 						Proxies map[string]proxySnapshot `json:"proxies"`
 					}

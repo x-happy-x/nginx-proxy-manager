@@ -460,6 +460,7 @@ func (x *olcSSH) root(cmd string, timeout time.Duration) (string, error) {
 // ---------- the job ----------
 
 func (o *olcState) snapshot() map[string]any {
+	ch := channelNow(nil) // a request to the core: not under the lock
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	servers := make([]olcServer, 0, len(o.st.Servers))
@@ -497,7 +498,7 @@ func (o *olcState) snapshot() map[string]any {
 		route[k] = v
 	}
 	return map[string]any{"route": route, "auto": o.st.Auto, "servers": servers, "events": append([]olcEvent{}, o.st.Events...), "checks": checks, "job": job,
-		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports, "channel": olcChannelMode()}
+		"pubkey": olcPublicKey(), "instances": olcInstances, "transports": olcTransports, "channel": ch.Mode, "channel_error": ch.Error}
 }
 
 func (j *olcJob) step(id string) *olcStep {
@@ -1260,21 +1261,9 @@ func (o *olcState) tryVariantIn(x *olcSSH, srv *olcServer, provider, room, tr st
 	return v, fmt.Sprintf("работает · %d мс", c.MS), true
 }
 
-// olcChannelMode: the uplink's mode as the fork's adaptive check sees it.
+// olcChannelMode: the uplink's mode as the core sees it (uplink.go).
 func olcChannelMode() string {
-	var body struct {
-		Providers map[string]providerSnapshot `json:"providers"`
-	}
-	if err := mihomoGet("/providers/proxies", &body); err != nil {
-		return "unknown"
-	}
-	best, mode := -1, "unknown"
-	for _, p := range body.Providers {
-		if p.Adaptive != nil && len(p.Proxies) > best {
-			best, mode = len(p.Proxies), p.Adaptive.Mode
-		}
-	}
-	return mode
+	return channelNow(nil).Mode
 }
 
 // olcDirectReach opens the Jitsi instance straight through the uplink,

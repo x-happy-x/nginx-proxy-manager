@@ -287,6 +287,9 @@ export type OlcCheck = { t: number; ok: boolean; ms: number; error?: string };
 export type OlcStep = { id: string; title: string; status: "wait" | "run" | "ok" | "fail" | "skip"; detail?: string; log?: string[]; fix?: string; fix_label?: string; ms?: number };
 export type OlcTry = { label: string; state: "wait" | "run" | "ok" | "fail" | "skip"; result?: string };
 export type OlcJob = { id: string; server: string; kind: "setup" | "repick"; running: boolean; done: boolean; ok: boolean; error?: string; waiting?: string; started: number; ended?: number; steps: OlcStep[]; tries: OlcTry[]; result?: OlcCheck[]; found?: OlcFound[] };
+/** the provider's channel as the core sees it now (GET /network) */
+export type Channel = { mode: NetMode; since?: string; from?: string; error?: string };
+
 export type OlcReport = {
   auto: boolean;
   servers: OlcServer[];
@@ -301,6 +304,8 @@ export type OlcReport = {
   route?: Record<string, string>;
   /** the uplink's mode now: whitelist | normal | offline | unknown */
   channel: string;
+  /** why the channel is unknown */
+  channel_error?: string;
 };
 export type OlcSetup = { id?: string; name?: string; host?: string; port?: number; user?: string; password?: string; instances?: string[]; transports?: string[]; keep?: number; mode?: "whitelist" | "normal"; rooms?: Array<{ provider: string; room: string; transport: string }> };
 
@@ -433,7 +438,9 @@ export const core = {
   applyRouting: (body: { sha: string; settings: RoutingSettings }) =>
     call<{ applied: boolean; changes: ConfigChange[]; backup?: string; sha?: string; message: string; warning?: string }>("/api/core/routing/apply", json("POST", body)),
   health: (provider: string, period: string) =>
-    call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[] }>(`/api/core/health?provider=${enc(provider)}&period=${enc(period)}`),
+    call<{ provider: string; providers: string[]; period: string; resolution: number; series: HealthPoint[]; uplink?: boolean; channel?: Channel }>(
+      `/api/core/health?provider=${enc(provider)}&period=${enc(period)}`,
+    ),
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   groups: (period: "24h" | "7d") => call<GroupsReport>(`/api/core/groups?period=${period}`),
   services: () => call<ServicesReport>("/api/core/services"),

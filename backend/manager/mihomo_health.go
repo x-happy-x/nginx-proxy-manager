@@ -181,12 +181,23 @@ func (t *trafficCollector) healthReport(provider, period string, now time.Time) 
 	sort.Strings(names)
 	h := t.st.Health[provider]
 	if h == nil && len(names) > 0 {
-		// No provider asked: the main subscription, the one with most nodes.
+		// No provider asked: the main subscription, the one with most nodes
+		// among those still reported — a subscription removed from the core
+		// keeps its history but must not stand for the present.
 		best := -1
+		fresh := now.Add(-10 * time.Minute).Unix()
 		for _, name := range names {
 			c := t.st.Health[name]
-			if n := len(c.Minutes); n > 0 && c.Minutes[n-1].Total > best {
+			if n := len(c.Minutes); n > 0 && c.Minutes[n-1].T >= fresh && c.Minutes[n-1].Total > best {
 				best, provider = c.Minutes[n-1].Total, name
+			}
+		}
+		if best < 0 {
+			for _, name := range names {
+				c := t.st.Health[name]
+				if n := len(c.Minutes); n > 0 && c.Minutes[n-1].Total > best {
+					best, provider = c.Minutes[n-1].Total, name
+				}
 			}
 		}
 		if best < 0 {
@@ -196,19 +207,33 @@ func (t *trafficCollector) healthReport(provider, period string, now time.Time) 
 	}
 	series := []healthPoint{}
 	resolution := 60
-	if h != nil {
-		src := h.Minutes
-		if span > 24*time.Hour {
-			src, resolution = h.Hours, 3600
+	if span > 24*time.Hour {
+		resolution = 3600
+	}
+	from := now.Add(-span).Unix()
+	pick := func(ph *providerHealth) {
+		src := ph.Minutes
+		if resolution == 3600 {
+			src = ph.Hours
 		}
-		from := now.Add(-span).Unix()
 		for _, p := range src {
 			if p.T >= from-int64(resolution) {
 				series = append(series, p)
 			}
 		}
 	}
-	return map[string]any{"provider": provider, "providers": names, "period": period, "resolution": resolution, "series": series}
+	if h != nil {
+		pick(h)
+	}
+	// the modes are the channel's, whatever subscription the counts are of
+	uplink := false
+	if len(series) == 0 && t.st.Uplink != nil {
+		pick(t.st.Uplink)
+		uplink = len(series) > 0
+	} else {
+		uplink = t.overlayUplink(series, resolution == 3600)
+	}
+	return map[string]any{"provider": provider, "providers": names, "period": period, "resolution": resolution, "series": series, "uplink": uplink}
 }
 
 func (a *app) handleCoreHealth(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +242,7 @@ func (a *app) handleCoreHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rep := traffic.healthReport(r.URL.Query().Get("provider"), r.URL.Query().Get("period"), time.Now())
+	rep["channel"] = channelNow(nil)
 	rep["ok"] = true
 	a.writeJSON(w, http.StatusOK, rep)
 }
