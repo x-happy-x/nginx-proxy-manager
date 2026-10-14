@@ -201,6 +201,44 @@ func (a *app) widgetServers() widgetReply {
 	return st
 }
 
+// widgetReliability: how often each server works, as a distribution — most
+// subscriptions are hundreds of nodes, so the shape says more than a list.
+func (a *app) widgetReliability() widgetReply {
+	if traffic == nil {
+		return widgetReply{State: "unknown", Note: "учёт на роутере не запущен", Body: map[string]any{"bars": []any{}}}
+	}
+	provider, shares := traffic.reliability(time.Now())
+	bars := make([]map[string]any, 10)
+	counts := make([]int, 10)
+	reliable := 0
+	for _, v := range shares {
+		i := int(v * 10)
+		if i > 9 {
+			i = 9
+		}
+		counts[i]++
+		if v >= 0.9 {
+			reliable++
+		}
+	}
+	for i := range bars {
+		bars[i] = map[string]any{"label": fmt.Sprintf("%d–%d%%", i*10, i*10+10), "value": counts[i]}
+	}
+	body := map[string]any{"unit": "серверов", "bars": bars, "scale": "sqrt"}
+	if len(shares) == 0 {
+		return widgetReply{State: "unknown", Note: "история копится: нужно полчаса наблюдений", Body: body}
+	}
+	st := widgetReply{State: "ok", UpdatedAt: time.Now().UTC().Format(time.RFC3339), Body: body,
+		Note: fmt.Sprintf("работают ≥90%% времени: %d из %d · %s", reliable, len(shares), provider)}
+	switch {
+	case reliable == 0:
+		st.State = "bad"
+	case reliable < 3:
+		st.State = "warn"
+	}
+	return st
+}
+
 func gb(bytes int64) string {
 	v := float64(bytes) / (1 << 30)
 	s := strconv.FormatFloat(v, 'f', 1, 64)
@@ -383,6 +421,8 @@ func (a *app) handleHomeWidget(w http.ResponseWriter, r *http.Request) bool {
 			reply = a.widgetServices()
 		case "servers":
 			reply = a.widgetServers()
+		case "servers-reliability":
+			reply = a.widgetReliability()
 		case "traffic-month":
 			reply = a.widgetTraffic()
 		case "olcrtc":
