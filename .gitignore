@@ -14,3 +14,7 @@ launcher.json
 dist/
 frontend/static/core/
 frontend/static/integrations/
+
+# built binaries (NPM-65: one slipped into master in 23f298f)
+backend/manager/manager.exe
+*.exe
