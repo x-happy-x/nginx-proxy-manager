@@ -48,3 +48,4 @@ h1{font-weight:800;letter-spacing:-.02em}
 .hn-sidebar{overflow-x:hidden;min-width:0}
 .hn-seg button{min-width:0;padding:0 4px;font-size:12px}
 .hn-account .hn-icon-btn{flex:none}
+.hn-sidebar-bottom{grid-template-columns:minmax(0,1fr)}.hn-seg,.hn-account{min-width:0}
