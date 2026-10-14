@@ -50,6 +50,15 @@ func (a *app) widgetDomains() widgetReply {
 	return st
 }
 
+// thousands: 18240 → «18 240», as Russian text writes it.
+func thousands(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	for i := len(s) - 3; i > 0 && s[i-1] != '-'; i -= 3 {
+		s = s[:i] + " " + s[i:]
+	}
+	return s
+}
+
 func plural(n int, one, few, many string) string {
 	n %= 100
 	if n >= 11 && n <= 14 {
@@ -170,10 +179,12 @@ func (a *app) widgetRequests() widgetReply {
 	for _, b := range series {
 		points = append(points, [2]any{b.Time, b.Requests})
 	}
-	total, _ := agg["total_requests"].(int)
+	// the aggregate keeps its counters as int64
+	total, _ := agg["total_requests"].(int64)
 	rate, _ := agg["error_rate"].(float64)
-	c5, _ := agg["errors_5xx"].(int)
-	st := widgetReply{State: "ok", UpdatedAt: now.UTC().Format(time.RFC3339), Note: fmt.Sprintf("%d запросов · ошибок %.1f%%", total, rate)}
+	c5, _ := agg["errors_5xx"].(int64)
+	st := widgetReply{State: "ok", UpdatedAt: now.UTC().Format(time.RFC3339),
+		Note: fmt.Sprintf("%s %s · ошибок %s%%", thousands(total), plural(int(total%100), "запрос", "запроса", "запросов"), strings.Replace(strconv.FormatFloat(rate, 'f', 1, 64), ".", ",", 1))}
 	if total > 50 && float64(c5)/float64(total) > 0.05 {
 		st.State = "warn"
 	}
@@ -310,7 +321,7 @@ func (a *app) widgetAvailability() widgetReply {
 		return widgetReply{State: "unknown", Note: "мониторинг связи ещё не собрал данные", Body: map[string]any{"unit": "%", "bars": bars, "scale": "linear"}}
 	}
 	share := float64(good) * 100 / float64(total)
-	st := widgetReply{State: "ok", UpdatedAt: stamp(list[len(list)-1].T), Note: fmt.Sprintf("интернет был %.1f%% суток · худший час %d%%", share, worst)}
+	st := widgetReply{State: "ok", UpdatedAt: stamp(list[len(list)-1].T), Note: fmt.Sprintf("интернет был %s%% суток · худший час %d%%", strings.Replace(strconv.FormatFloat(share, 'f', 1, 64), ".", ",", 1), worst)}
 	if share < 99 {
 		st.State = "warn"
 	}

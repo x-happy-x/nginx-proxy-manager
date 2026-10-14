@@ -77,3 +77,20 @@ func TestHomeNetworkWidgets(t *testing.T) {
 		t.Fatal("plural")
 	}
 }
+
+func TestHomeRequestsWidgetCounts(t *testing.T) {
+	dir := t.TempDir()
+	a := &app{routeAccessLog: filepath.Join(dir, "access.log")}
+	store := a.ensureTelemetry()
+	now := time.Now()
+	agg := store.aggregate(now, 24*time.Hour, "", "")
+	if _, ok := agg["total_requests"].(int64); !ok {
+		t.Fatalf("total_requests is %T, the widget reads int64", agg["total_requests"])
+	}
+	if got := thousands(18240); got != "18 240" || thousands(999) != "999" || thousands(1234567) != "1 234 567" {
+		t.Fatal(got)
+	}
+	if w := a.widgetRequests(); !strings.HasPrefix(w.Note, "0 запросов") {
+		t.Fatal(w.Note)
+	}
+}
