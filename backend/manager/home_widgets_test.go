@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // NPM-66: the services widget and the attention list read the last checks only.
@@ -50,5 +51,61 @@ func TestHomeGB(t *testing.T) {
 		if got := gb(in); got != want {
 			t.Errorf("%d → %s, want %s", in, got, want)
 		}
+	}
+}
+
+// NPM-68: the share of minutes each node worked, and the widget's distribution.
+func TestHomeServerReliability(t *testing.T) {
+	old := traffic
+	t.Cleanup(func() { traffic = old })
+	traffic = newTrafficCollector(filepath.Join(t.TempDir(), "traffic.json"), time.Now())
+	yes, no := true, false
+	start := time.Now().Add(-90 * time.Minute).Truncate(time.Minute)
+	for i := 0; i < 90; i++ {
+		a := &adaptiveSnapshot{Mode: "normal", Results: map[string]struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{}}
+		half := &no
+		if i%2 == 0 {
+			half = &yes
+		}
+		a.Results["good"] = struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{Available: &yes}
+		a.Results["half"] = struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{Available: half}
+		a.Results["dead"] = struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{OK: false}
+		a.Results["skipped"] = struct {
+			OK        bool   `json:"ok"`
+			Available *bool  `json:"available"`
+			Skipped   string `json:"skipped"`
+		}{Skipped: "mode"}
+		traffic.observeHealth(start.Add(time.Duration(i)*time.Minute), map[string]providerSnapshot{"ROUTER": {Adaptive: a, Proxies: make([]proxySnapshot, 4)}})
+	}
+	provider, shares := traffic.reliability(start.Add(90 * time.Minute))
+	if provider != "ROUTER" || len(shares) != 3 || shares[0] != 0 || shares[2] != 1 || shares[1] < 0.45 || shares[1] > 0.55 {
+		t.Fatalf("%s %v", provider, shares)
+	}
+	w := (&app{}).widgetReliability()
+	bars := w.Body.(map[string]any)["bars"].([]map[string]any)
+	if w.State != "warn" || bars[0]["value"] != 1 || bars[9]["value"] != 1 || !strings.Contains(w.Note, "1 из 3") {
+		t.Fatalf("%+v", w)
+	}
+	// a node gone for more than a day is forgotten
+	h := traffic.st.Health["ROUTER"]
+	h.observeNodes(start.Add(26*time.Hour).Unix(), &adaptiveSnapshot{})
+	if len(h.Nodes) != 0 {
+		t.Fatalf("stale nodes kept: %d", len(h.Nodes))
 	}
 }
