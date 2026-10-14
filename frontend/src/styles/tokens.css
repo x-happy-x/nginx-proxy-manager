@@ -2,7 +2,7 @@
 :root {
   color-scheme: light;
 
-  --font-sans: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: Manrope, Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace;
 
   --bg: #f5f6f8;
@@ -59,6 +59,7 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
+  --nav-bg: #ffffff;
   --sidebar-width: 248px;
   --topbar-height: 56px;
   --control-height: 36px;
@@ -66,49 +67,51 @@
 }
 
 :root[data-theme="dark"] {
+  /* NPM-65: palette B+ of the redesign («HomeNet — редизайн», page «Переработка») */
   color-scheme: dark;
 
-  --bg: #0c0e11;
-  --surface: #13161a;
-  --surface-2: #171a1f;
+  --bg: #111315;
+  --surface: #1a1d21;
+  --surface-2: #16181b;
   --surface-3: #1e2228;
-  --surface-inverse: #e8eaed;
-  --border: #252a31;
-  --border-strong: #343a43;
-  --text: #e8eaed;
-  --text-2: #b4bac4;
-  --text-3: #8b929d;
-  --text-inverse: #14171c;
+  --surface-inverse: #e8ebef;
+  --border: #23272c;
+  --border-strong: #2b3037;
+  --text: #e8ebef;
+  --text-2: #b4bcc6;
+  --text-3: #8e97a3;
+  --text-inverse: #111315;
 
-  --accent: #3b7cf5;
-  --accent-hover: #5b92f7;
-  --accent-text: #86adfb;
-  --accent-soft: rgba(59, 124, 245, 0.14);
-  --accent-border: rgba(59, 124, 245, 0.38);
-  --on-accent: #ffffff;
+  --accent: #8cb4ff;
+  --accent-hover: #a9c7ff;
+  --accent-text: #8cb4ff;
+  --accent-soft: rgba(140, 180, 255, 0.13);
+  --accent-border: rgba(140, 180, 255, 0.4);
+  --on-accent: #0c0d0f;
 
-  --success: #43b872;
-  --success-soft: rgba(67, 184, 114, 0.13);
-  --success-border: rgba(67, 184, 114, 0.34);
-  --warning: #e3a640;
-  --warning-soft: rgba(227, 166, 64, 0.13);
-  --warning-border: rgba(227, 166, 64, 0.34);
-  --danger: #f06a64;
-  --danger-hover: #f4857f;
-  --danger-soft: rgba(240, 106, 100, 0.13);
-  --danger-border: rgba(240, 106, 100, 0.36);
+  --success: #5fd0a2;
+  --success-soft: rgba(95, 208, 162, 0.12);
+  --success-border: rgba(95, 208, 162, 0.34);
+  --warning: #f0c978;
+  --warning-soft: rgba(240, 201, 120, 0.12);
+  --warning-border: rgba(240, 201, 120, 0.34);
+  --danger: #f59b95;
+  --danger-hover: #f8b5b0;
+  --danger-soft: rgba(245, 155, 149, 0.12);
+  --danger-border: rgba(245, 155, 149, 0.36);
 
-  --chart-grid: #22262d;
-  --chart-axis: #343a43;
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-neutral: #5d646f;
+  --chart-grid: #23272c;
+  --chart-axis: #2b3037;
+  --series-1: #5e8ee6;
+  --series-2: #c9813f;
+  --series-neutral: #6b7280;
 
-  --overlay: rgba(0, 0, 0, 0.6);
-  --code-bg: #0f1114;
+  --overlay: rgba(0, 0, 0, 0.62);
+  --code-bg: #0f1113;
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
   --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
-  --focus-ring: 0 0 0 3px rgba(59, 124, 245, 0.4);
+  --focus-ring: 0 0 0 3px rgba(140, 180, 255, 0.4);
+  --nav-bg: #0c0d0f;
 }

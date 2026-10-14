@@ -17,9 +17,6 @@ type HomeReply = { mode: HomeMode; generated_at: string; customized: boolean; la
 
 const SIZE_LABEL: Record<WidgetSize, string> = { s: "S", m: "M", l: "L" };
 const KIND_LABEL: Record<WidgetKind, string> = { stat: "число", status: "статус", list: "список", progress: "прогресс", series: "график", bars: "столбцы", custom: "свой" };
-const MODE_KEY = "homenet-home-mode";
-
-const readMode = (): HomeMode => { try { return localStorage.getItem(MODE_KEY) === "simple" ? "simple" : "pro"; } catch { return "pro"; } };
 const hhmm = (iso?: string) => { if (!iso) return ""; const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); };
 function ago(iso?: string, now = Date.now()) {
   if (!iso) return "";
@@ -180,8 +177,7 @@ function WidgetBody({ widget, data, size, mode, item, notify }: { widget: Catalo
 
 /* ---------- the page ---------- */
 
-export function Home({ installed, notify, onCatalog }: { installed: Installed[]; notify: (text: string) => void; onCatalog: () => void }) {
-  const [mode, setMode] = useState<HomeMode>(readMode);
+export function Home({ installed, notify, onCatalog, mode, setMode, onAttention }: { installed: Installed[]; notify: (text: string) => void; onCatalog: () => void; mode: HomeMode; setMode: (m: HomeMode) => void; onAttention?: (counts: Record<string, number>) => void }) {
   const [reply, setReply] = useState<HomeReply>();
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -201,7 +197,14 @@ export function Home({ installed, notify, onCatalog }: { installed: Installed[];
       setReply(body); setError(""); setNow(Date.now());
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, []);
-  useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* per-viewer convenience only */ } void load(mode); }, [mode, load]);
+  useEffect(() => { void load(mode); }, [mode, load]);
+  // the menu shows how many problems each module reports
+  useEffect(() => {
+    if (!reply || !onAttention) return;
+    const counts: Record<string, number> = {};
+    reply.attention.forEach(a => { if (a.severity !== "info") counts[a.module] = (counts[a.module] || 0) + 1; });
+    onAttention(counts);
+  }, [reply, onAttention]);
   // every 30 s while the tab is visible; not while the layout is being edited
   useEffect(() => {
     if (editing) return;
@@ -277,9 +280,6 @@ export function Home({ installed, notify, onCatalog }: { installed: Installed[];
         <div><h1>{editing ? "Главная · изменение" : "Главная"}</h1>
           <p>{editing ? `Раскладка режима «${mode === "simple" ? "Просто" : "Подробно"}». Перетаскивайте за ⠿ или Alt+стрелки, размер — Alt+S/M/L.` : `обновлено ${ago(reply.generated_at, now)}${answered.length ? ` · ответили ${fresh} из ${answered.length} интеграций` : ""}`}</p></div>
         <div className="hw-tools">
-          <div className="hw-seg" role="group" aria-label="Режим главной">
-            {(["simple", "pro"] as HomeMode[]).map(m => <button type="button" key={m} aria-pressed={mode === m} disabled={editing} onClick={() => setMode(m)}>{m === "simple" ? "Просто" : "Подробно"}</button>)}
-          </div>
           {!editing && reply.can_save && (mode === "pro"
             ? <button type="button" onClick={startEdit}>✎ Изменить</button>
             : <div className="hw-menu"><button type="button" aria-label="Ещё" aria-expanded={menu} onClick={() => setMenu(v => !v)}>⋯</button>{menu && <div role="menu"><button role="menuitem" type="button" onClick={startEdit}>Изменить главную</button></div>}</div>)}

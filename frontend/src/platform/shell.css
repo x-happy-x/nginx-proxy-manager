@@ -1,0 +1,46 @@
+/* NPM-65: the shell of the redesign — palette B+ (styles/tokens.css), Manrope,
+   a two-level menu on the left and no top bar. */
+.hn-layout{grid-template-columns:232px minmax(0,1fr);background:var(--bg)}
+.hn-sidebar{background:var(--nav-bg);border-right:1px solid var(--line);padding:20px 14px 16px;gap:4px}
+.hn-brand{font-size:16px;font-weight:700;gap:10px;padding:0 8px 16px}
+.hn-logo{width:32px;height:32px;border-radius:10px;font-size:17px;color:var(--on-accent)}
+.hn-sidebar nav{display:flex;flex-direction:column;gap:2px}
+.hn-sidebar nav a{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:10px;font-size:14px;color:var(--text-2);position:static}
+.hn-sidebar nav a:hover{background:var(--surface-3);color:var(--text)}
+.hn-sidebar nav a.active{background:var(--surface-3);color:var(--text);font-weight:600}
+.hn-sidebar nav a>span{position:static}
+.hn-nav-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hn-nav-label{margin:14px 0 4px;padding:0 12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);font-weight:600}
+.hn-nav-group{display:flex;flex-direction:column;gap:2px}
+.hn-back{color:var(--accent-text)!important;font-size:13px!important;padding:6px 12px!important}
+.hn-module-title{padding:6px 12px 8px;font-weight:700;font-size:15px;color:var(--text)}
+.hn-count{font-size:11px;font-weight:700;min-width:20px;height:20px;padding:0 6px;border-radius:999px;display:inline-grid;place-items:center;background:var(--danger-soft);color:var(--danger)}
+.hn-count-muted{background:transparent;color:var(--text-3);font-weight:500}
+.hn-more{margin-top:8px;border:0;background:none;color:var(--accent-text);font-size:12px;text-align:left;padding:6px 12px}
+.hn-sidebar-bottom{margin-top:auto;padding:14px 0 0;border-top:1px solid var(--line);display:grid;gap:10px;font-size:13px}
+.hn-seg{display:flex;padding:3px;border-radius:11px;background:var(--surface)}
+.hn-seg button{flex:1;height:34px;border:0;border-radius:8px;background:transparent;color:var(--text-2);padding:0 8px;font-size:13px}
+.hn-seg button[aria-pressed=true]{background:var(--text);color:var(--bg);font-weight:700}
+.hn-account{display:flex;align-items:center;gap:6px;padding:0 4px}
+.hn-login{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.hn-icon-btn{width:34px;height:34px;padding:0;border-radius:9px;display:inline-grid;place-items:center;background:transparent;border-color:var(--line);color:var(--text-2)}
+.hn-main{max-width:1440px;padding:28px 32px 48px}
+.hn-primary{color:var(--on-accent)}
+.hn-dms .btn-primary{color:var(--on-accent)}
+.hn-card,.hn-empty,.hn-baseline{border-radius:16px}
+h1{font-weight:800;letter-spacing:-.02em}
+@media(max-width:1100px){.hn-layout{grid-template-columns:210px minmax(0,1fr)}}
+/* phone: the menu becomes a strip on top; mode and account stay reachable */
+@media(max-width:760px){
+  .hn-sidebar{padding:10px 12px;gap:6px;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line)}
+  .hn-brand{padding:0;font-size:15px}
+  .hn-sidebar nav{flex-direction:row;flex-basis:100%;order:3;overflow-x:auto;gap:4px;scrollbar-width:none}
+  .hn-sidebar nav::-webkit-scrollbar{display:none}
+  .hn-sidebar nav a{white-space:nowrap;padding:8px 12px;font-size:13px}
+  .hn-nav-label,.hn-module-title,.hn-more{display:none}
+  .hn-nav-group{flex-direction:row;gap:4px}
+  .hn-sidebar-bottom{display:flex;margin:0 0 0 auto;padding:0;border:0;gap:6px;align-items:center}
+  .hn-sidebar-bottom .hn-login{display:none}
+  .hn-seg button{height:30px;font-size:12px}
+  .hn-main{padding:16px 14px 32px}
+}

@@ -18,6 +18,8 @@ export type Host = {
   api: (path: string, init?: RequestInit) => Promise<Response>;
   navigate: (page: string) => void;
   notify: (message: string) => void;
+  // NPM-65: Core's menu lists the module's sections, so the module hides its own tabs
+  shellNav?: boolean;
 };
 export type WidgetContext = { size: WidgetSize; mode: HomeMode };
 // ui_api 2: a module may export its own home widgets next to mount (kind "custom").

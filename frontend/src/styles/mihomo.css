@@ -1622,7 +1622,7 @@ button.mh-health {
 .rt-node.is-cur .rt-no {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .rt-cn {

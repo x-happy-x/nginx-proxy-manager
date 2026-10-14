@@ -30,7 +30,7 @@ export function usePage() {
  */
 export function ModuleTabs({ ids, host, page }: { ids: string[]; host: Host; page: string }) {
   const title = (id: string) => (id === "proxy-system" ? "Прокси nginx" : NAV.find((n) => n.id === id)?.tab || id);
-  if (ids.length < 2) return null;
+  if (ids.length < 2 || host.shellNav) return null;
   return (
     <>
       <nav className="section-tabs module-tabs" aria-label="Страницы раздела">
