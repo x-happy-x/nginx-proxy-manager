@@ -3,13 +3,24 @@
     "id": "proxy", "name": "Прокси и домены", "description": "Домены, HTTPS, nginx, DNS и KeenDNS", "port": 63501,
     "pages": ["servers", "stats", "logs", "certs", "dns", "advanced", "routing", "proxy-system"],
     "paths": ["/api/routes", "/api/routes/", "/api/nginx/", "/api/ca/", "/api/cert/", "/api/dns/", "/api/ip-hosts", "/api/ip-hosts/", "/api/ndns/", "/api/apply", "/api/apply/", "/api/stub/"],
-    "data": ["/opt/etc/homenet/nginx", "/opt/etc/homenet/proxy"]
+    "data": ["/opt/etc/homenet/nginx", "/opt/etc/homenet/proxy"],
+    "widgets": [
+      {"id": "domains", "title": "Домены", "kind": "stat", "sizes": ["s", "m"], "data": "/api/nginx/widgets/domains", "refresh": 60, "modes": ["simple", "pro"], "default": {"simple": 30, "pro": 30}, "page": "servers"},
+      {"id": "certificates", "title": "Сертификаты", "kind": "list", "sizes": ["m", "l"], "data": "/api/nginx/widgets/certificates", "refresh": 3600, "modes": ["pro"], "default": {"pro": 80}, "page": "certs"},
+      {"id": "requests-day", "title": "Запросы к доменам · сутки", "kind": "series", "sizes": ["m", "l"], "data": "/api/nginx/widgets/requests-day", "refresh": 120, "modes": ["pro"], "default": {"pro": 55}, "page": "stats"}
+    ],
+    "summary": {"attention": "/api/nginx/summary/attention"}
   },
   {
     "id": "network", "name": "Мониторинг связи", "description": "Интернет, LTE, диагностика и ресурсы устройств", "port": 63502,
     "pages": ["network", "scheme", "antenna", "netdns", "analyzer", "scan", "resources"],
     "paths": ["/api/network", "/api/network/", "/api/resources"],
-    "data": ["/opt/etc/homenet/network"]
+    "data": ["/opt/etc/homenet/network"],
+    "widgets": [
+      {"id": "internet", "title": "Интернет и LTE", "kind": "status", "sizes": ["s", "m"], "data": "/api/network/widgets/internet", "refresh": 30, "modes": ["simple", "pro"], "default": {"simple": 5, "pro": 5}, "page": "network"},
+      {"id": "availability-day", "title": "Интернет по часам · сутки", "kind": "bars", "sizes": ["m", "l"], "data": "/api/network/widgets/availability-day", "refresh": 300, "modes": ["pro"], "default": {"pro": 57}, "page": "network"}
+    ],
+    "summary": {"attention": "/api/network/summary/attention"}
   },
   {
     "id": "vpn", "name": "VPN и маршрутизация", "description": "mihomo, XKeen, подписки, Tailscale и OLCRTC", "port": 63503,
