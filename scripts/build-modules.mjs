@@ -38,8 +38,8 @@ for (const item of catalog) {
   }
   await cp(path.join(frontend, 'static/integrations', item.id), path.join(destination, 'ui'), { recursive: true });
   const manifest = {
-    schema: 1, id: item.id, name: item.name, description: item.description, version, arch, core_api: 1, ui_api: 1,
-    ui: { entry: 'entry.js', css: ['style.css'], pages: item.pages.map(id => ({ id, title: id, ...(id === 'subs' ? { aliases: ['tailscale', 'olcrtc'] } : {}) })) },
+    schema: 1, id: item.id, name: item.name, description: item.description, version, arch, core_api: 1, ui_api: item.widgets ? 2 : 1,
+    ui: { entry: 'entry.js', css: ['style.css'], pages: item.pages.map(id => ({ id, title: id, ...(id === 'subs' ? { aliases: ['tailscale', 'olcrtc'] } : {}) })), ...(item.widgets ? { widgets: item.widgets, summary: item.summary } : {}) },
     backend: { endpoint: `http://127.0.0.1:${item.port}`, health: '/health', paths: item.paths, service: `S90homenet-${item.id}` },
     data_schema: 1, data_directories: item.data, package: `homenet-${item.id}`,
   };
