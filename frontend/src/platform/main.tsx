@@ -9,7 +9,11 @@ import { useEffect, useRef, useState } from "react";
 import { request, type Installed, type IntegrationModule } from "./sdk";
 import { moduleBase, moduleHost, navigate } from "./host";
 import { Home } from "./Home";
+import { Sidebar } from "./Shell";
+import type { HomeMode } from "./sdk";
+import "../styles/tokens.css";
 import "./style.css";
+import "./shell.css";
 
 declare global { var __HOMENET_RUNTIME__: { React: typeof React; ReactDOM: typeof ReactDOM; ReactDOMClient: { createRoot: typeof createRoot }; portalTarget?: Element | DocumentFragment }; }
 globalThis.__HOMENET_RUNTIME__ = { React, ReactDOM, ReactDOMClient: { createRoot } };
@@ -86,9 +90,13 @@ function App({onPortal}: {onPortal: () => void}) {
   const [dms, setDms] = useState<"loading" | "available" | "unavailable">("loading");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [notice, setNotice] = useState("");
-  const [theme, setTheme] = useState(() => localStorage.getItem("homenet-theme") || "light");
+  // the redesign is dark first (palette B+); light stays one click away
+  const [theme, setTheme] = useState(() => { try { const t = localStorage.getItem("homenet-theme"); if (t === "dark" || t === "light") return t; } catch { /* storage may be unavailable */ } return "dark"; });
+  const [mode, setModeState] = useState<HomeMode>(() => { try { return localStorage.getItem("homenet-home-mode") === "simple" ? "simple" : "pro"; } catch { return "pro"; } });
+  const setMode = React.useCallback((m: HomeMode) => { setModeState(m); try { localStorage.setItem("homenet-home-mode", m); } catch { /* per-viewer convenience */ } }, []);
+  const [attention, setAttention] = useState<Record<string, number>>({});
   const notify = React.useCallback((message: string) => setNotice(message), []);
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("homenet-theme", theme); }, [theme]);
+  useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem("homenet-theme", theme); } catch { /* per-viewer convenience */ } }, [theme]);
   useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
   useEffect(() => {
     let alive = true;
@@ -110,13 +118,10 @@ function App({onPortal}: {onPortal: () => void}) {
   const choose = () => { setTab("catalog"); navigate("integrations"); };
   if (!data) return <main className="hn-boot"><div className="hn-logo">H</div><h1>HomeNet</h1><p role="status">{error || "Подключение к HomeNet…"}</p>{error && <a className="hn-primary" href="/_gate/login?return=/">Войти через Account</a>}</main>;
   return <div className="hn-layout">
-    <aside className="hn-sidebar"><a className="hn-brand" href="#/overview"><span className="hn-logo">H</span><span>HomeNet<small>Ваша домашняя сеть</small></span></a><div className="hn-nav-label">УПРАВЛЕНИЕ</div>
-      <button onClick={onPortal}>← Приложения</button><nav>{[{ id: "overview", title: "Главная" }, ...active.map(i => ({ id: i.manifest.ui.pages[0]?.id || "integrations", title: i.manifest.name })), { id: "integrations", title: "Интеграции" }, { id: "system", title: "Система" }].map(n => <a key={n.id} className={page === n.id ? "active" : ""} href={`#/${n.id}`}>{n.title}{n.id === "integrations" && <span>{installed.length}</span>}</a>)}</nav>
-      <div className="hn-sidebar-bottom"><span className="hn-dot" /> HomeNet Core<small>Базовая платформа · API 1</small></div>
-    </aside>
-    <div className="hn-workspace"><header className="hn-header"><span>Домашняя сеть <b>/</b> {page === "integrations" ? "Интеграции" : page === "overview" ? "Главная" : page === "system" ? "Система" : module?.manifest.name || "Раздел"}</span><div><button aria-label="Сменить тему" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "◐"}</button><span>{data.identity.login || "Администратор"}</span></div></header>
+    <Sidebar page={page} module={["overview", "integrations", "system"].includes(page) ? undefined : module} active={active} installedCount={installed.length} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} login={data.identity.login} attention={attention} onPortal={onPortal} />
+    <div className="hn-workspace">
       <main className="hn-main">{notice && <div className="hn-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Закрыть уведомление">×</button></div>}
-        {page === "overview" && installed.length > 0 && <Home installed={installed} notify={notify} onCatalog={choose} />}
+        {page === "overview" && installed.length > 0 && <Home installed={installed} notify={notify} onCatalog={choose} mode={mode} setMode={setMode} onAttention={setAttention} />}
         {page === "overview" && !installed.length && <><div className="hn-heading"><div><span className="hn-eyebrow">HOMENET</span><h1>{installed.length ? "Ваша домашняя сеть" : "Ваша сеть начинается здесь"}</h1><p>{installed.length ? "Управляйте подключёнными интеграциями в одном месте." : "HomeNet готов к настройке. Добавьте возможности, которые нужны вашей сети."}</p></div><span className="hn-badge">Ядро работает</span></div>
           <section className="hn-hero"><div><span className="hn-eyebrow">ОДНА ПАНЕЛЬ · ВАШ НАБОР ВОЗМОЖНОСТЕЙ</span><h2>{installed.length ? `${installed.length} интеграции установлено` : "Начните с первой интеграции"}</h2><p>Домены для сервисов, наблюдение за связью или управление VPN — каждый модуль подключается отдельно.</p><button className="hn-primary" onClick={choose}>Выбрать интеграции →</button></div><div className="hn-network-art" aria-hidden="true"><span>↗</span><b>H</b><span>◇</span></div></section>
           <div className="hn-section-title"><h2>Возможности HomeNet</h2><button onClick={choose}>Открыть каталог →</button></div><div className="hn-grid">{catalog.map(c => <article className="hn-card" key={c.id}><span className="hn-icon">{c.icon}</span><h3>{c.name}</h3><p>{c.description}</p><button onClick={() => { setDetail(c.id); navigate("integrations"); }}>{installed.some(i => i.manifest.id === c.id) ? "Управление" : "Подробнее"} →</button></article>)}</div></>}
@@ -130,7 +135,7 @@ function App({onPortal}: {onPortal: () => void}) {
         {page === "system" && <System />}
         {!["overview", "integrations", "system"].includes(page) && (module?.enabled ? <Boundary key={module.manifest.id}><ModuleView item={module} notify={notify} /></Boundary> : <div className="hn-empty"><h2>Интеграция недоступна</h2><p>Для этого раздела требуется установленная и включённая интеграция.</p><button onClick={choose}>Открыть интеграции</button></div>)}
         {["overview", "integrations", "system"].includes(page) && <section className="hn-baseline"><div><b>Базовые компоненты</b><p>Основа HomeNet, доступная при любом наборе интеграций.</p></div><div><span className="hn-dot" /><b>HomeNet Core</b><small>Работает</small></div><div><span className={`hn-dot ${dms !== "available" ? "muted" : ""}`} /><b>DMS</b><small>{dms === "available" ? "Готов к установке" : dms === "loading" ? "Проверка…" : "Недоступен"}</small></div></section>}
-      </main><footer>HomeNet · Локальное управление домашней сетью</footer>
+      </main>
     </div>
     {detail && <div className="hn-overlay" onClick={() => setDetail(undefined)}><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="detail-title" className="hn-dialog" onClick={e => e.stopPropagation()}><button className="hn-close" aria-label="Закрыть" onClick={() => setDetail(undefined)}>×</button><span className="hn-eyebrow">ИНТЕГРАЦИЯ</span><h2 id="detail-title">{catalog.find(c => c.id === detail)?.name || selected?.manifest.name}</h2><p>{catalog.find(c => c.id === detail)?.detail || selected?.manifest.description}</p><hr /><IntegrationDetails key={detail} id={detail} installed={selected} dmsAvailable={dms === "available"} onRefresh={() => { void request("/api/platform").then(r => r.json()).then(setData); }} /><button onClick={() => setDetail(undefined)}>Закрыть</button></section></div>}
   </div>;

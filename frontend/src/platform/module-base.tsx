@@ -10,6 +10,7 @@ import "../styles/resources.css";
 import "../styles/network.css";
 import "../styles/mihomo.css";
 import "../styles/sections.css";
+import "./module.css";
 
 export class ModuleBoundary extends Component<{ children: ReactNode }, { error: string }> {
   state = { error: "" };
@@ -23,6 +24,41 @@ export function usePage() {
   useEffect(() => { const update = () => setPage(read()); window.addEventListener("hashchange", update); return () => window.removeEventListener("hashchange", update); }, []);
   return page;
 }
+/**
+ * The module's pages as the console's section tabs (NPM-65): pills with the
+ * current one marked, a list control on a phone — as before the split.
+ */
 export function ModuleTabs({ ids, host, page }: { ids: string[]; host: Host; page: string }) {
-  return <nav aria-label="Страницы интеграции" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>{ids.map(id => <button type="button" key={id} aria-current={id === page ? "page" : undefined} onClick={() => host.navigate(id)}>{id === "proxy-system" ? "Прокси nginx" : NAV.find(n => n.id === id)?.tab || id}</button>)}</nav>;
+  const title = (id: string) => (id === "proxy-system" ? "Прокси nginx" : NAV.find((n) => n.id === id)?.tab || id);
+  if (ids.length < 2 || host.shellNav) return null;
+  return (
+    <>
+      <nav className="section-tabs module-tabs" aria-label="Страницы раздела">
+        {ids.map((id) => (
+          <a
+            key={id}
+            href={`#/${id}`}
+            className="section-tab"
+            aria-current={id === page ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              host.navigate(id);
+            }}
+          >
+            {title(id)}
+          </a>
+        ))}
+      </nav>
+      <label className="section-select module-tabs">
+        <span className="sr-only">Страница раздела</span>
+        <select value={ids.includes(page) ? page : ids[0]} onChange={(event) => host.navigate(event.target.value)}>
+          {ids.map((id) => (
+            <option key={id} value={id}>
+              {title(id)}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
+  );
 }

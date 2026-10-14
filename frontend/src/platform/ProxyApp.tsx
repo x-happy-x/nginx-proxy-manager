@@ -565,8 +565,13 @@ export default function ProxyApp({ host }: { host: Host }) {
 
   return (
     <div className="proxy-module">
-      <div className="module-toolbar"><button onClick={openApply} disabled={busy}>Применить конфигурацию</button><button onClick={() => setOpsOpen(true)}>Операции</button></div>
-      <ModuleTabs ids={["servers","stats","logs","certs","dns","advanced","routing","proxy-system"]} host={host} page={page === "system" ? "proxy-system" : page} />
+      <div className="module-head">
+        <ModuleTabs ids={["servers","stats","logs","certs","dns","advanced","routing","proxy-system"]} host={host} page={page === "system" ? "proxy-system" : page} />
+        <div className="module-actions">
+          <button type="button" className="btn" onClick={() => setOpsOpen(true)}>Операции</button>
+          <button type="button" className="btn btn-primary" onClick={openApply} disabled={busy}>Применить конфигурацию</button>
+        </div>
+      </div>
       <div><div><main>
           {page === "stats" ? <Dashboard doc={doc} status={status} onNavigate={navigate} /> : null}
           {page === "servers" ? (

@@ -1,0 +1,8 @@
+/* NPM-65: a module's page laid out like a console page — tabs, then the page */
+.homenet-module-root{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;min-width:0;color:var(--text);font-family:var(--font-sans);background:transparent}
+.homenet-module-root>.section-tabs{margin:0}
+/* tabs and the module's own actions on one row (proxy: apply, operations) */
+.module-head{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:center;justify-content:space-between;min-width:0}
+.module-head>.section-tabs{margin:0;min-width:0;flex:0 1 auto}
+.module-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.proxy-module{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;min-width:0}
