@@ -444,6 +444,7 @@ export const core = {
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   groups: (period: "24h" | "7d") => call<GroupsReport>(`/api/core/groups?period=${period}`),
   services: () => call<ServicesReport>("/api/core/services"),
+  board: () => call<Board>("/api/core/vpn/board"),
   nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
   saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),
@@ -497,3 +498,17 @@ export function openStream<T>(path: string, onMessage: (data: T) => void, onStat
 }
 
 export const DEFAULT_TEST_URL = "https://www.gstatic.com/generate_204";
+
+/* NPM-70: data of the redesigned VPN screens (GET /api/core/vpn/board) */
+export type BoardServer = { name: string; rate: number; ms: number; checks: number; stable: boolean; now: string; country?: string; selected?: string[] };
+export type BoardDay = { day: string; normal: number; whitelist: number; offline: number; unknown: number; bypass: number; working: number };
+export type BoardService = { id: string; name: string; what: string; group: string; path?: string[]; checked: boolean; ok?: boolean; ms?: number; error?: string; since?: string };
+export type Board = {
+  generated_at: string; core_error?: string;
+  provider?: { name: string; total: number; checked_at: string; pending: number; mode: string; updated_at?: string };
+  channel: { mode: string; since?: string; error?: string; observed?: string; direct?: { host: string; ok: boolean; ms: number; fail: string }[] };
+  servers?: { answering: number; stable: Record<string, number>; fails: Record<string, number>; rows: Record<string, BoardServer[]>; bins: Record<string, number[]>; latency: Record<string, number[]>; latency_edges: number[] };
+  week?: BoardDay[]; hours?: { t: number; working: number; whitelist: number }[];
+  provider_updates?: { t: number; total: number; alive: number; added: number; via?: string }[];
+  services: { checked_at: string; ok: number; total: number; items: BoardService[] };
+};

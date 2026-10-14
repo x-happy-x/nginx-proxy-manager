@@ -93,7 +93,7 @@ function App({onPortal}: {onPortal: () => void}) {
   // the redesign is dark first (palette B+); light stays one click away
   const [theme, setTheme] = useState(() => { try { const t = localStorage.getItem("homenet-theme"); if (t === "dark" || t === "light") return t; } catch { /* storage may be unavailable */ } return "dark"; });
   const [mode, setModeState] = useState<HomeMode>(() => { try { return localStorage.getItem("homenet-home-mode") === "simple" ? "simple" : "pro"; } catch { return "pro"; } });
-  const setMode = React.useCallback((m: HomeMode) => { setModeState(m); try { localStorage.setItem("homenet-home-mode", m); } catch { /* per-viewer convenience */ } }, []);
+  const setMode = React.useCallback((m: HomeMode) => { setModeState(m); try { localStorage.setItem("homenet-home-mode", m); } catch { /* per-viewer convenience */ } window.dispatchEvent(new CustomEvent("homenet:mode", { detail: m })); }, []);
   const [attention, setAttention] = useState<Record<string, number>>({});
   const notify = React.useCallback((message: string) => setNotice(message), []);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem("homenet-theme", theme); } catch { /* per-viewer convenience */ } }, [theme]);

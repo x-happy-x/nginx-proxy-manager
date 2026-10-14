@@ -14,8 +14,8 @@ const PLANS: Record<string, Plan> = {
   vpn: {
     simple: ["vpn", "vpnsvc", "why"],
     pro: [
-      { pages: ["vpn", "proxies", "checks", "vroute", "subs", "vpnsvc", "traffic", "corelog"] },
-      { title: "Разбор и настройка", pages: ["why", "connections", "rules", "torrents", "coreconfig", "core"] },
+      { pages: ["vpn", "vservers", "checks", "vroute", "subs", "vpnsvc", "traffic", "corelog"] },
+      { title: "Разбор и настройка", pages: ["why", "proxies", "connections", "rules", "torrents", "vnow", "coreconfig", "core"] },
     ],
   },
   proxy: {
@@ -33,7 +33,7 @@ const PLANS: Record<string, Plan> = {
     ],
   },
 };
-const TITLES: Record<string, string> = { vpn: "Обзор", proxies: "Серверы", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx" };
+const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", proxies: "Узлы и группы", vnow: "Прежняя сводка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx" };
 const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь" };
 
 export const pageTitle = (id: string, item?: Installed) =>
