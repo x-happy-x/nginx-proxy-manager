@@ -44,3 +44,7 @@ h1{font-weight:800;letter-spacing:-.02em}
   .hn-seg button{height:30px;font-size:12px}
   .hn-main{padding:16px 14px 32px}
 }
+/* the menu's bottom fits a narrow column: no sideways scroll */
+.hn-sidebar{overflow-x:hidden;min-width:0}
+.hn-seg button{min-width:0;padding:0 4px;font-size:12px}
+.hn-account .hn-icon-btn{flex:none}
