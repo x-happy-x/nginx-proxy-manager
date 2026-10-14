@@ -15,6 +15,14 @@
     "id": "vpn", "name": "VPN и маршрутизация", "description": "mihomo, XKeen, подписки, Tailscale и OLCRTC", "port": 63503,
     "pages": ["vpn", "vpnsvc", "subs", "torrents", "vroute", "why", "proxies", "checks", "connections", "traffic", "rules", "corelog", "coreconfig", "core"],
     "paths": ["/api/core/", "/api/mihomo/"],
-    "data": ["/opt/etc/homenet/mihomo"]
+    "data": ["/opt/etc/homenet/mihomo"],
+    "widgets": [
+      {"id": "channel", "title": "Канал провайдера", "kind": "status", "sizes": ["s", "m"], "data": "/api/core/widgets/channel", "refresh": 30, "modes": ["simple", "pro"], "default": {"simple": 10, "pro": 10}, "page": "vpn"},
+      {"id": "services", "title": "Сервисы", "kind": "stat", "sizes": ["s", "m"], "data": "/api/core/widgets/services", "refresh": 60, "modes": ["simple", "pro"], "default": {"simple": 20, "pro": 20}, "page": "vpnsvc"},
+      {"id": "servers", "title": "Отвечающие серверы · сутки", "kind": "series", "sizes": ["m", "l"], "data": "/api/core/widgets/servers", "refresh": 120, "modes": ["pro"], "default": {"pro": 50}, "page": "proxies"},
+      {"id": "traffic-month", "title": "Через обходы за месяц", "kind": "stat", "sizes": ["s", "m"], "data": "/api/core/widgets/traffic-month", "refresh": 300, "modes": ["simple", "pro"], "default": {"pro": 60}, "page": "traffic"},
+      {"id": "olcrtc", "title": "OLCRTC", "kind": "status", "sizes": ["s", "m"], "data": "/api/core/widgets/olcrtc", "refresh": 60, "modes": ["simple", "pro"], "default": {"pro": 70}, "page": "olcrtc"}
+    ],
+    "summary": {"attention": "/api/core/summary/attention", "tasks": "/api/core/summary/tasks"}
   }
 ]

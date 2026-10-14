@@ -6,7 +6,9 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import * as ReactDOM from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { request, type Installed, type IntegrationModule, type Host } from "./sdk";
+import { request, type Installed, type IntegrationModule } from "./sdk";
+import { moduleBase, moduleHost, navigate } from "./host";
+import { Home } from "./Home";
 import "./style.css";
 
 declare global { var __HOMENET_RUNTIME__: { React: typeof React; ReactDOM: typeof ReactDOM; ReactDOMClient: { createRoot: typeof createRoot }; portalTarget?: Element | DocumentFragment }; }
@@ -19,7 +21,6 @@ const catalog = [
 ];
 type Platform = { identity: { login: string; admin: boolean }; protocol: number; integrations: Installed[] };
 type Job = { id: string; status: string; app?: string; error?: string };
-const navigate = (page: string) => { location.hash = `/${page}`; };
 
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: string }> {
   state = { error: "" };
@@ -33,7 +34,7 @@ function ModuleView({ item, notify }: { item: Installed; notify: (text: string) 
     let disposed = false;
     let cleanup: (() => void) | undefined;
     const m = item.manifest;
-    const base = `/integrations/${encodeURIComponent(m.id)}/${encodeURIComponent(m.version)}/`;
+    const base = moduleBase(m);
     if (!element.current) return;
     const target = element.current;
     const shadow = target.shadowRoot || target.attachShadow({ mode: "open" });
@@ -46,13 +47,7 @@ function ModuleView({ item, notify }: { item: Installed; notify: (text: string) 
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const links = (m.ui.css || []).map(css => { const link = document.createElement("link"); link.rel = "stylesheet"; link.href = base + css; shadow.appendChild(link); return link; });
-    const host: Host = {
-      protocol: 1, React, createRoot, navigate, notify,
-      api: (path, init) => {
-        if (!path.startsWith("/") || path.includes("..") || path.includes("\\") || path.includes("%")) return Promise.reject(new Error("Недопустимый путь API"));
-        return request(`/api/integrations/${m.id}${path}`, init);
-      },
-    };
+    const host = moduleHost(m, notify);
     setError("");
     (async () => {
       const mod = await import(/* @vite-ignore */ base + m.ui.entry) as IntegrationModule;
@@ -116,12 +111,13 @@ function App({onPortal}: {onPortal: () => void}) {
   if (!data) return <main className="hn-boot"><div className="hn-logo">H</div><h1>HomeNet</h1><p role="status">{error || "Подключение к HomeNet…"}</p>{error && <a className="hn-primary" href="/_gate/login?return=/">Войти через Account</a>}</main>;
   return <div className="hn-layout">
     <aside className="hn-sidebar"><a className="hn-brand" href="#/overview"><span className="hn-logo">H</span><span>HomeNet<small>Ваша домашняя сеть</small></span></a><div className="hn-nav-label">УПРАВЛЕНИЕ</div>
-      <button onClick={onPortal}>← Приложения</button><nav>{[{ id: "overview", title: "Обзор" }, ...active.map(i => ({ id: i.manifest.ui.pages[0]?.id || "integrations", title: i.manifest.name })), { id: "integrations", title: "Интеграции" }, { id: "system", title: "Система" }].map(n => <a key={n.id} className={page === n.id ? "active" : ""} href={`#/${n.id}`}>{n.title}{n.id === "integrations" && <span>{installed.length}</span>}</a>)}</nav>
+      <button onClick={onPortal}>← Приложения</button><nav>{[{ id: "overview", title: "Главная" }, ...active.map(i => ({ id: i.manifest.ui.pages[0]?.id || "integrations", title: i.manifest.name })), { id: "integrations", title: "Интеграции" }, { id: "system", title: "Система" }].map(n => <a key={n.id} className={page === n.id ? "active" : ""} href={`#/${n.id}`}>{n.title}{n.id === "integrations" && <span>{installed.length}</span>}</a>)}</nav>
       <div className="hn-sidebar-bottom"><span className="hn-dot" /> HomeNet Core<small>Базовая платформа · API 1</small></div>
     </aside>
-    <div className="hn-workspace"><header className="hn-header"><span>Домашняя сеть <b>/</b> {page === "integrations" ? "Интеграции" : page === "overview" ? "Обзор" : page === "system" ? "Система" : module?.manifest.name || "Раздел"}</span><div><button aria-label="Сменить тему" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "◐"}</button><span>{data.identity.login || "Администратор"}</span></div></header>
+    <div className="hn-workspace"><header className="hn-header"><span>Домашняя сеть <b>/</b> {page === "integrations" ? "Интеграции" : page === "overview" ? "Главная" : page === "system" ? "Система" : module?.manifest.name || "Раздел"}</span><div><button aria-label="Сменить тему" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "◐"}</button><span>{data.identity.login || "Администратор"}</span></div></header>
       <main className="hn-main">{notice && <div className="hn-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Закрыть уведомление">×</button></div>}
-        {page === "overview" && <><div className="hn-heading"><div><span className="hn-eyebrow">HOMENET</span><h1>{installed.length ? "Ваша домашняя сеть" : "Ваша сеть начинается здесь"}</h1><p>{installed.length ? "Управляйте подключёнными интеграциями в одном месте." : "HomeNet готов к настройке. Добавьте возможности, которые нужны вашей сети."}</p></div><span className="hn-badge">Ядро работает</span></div>
+        {page === "overview" && installed.length > 0 && <Home installed={installed} notify={notify} onCatalog={choose} />}
+        {page === "overview" && !installed.length && <><div className="hn-heading"><div><span className="hn-eyebrow">HOMENET</span><h1>{installed.length ? "Ваша домашняя сеть" : "Ваша сеть начинается здесь"}</h1><p>{installed.length ? "Управляйте подключёнными интеграциями в одном месте." : "HomeNet готов к настройке. Добавьте возможности, которые нужны вашей сети."}</p></div><span className="hn-badge">Ядро работает</span></div>
           <section className="hn-hero"><div><span className="hn-eyebrow">ОДНА ПАНЕЛЬ · ВАШ НАБОР ВОЗМОЖНОСТЕЙ</span><h2>{installed.length ? `${installed.length} интеграции установлено` : "Начните с первой интеграции"}</h2><p>Домены для сервисов, наблюдение за связью или управление VPN — каждый модуль подключается отдельно.</p><button className="hn-primary" onClick={choose}>Выбрать интеграции →</button></div><div className="hn-network-art" aria-hidden="true"><span>↗</span><b>H</b><span>◇</span></div></section>
           <div className="hn-section-title"><h2>Возможности HomeNet</h2><button onClick={choose}>Открыть каталог →</button></div><div className="hn-grid">{catalog.map(c => <article className="hn-card" key={c.id}><span className="hn-icon">{c.icon}</span><h3>{c.name}</h3><p>{c.description}</p><button onClick={() => { setDetail(c.id); navigate("integrations"); }}>{installed.some(i => i.manifest.id === c.id) ? "Управление" : "Подробнее"} →</button></article>)}</div></>}
         {page === "integrations" && <><div className="hn-heading"><div><span className="hn-eyebrow">ВОЗМОЖНОСТИ ВАШЕЙ СЕТИ</span><h1>Интеграции</h1><p>Подключайте, обновляйте и настраивайте модули HomeNet.</p></div></div><div className="hn-tabs">{[["installed", `Установленные · ${installed.length}`], ["catalog", "Каталог"], ["history", "История"], ["release", "Набор версий"]].map(([id, title]) => <button className={tab === id ? "active" : ""} key={id} onClick={() => setTab(id)}>{title}</button>)}</div>

@@ -41,6 +41,8 @@ type Server struct {
 	Registry   *integration.Registry
 	Client     *http.Client
 	Lifecycle  *integration.Lifecycle
+	homeOnce   sync.Once
+	homeCache  *homeCache
 }
 type Identity struct {
 	Login string `json:"login"`
@@ -201,6 +203,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/integrations/") {
 
 		integration.Gateway{Registry: s.Registry, Token: s.workerToken}.ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == "/api/platform/home" || strings.HasPrefix(r.URL.Path, "/api/platform/home/") {
+		s.home(w, r, id)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/platform/") {

@@ -28,7 +28,7 @@ const coreBody=await readFile(coreFile);release.packages.push({id:'core',version
 for(const id of ['proxy','network','vpn']){
  const module=JSON.parse(await readFile(path.join(build,id,version,'manifest.json'),'utf8'));
  if(module.version!==version||module.arch!==arch)throw new Error('Candidate identity mismatch');
- const manifest={version:'1',app:`homenet-${id}`,metadata:{name:module.name,description:module.description,version,os:'linux',arch},integration:{staged:true,schema:1,id,core_api:1,ui_api:1,data_schema:module.data_schema,dependencies:module.dependencies||[]},artifacts:[{source:`${id}/${version}`,destination:`/opt/share/homenet/integrations/${id}/${version}`,mode:493}]};
+ const manifest={version:'1',app:`homenet-${id}`,metadata:{name:module.name,description:module.description,version,os:'linux',arch},integration:{staged:true,schema:1,id,core_api:1,ui_api:module.ui_api,data_schema:module.data_schema,dependencies:module.dependencies||[]},artifacts:[{source:`${id}/${version}`,destination:`/opt/share/homenet/integrations/${id}/${version}`,mode:493}]};
  const config=path.join(build,`${id}.dms.json`);await writeFile(config,JSON.stringify(manifest,null,2));
  const name=`homenet-${id}-${version}-linux-${arch}.dms.tar.gz`;const file=path.join(output,name);
  const result=spawnSync(path.resolve(client),['pack','--config',config,'--output',file],{stdio:'inherit',shell:false});
