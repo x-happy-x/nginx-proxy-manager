@@ -16,16 +16,31 @@ const requested = new Set((process.argv[2] || '').split(','));
 const servers = [];
 async function listen(handler) { const server = createServer(handler); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); servers.push(server); return `http://127.0.0.1:${server.address().port}`; }
 const account = await listen((req, res) => { res.writeHead(204, { 'X-Gate-Login': 'local-preview', 'X-Gate-Role': 'admin' }); res.end(); });
+const now = Date.now(), iso = t => new Date(t).toISOString();
+const previewWidgets = {
+  '/api/core/widgets/channel': { state: 'warn', updated_at: iso(now - 60e3), note: 'с 15:14 · пример', body: { label: 'Белые списки', items: [{ text: 'Яндекс', ok: true }, { text: 'Google', ok: false }] } },
+  '/api/core/widgets/services': { state: 'warn', updated_at: iso(now - 4 * 60e3), note: 'не открывается: Telegram', body: { value: '11 из 12' } },
+  '/api/core/widgets/servers': () => ({ state: 'ok', updated_at: iso(now - 6 * 60e3), note: 'сейчас 41 из 690 · стабильных 8 · пример', body: { unit: 'серверов', points: Array.from({ length: 288 }, (_, i) => [iso(now - (287 - i) * 300e3), Math.round(30 + 20 * Math.sin(i / 25) + (i > 150 && i < 200 ? -22 : 0))]), bands: [{ from: iso(now - 137 * 300e3), to: iso(now - 87 * 300e3), label: 'белые списки' }] } }),
+  '/api/core/widgets/traffic-month': { state: 'ok', updated_at: iso(now - 60e3), note: 'лимит не задан · с 01.10', body: { value: '255,8', unit: 'ГБ' } },
+  '/api/core/widgets/olcrtc': { state: 'ok', updated_at: iso(now - 3 * 60e3), note: 'резервный канал · UDP через реле', body: { label: '2 из 2 работают', items: [{ text: 'VDSKA jitsi', ok: true, value: '205 мс' }, { text: 'VDSKA telemost', ok: true, value: '310 мс' }] } },
+  '/api/core/summary/attention': { items: [{ id: 'service-telegram', severity: 'warning', text: '«Telegram» не открывается: нет ответа за 8 с', since: iso(now - 20 * 60e3), action: { label: 'Разобрать', page: 'vpnsvc' } }, { id: 'channel', severity: 'info', text: 'Пример: сведения без действия' }] },
+  '/api/core/summary/tasks': { items: [{ id: 'olcrtc-setup', label: 'OLCRTC: настройка сервера', value: 3, total: 9, step: 'сборка olcrtc' }] },
+};
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
+    // NPM-66: sample home widgets so the page can be checked without a router
+    const sample = previewWidgets[req.url.split('?')[0]];
+    if (item.id === 'vpn' && sample) { setTimeout(() => res.end(JSON.stringify(typeof sample === 'function' ? sample() : sample)), req.url.includes('olcrtc') ? 2500 : 0); return; }
     if (req.url === '/api/core/status') { res.end(JSON.stringify({ok:true,status:{installed:true,running:false,controller_ok:false}})); return; }
     res.writeHead(503); res.end(JSON.stringify({ok:false,error:'Изолированная проверка интерфейса: устройство не подключено'}));
   });
   const manifest = JSON.parse(await readFile(path.join(root, '.runtime/modules/linux-amd64', item.id, '1.0.0/manifest.json'), 'utf8'));
   manifest.arch = 'amd64'; manifest.backend.endpoint = endpoint;
+  // a custom widget the VPN entry does not export: shows the «не отрисовался» path
+  if (item.id === 'vpn' && manifest.ui.widgets) manifest.ui.widgets.push({ id: 'preview-custom', title: 'Свой виджет (проверка ошибки)', kind: 'custom', sizes: ['m'], modes: ['pro'], default: { pro: 99 } });
   items.push({ manifest, enabled:true, connection:'unconfigured' });
   await writeFile(path.join(state, 'credentials', `${item.id}.token`), 'local-preview-only-credential-not-for-deployment');
   const destination=path.join(state,'packages',item.id,'1.0.0');
