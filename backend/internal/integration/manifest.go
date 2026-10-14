@@ -13,6 +13,10 @@ import (
 
 const Protocol = 1
 
+// UIProtocol is the newest UI contract Core understands. ui_api 2 adds home
+// widgets and summaries; a ui_api 1 module keeps working with its pages only.
+const UIProtocol = 2
+
 var identifier = regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`)
 var version = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
@@ -41,10 +45,38 @@ type Dependency struct {
 	Optional bool   `json:"optional,omitempty"`
 }
 type UI struct {
-	Entry string   `json:"entry"`
-	CSS   []string `json:"css,omitempty"`
-	Pages []Page   `json:"pages"`
+	Entry   string   `json:"entry"`
+	CSS     []string `json:"css,omitempty"`
+	Pages   []Page   `json:"pages"`
+	Widgets []Widget `json:"widgets,omitempty"`
+	Summary *Summary `json:"summary,omitempty"`
 }
+
+// Widget is a card a module offers for Core's home page (docs/modular-homenet/widgets.md).
+// Data is fetched by Core through the module's own allowlisted paths.
+type Widget struct {
+	ID      string         `json:"id"`
+	Title   string         `json:"title"`
+	Kind    string         `json:"kind"`
+	Sizes   []string       `json:"sizes"`
+	Data    string         `json:"data,omitempty"`
+	Refresh int            `json:"refresh,omitempty"`
+	Modes   []string       `json:"modes"`
+	Default map[string]int `json:"default,omitempty"`
+	Page    string         `json:"page,omitempty"`
+}
+
+// Summary points to the module's attention and task lists, merged by Core.
+type Summary struct {
+	Attention string `json:"attention,omitempty"`
+	Tasks     string `json:"tasks,omitempty"`
+}
+
+var WidgetKinds = map[string]bool{"stat": true, "status": true, "list": true, "progress": true, "series": true, "bars": true, "custom": true}
+var WidgetSizes = map[string]bool{"s": true, "m": true, "l": true}
+var HomeModes = map[string]bool{"simple": true, "pro": true}
+var widgetID = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+
 type Page struct {
 	ID      string   `json:"id"`
 	Title   string   `json:"title"`
@@ -62,7 +94,7 @@ func asset(s string) bool {
 	return s != "" && s != "." && !strings.ContainsAny(s, `\?#:%`) && !strings.HasPrefix(s, "/") && path.Clean(s) == s && !strings.HasPrefix(s, "../")
 }
 func (m Manifest) Validate(arch string) error {
-	if m.Schema != Protocol || m.CoreAPI != Protocol || m.UIAPI != Protocol {
+	if m.Schema != Protocol || m.CoreAPI != Protocol || m.UIAPI < 1 || m.UIAPI > UIProtocol {
 		return fmt.Errorf("incompatible integration protocol")
 	}
 	if !ValidID(m.ID) || !ValidID(m.Package) || !version.MatchString(m.Version) || strings.TrimSpace(m.Name) == "" {
@@ -113,6 +145,9 @@ func (m Manifest) Validate(arch string) error {
 			seen[id] = true
 		}
 	}
+	if err := m.validateWidgets(seen); err != nil {
+		return err
+	}
 	seen = map[string]bool{}
 	for _, d := range m.Dependencies {
 		if !ValidID(d.ID) || d.ID == m.ID || seen[d.ID] || !version.MatchString(d.Version) {
@@ -130,6 +165,80 @@ func (m Manifest) Validate(arch string) error {
 	}
 	return nil
 }
+func (m Manifest) validateWidgets(pages map[string]bool) error {
+	if m.UIAPI < 2 {
+		if len(m.UI.Widgets) > 0 || m.UI.Summary != nil {
+			return fmt.Errorf("widgets require ui_api 2")
+		}
+		return nil
+	}
+	if len(m.UI.Widgets) > 16 {
+		return fmt.Errorf("too many widgets")
+	}
+	seen := map[string]bool{}
+	for _, w := range m.UI.Widgets {
+		if !widgetID.MatchString(w.ID) || seen[w.ID] {
+			return fmt.Errorf("invalid or duplicate widget %q", w.ID)
+		}
+		seen[w.ID] = true
+		if strings.TrimSpace(w.Title) == "" || len([]rune(w.Title)) > 48 {
+			return fmt.Errorf("widget %s: invalid title", w.ID)
+		}
+		if !WidgetKinds[w.Kind] {
+			return fmt.Errorf("widget %s: unknown kind", w.ID)
+		}
+		if len(w.Sizes) == 0 || len(w.Sizes) > 3 || len(w.Modes) == 0 || len(w.Modes) > 2 {
+			return fmt.Errorf("widget %s: sizes and modes required", w.ID)
+		}
+		for _, list := range []struct {
+			values []string
+			valid  map[string]bool
+		}{{w.Sizes, WidgetSizes}, {w.Modes, HomeModes}} {
+			dup := map[string]bool{}
+			for _, v := range list.values {
+				if !list.valid[v] || dup[v] {
+					return fmt.Errorf("widget %s: invalid size or mode", w.ID)
+				}
+				dup[v] = true
+			}
+		}
+		for mode, order := range w.Default {
+			if !HomeModes[mode] || order < 0 || order > 1000 {
+				return fmt.Errorf("widget %s: invalid default", w.ID)
+			}
+		}
+		if w.Kind == "custom" {
+			if w.Data != "" && !m.Allows(w.Data) {
+				return fmt.Errorf("widget %s: data outside backend paths", w.ID)
+			}
+		} else if !m.Allows(w.Data) {
+			return fmt.Errorf("widget %s: data outside backend paths", w.ID)
+		}
+		if w.Refresh != 0 && (w.Refresh < 10 || w.Refresh > 3600) {
+			return fmt.Errorf("widget %s: refresh out of range", w.ID)
+		}
+		if w.Page != "" && !pages[w.Page] {
+			return fmt.Errorf("widget %s: unknown page", w.ID)
+		}
+	}
+	if s := m.UI.Summary; s != nil {
+		for _, p := range []string{s.Attention, s.Tasks} {
+			if p != "" && !m.Allows(p) {
+				return fmt.Errorf("summary outside backend paths")
+			}
+		}
+	}
+	return nil
+}
+
+// RefreshSeconds is how long a widget's data stays fresh.
+func (w Widget) RefreshSeconds() int {
+	if w.Refresh == 0 {
+		return 60
+	}
+	return w.Refresh
+}
+
 func apiPath(p string) bool {
 	return strings.HasPrefix(p, "/") && path.Clean(p) == strings.TrimSuffix(p, "/") && !strings.ContainsAny(p, `\?#%`) && p != "/"
 }

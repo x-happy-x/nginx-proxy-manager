@@ -589,6 +589,9 @@ func readCoreBackup(target, name string) ([]byte, error) {
 /* ---------- handlers ---------- */
 
 func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
+	if a.handleHomeWidget(w, r) {
+		return
+	}
 	switch r.URL.Path {
 	case "/api/core/status":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "status": readCoreStatus()})

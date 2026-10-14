@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"net/http"
 	"sort"
 	"time"
@@ -31,6 +32,56 @@ type healthPoint struct {
 type providerHealth struct {
 	Minutes []healthPoint `json:"minutes"`
 	Hours   []healthPoint `json:"hours"`
+	// Per node: how many recent minutes the core counted it working (NPM-68).
+	Nodes map[string]*nodeShare `json:"nodes,omitempty"`
+}
+
+// nodeShare counts minutes with a decay of shareDecay per minute (half-life
+// about 11.5 hours), so an old outage fades and a day's behaviour dominates.
+type nodeShare struct {
+	OK   float64 `json:"o"`
+	N    float64 `json:"n"`
+	Seen int64   `json:"t"`
+}
+
+const (
+	shareDecay   = 0.999
+	shareForget  = 24 * 60 * 60 // a node gone from the report for a day is dropped
+	shareMinimum = 30           // minutes observed before a node's share means anything
+)
+
+func round2f(v float64) float64 { return math.Round(v*100) / 100 }
+
+// observeNodes adds one minute: every node the report has an answer for.
+func (h *providerHealth) observeNodes(minute int64, a *adaptiveSnapshot) {
+	if h.Nodes == nil {
+		h.Nodes = map[string]*nodeShare{}
+	}
+	for name, r := range a.Results {
+		if r.Skipped != "" {
+			continue
+		}
+		ok := r.OK
+		if r.Available != nil {
+			ok = *r.Available
+		}
+		n := h.Nodes[name]
+		if n == nil {
+			n = &nodeShare{}
+			h.Nodes[name] = n
+		}
+		n.OK, n.N = n.OK*shareDecay, n.N*shareDecay
+		n.N++
+		if ok {
+			n.OK++
+		}
+		n.OK, n.N, n.Seen = round2f(n.OK), round2f(n.N), minute
+	}
+	for name, n := range h.Nodes {
+		if minute-n.Seen > shareForget {
+			delete(h.Nodes, name)
+		}
+	}
 }
 
 type adaptiveSnapshot struct {
@@ -162,6 +213,7 @@ func (t *trafficCollector) observeHealth(now time.Time, providers map[string]pro
 			continue
 		}
 		h.Minutes = addHealth(h.Minutes, minute, p, minuteKeep)
+		h.observeNodes(minute, p.Adaptive)
 		h.Hours = addHealth(h.Hours, hour, p, hourKeep)
 	}
 	t.dirty = true
@@ -181,12 +233,23 @@ func (t *trafficCollector) healthReport(provider, period string, now time.Time) 
 	sort.Strings(names)
 	h := t.st.Health[provider]
 	if h == nil && len(names) > 0 {
-		// No provider asked: the main subscription, the one with most nodes.
+		// No provider asked: the main subscription, the one with most nodes
+		// among those still reported — a subscription removed from the core
+		// keeps its history but must not stand for the present.
 		best := -1
+		fresh := now.Add(-10 * time.Minute).Unix()
 		for _, name := range names {
 			c := t.st.Health[name]
-			if n := len(c.Minutes); n > 0 && c.Minutes[n-1].Total > best {
+			if n := len(c.Minutes); n > 0 && c.Minutes[n-1].T >= fresh && c.Minutes[n-1].Total > best {
 				best, provider = c.Minutes[n-1].Total, name
+			}
+		}
+		if best < 0 {
+			for _, name := range names {
+				c := t.st.Health[name]
+				if n := len(c.Minutes); n > 0 && c.Minutes[n-1].Total > best {
+					best, provider = c.Minutes[n-1].Total, name
+				}
 			}
 		}
 		if best < 0 {
@@ -196,19 +259,33 @@ func (t *trafficCollector) healthReport(provider, period string, now time.Time) 
 	}
 	series := []healthPoint{}
 	resolution := 60
-	if h != nil {
-		src := h.Minutes
-		if span > 24*time.Hour {
-			src, resolution = h.Hours, 3600
+	if span > 24*time.Hour {
+		resolution = 3600
+	}
+	from := now.Add(-span).Unix()
+	pick := func(ph *providerHealth) {
+		src := ph.Minutes
+		if resolution == 3600 {
+			src = ph.Hours
 		}
-		from := now.Add(-span).Unix()
 		for _, p := range src {
 			if p.T >= from-int64(resolution) {
 				series = append(series, p)
 			}
 		}
 	}
-	return map[string]any{"provider": provider, "providers": names, "period": period, "resolution": resolution, "series": series}
+	if h != nil {
+		pick(h)
+	}
+	// the modes are the channel's, whatever subscription the counts are of
+	uplink := false
+	if len(series) == 0 && t.st.Uplink != nil {
+		pick(t.st.Uplink)
+		uplink = len(series) > 0
+	} else {
+		uplink = t.overlayUplink(series, resolution == 3600)
+	}
+	return map[string]any{"provider": provider, "providers": names, "period": period, "resolution": resolution, "series": series, "uplink": uplink}
 }
 
 func (a *app) handleCoreHealth(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +294,30 @@ func (a *app) handleCoreHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rep := traffic.healthReport(r.URL.Query().Get("provider"), r.URL.Query().Get("period"), time.Now())
+	rep["channel"] = channelNow(nil)
 	rep["ok"] = true
 	a.writeJSON(w, http.StatusOK, rep)
+}
+
+// reliability: nodes of the main subscription by their share of working minutes.
+func (t *trafficCollector) reliability(now time.Time) (provider string, shares []float64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	best := -1
+	fresh := now.Add(-10 * time.Minute).Unix()
+	for name, h := range t.st.Health {
+		if n := len(h.Minutes); n > 0 && h.Minutes[n-1].T >= fresh && len(h.Nodes) > best {
+			best, provider = len(h.Nodes), name
+		}
+	}
+	if best < 0 {
+		return "", nil
+	}
+	for _, n := range t.st.Health[provider].Nodes {
+		if n.N >= shareMinimum {
+			shares = append(shares, n.OK/n.N)
+		}
+	}
+	sort.Float64s(shares)
+	return provider, shares
 }
