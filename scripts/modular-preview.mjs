@@ -34,6 +34,7 @@ const previewWidgets = {
   '/api/network/summary/attention': { items: [] },
   '/api/core/summary/tasks': { items: [{ id: 'olcrtc-setup', label: 'OLCRTC: настройка сервера', value: 3, total: 9, step: 'сборка olcrtc' }] },
 };
+const vpnBoard = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD, 'utf8') : '';
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
@@ -42,7 +43,9 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     // NPM-66: sample home widgets so the page can be checked without a router
     const sample = previewWidgets[req.url.split('?')[0]];
     if (sample) { setTimeout(() => res.end(JSON.stringify(typeof sample === 'function' ? sample() : sample)), req.url.includes('olcrtc') ? 2500 : 0); return; }
-    if (req.url === '/api/core/status') { res.end(JSON.stringify({ok:true,status:{installed:true,running:false,controller_ok:false}})); return; }
+    // NPM-70: PREVIEW_VPN_BOARD=<file> answers the VPN screens with a local snapshot (never committed)
+    if (item.id === 'vpn' && vpnBoard && req.url.startsWith('/api/core/vpn/board')) { res.end(vpnBoard); return; }
+    if (req.url === '/api/core/status') { res.end(JSON.stringify({ok:true,status:{installed:true,running:!!vpnBoard,controller_ok:!!vpnBoard}})); return; }
     res.writeHead(503); res.end(JSON.stringify({ok:false,error:'Изолированная проверка интерфейса: устройство не подключено'}));
   });
   const manifest = JSON.parse(await readFile(path.join(root, '.runtime/modules/linux-amd64', item.id, '1.0.0/manifest.json'), 'utf8'));

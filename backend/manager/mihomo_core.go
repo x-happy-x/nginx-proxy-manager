@@ -648,6 +648,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleServices(w, r)
 	case "/api/core/nodes":
 		a.handleNodesMeta(w)
+	case "/api/core/vpn/board":
+		a.handleVPNBoard(w, r)
 	case "/api/core/config/version":
 		s, err := coreSettings()
 		if err != nil {

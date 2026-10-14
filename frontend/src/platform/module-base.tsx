@@ -18,6 +18,19 @@ export class ModuleBoundary extends Component<{ children: ReactNode }, { error: 
   render() { return this.state.error ? <div role="alert">Ошибка интерфейса интеграции: {this.state.error}. Остальные разделы HomeNet доступны.</div> : this.props.children; }
 }
 
+/** «Просто» / «Подробно»: chosen in Core's menu, shared with every module (NPM-70). */
+export type HomeMode = "simple" | "pro";
+const readMode = (): HomeMode => { try { return localStorage.getItem("homenet-home-mode") === "simple" ? "simple" : "pro"; } catch { return "pro"; } };
+export function useHomeMode(): HomeMode {
+  const [mode, setMode] = useState<HomeMode>(readMode);
+  useEffect(() => {
+    const update = (e: Event) => setMode((e as CustomEvent<HomeMode>).detail === "simple" ? "simple" : "pro");
+    window.addEventListener("homenet:mode", update);
+    return () => window.removeEventListener("homenet:mode", update);
+  }, []);
+  return mode;
+}
+
 export function usePage() {
   const read = () => location.hash.replace(/^#\/?/, "").split("/")[0] || "overview";
   const [page, setPage] = useState(read);
