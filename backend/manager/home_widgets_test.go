@@ -62,35 +62,15 @@ func TestHomeServerReliability(t *testing.T) {
 	yes, no := true, false
 	start := time.Now().Add(-90 * time.Minute).Truncate(time.Minute)
 	for i := 0; i < 90; i++ {
-		a := &adaptiveSnapshot{Mode: "normal", Results: map[string]struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{}}
+		a := &adaptiveSnapshot{Mode: "normal", Results: map[string]adaptiveResult{}}
 		half := &no
 		if i%2 == 0 {
 			half = &yes
 		}
-		a.Results["good"] = struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{Available: &yes}
-		a.Results["half"] = struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{Available: half}
-		a.Results["dead"] = struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{OK: false}
-		a.Results["skipped"] = struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{Skipped: "mode"}
+		a.Results["good"] = adaptiveResult{Available: &yes}
+		a.Results["half"] = adaptiveResult{Available: half}
+		a.Results["dead"] = adaptiveResult{OK: false}
+		a.Results["skipped"] = adaptiveResult{Skipped: "mode"}
 		traffic.observeHealth(start.Add(time.Duration(i)*time.Minute), map[string]providerSnapshot{"ROUTER": {Adaptive: a, Proxies: make([]proxySnapshot, 4)}})
 	}
 	provider, shares := traffic.reliability(start.Add(90 * time.Minute))

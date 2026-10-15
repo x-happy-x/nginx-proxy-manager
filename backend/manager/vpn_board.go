@@ -53,12 +53,36 @@ type boardAdaptive struct {
 	DirectGlobal  []boardProbe              `json:"directGlobal"`
 	Rankings      map[string][]boardSummary `json:"rankings"`
 	Results       map[string]boardResult    `json:"results"`
+	Scan          *boardScan                `json:"scan"`
+	LastScan      *boardScan                `json:"lastScan"`
+}
+
+// boardScan: the fork's progress of a scan (MIHOMO-19); absent on older cores.
+type boardScan struct {
+	Running     bool      `json:"running"`
+	Step        string    `json:"step"`
+	StartedAt   time.Time `json:"startedAt"`
+	EndedAt     time.Time `json:"endedAt"`
+	Total       int       `json:"total"`
+	Planned     int       `json:"planned"`
+	Rested      int       `json:"rested"`
+	Done        int       `json:"done"`
+	OK          int       `json:"ok"`
+	Fail        int       `json:"fail"`
+	Concurrency int       `json:"concurrency"`
+	Probing     []string  `json:"probing,omitempty"`
 }
 
 type boardProvider struct {
-	Proxies   []struct{ Name string } `json:"proxies"`
-	Adaptive  *boardAdaptive          `json:"adaptive"`
-	UpdatedAt string                  `json:"updatedAt"`
+	Proxies []struct {
+		Name  string `json:"name"`
+		Type  string `json:"type"`
+		Alive bool   `json:"alive"`
+	} `json:"proxies"`
+	Adaptive    *boardAdaptive `json:"adaptive"`
+	UpdatedAt   string         `json:"updatedAt"`
+	VehicleType string         `json:"vehicleType"`
+	Skipped     []string       `json:"skipped"`
 }
 
 type boardServer struct {
@@ -70,6 +94,7 @@ type boardServer struct {
 	Now      string   `json:"now"` // ok | silent | tls | reset | http | body | fail | skipped | unknown
 	Country  string   `json:"country,omitempty"`
 	Selected []string `json:"selected,omitempty"` // groups using it now
+	Hist     string   `json:"hist,omitempty"`     // last checks, oldest first (node_history.go)
 }
 
 type boardDay struct {
@@ -100,10 +125,18 @@ func failOf(r boardResult) string {
 	if ok {
 		return "ok"
 	}
+	if len(r.Probes) == 0 {
+		return "nodata"
+	}
 	for _, p := range r.Probes {
 		if !p.OK && p.Fail != "" {
 			return p.Fail
 		}
+	}
+	// the last probe passed, but the core waits for a few in a row before
+	// letting a node that failed carry traffic again
+	if r.OK {
+		return "recovering"
 	}
 	return "fail"
 }
@@ -184,6 +217,9 @@ func (a *app) vpnBoard(days int) response {
 			for _, s := range list {
 				r := ad.Results[s.Name]
 				row := boardServer{Name: s.Name, Rate: round2(s.SuccessRate), MS: int(s.Record.AvgMS), Checks: s.Record.Checks, Stable: s.Stable, Now: "unknown", Country: r.Country, Selected: selected[s.Name]}
+				if nodes != nil {
+					row.Hist = nodes.strip(main, s.Name, 24)
+				}
 				if _, ok := ad.Results[s.Name]; ok {
 					row.Now = failOf(r)
 				}
@@ -220,15 +256,18 @@ func (a *app) vpnBoard(days int) response {
 				fails[f]++
 			}
 		}
-		out["provider"] = response{"name": main, "total": len(p.Proxies), "checked_at": ad.CheckedAt, "pending": ad.Pending, "mode": ad.Mode, "updated_at": p.UpdatedAt}
+		out["provider"] = response{"name": main, "total": len(p.Proxies), "checked_at": ad.CheckedAt, "pending": ad.Pending, "mode": ad.Mode, "updated_at": p.UpdatedAt,
+			"scan": ad.Scan, "last_scan": ad.LastScan, "skipped": p.Skipped}
 		out["servers"] = response{"answering": answering, "stable": stable, "fails": fails, "rows": rows, "bins": bins, "latency": lat, "latency_edges": latencyEdges}
 	}
 	out["channel"] = channel
+	out["sources"] = boardSources(body.Providers, groups.Proxies, main)
 
 	// a week by local day: the channel's minutes, bypass traffic, answering servers
 	if traffic != nil {
 		out["week"] = traffic.boardWeek(main, now, days)
-		out["hours"] = traffic.boardHours(main, now)
+		out["hours"] = traffic.boardHours(main, now, 24)
+		out["hours_week"] = traffic.boardHours(main, now, 7*24)
 		if logs := traffic.provLog(main); len(logs) > 0 {
 			out["provider_updates"] = logs
 		}
@@ -326,7 +365,7 @@ func (t *trafficCollector) boardWeek(provider string, now time.Time, n int) []bo
 	return days
 }
 
-func (t *trafficCollector) boardHours(provider string, now time.Time) []boardHour {
+func (t *trafficCollector) boardHours(provider string, now time.Time, n int) []boardHour {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	out := []boardHour{}
@@ -334,11 +373,74 @@ func (t *trafficCollector) boardHours(provider string, now time.Time) []boardHou
 	if h == nil {
 		return out
 	}
-	from := now.Add(-24 * time.Hour).Unix()
+	from := now.Add(-time.Duration(n) * time.Hour).Unix()
 	for _, p := range h.Hours {
 		if p.T >= from {
 			out = append(out, boardHour{T: p.T, Working: p.Working, Whitelist: p.Whitelist})
 		}
+	}
+	return out
+}
+
+// boardSources: where nodes come from — subscriptions and files, plus the
+// Tailscale nodes; the main subscription first.
+func boardSources(providers map[string]boardProvider, proxies map[string]proxySnapshot, main string) []response {
+	out := []response{}
+	names := []string{}
+	for name, p := range providers {
+		if p.VehicleType == "HTTP" || p.VehicleType == "File" {
+			names = append(names, name)
+		}
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if (names[i] == main) != (names[j] == main) {
+			return names[i] == main
+		}
+		return len(providers[names[i]].Proxies) > len(providers[names[j]].Proxies)
+	})
+	for _, name := range names {
+		p := providers[name]
+		alive := 0
+		if p.Adaptive != nil && len(p.Adaptive.Results) > 0 {
+			for _, r := range p.Adaptive.Results {
+				if failOf(r) == "ok" {
+					alive++
+				}
+			}
+		} else {
+			for _, x := range p.Proxies {
+				if x.Alive {
+					alive++
+				}
+			}
+		}
+		kind := "file"
+		if p.VehicleType == "HTTP" {
+			kind = "subscription"
+		}
+		if strings.EqualFold(name, "olcrtc") {
+			kind = "olcrtc"
+		}
+		item := response{"name": name, "kind": kind, "total": len(p.Proxies), "alive": alive, "updated_at": p.UpdatedAt, "adaptive": p.Adaptive != nil && p.Adaptive.DependsOn == ""}
+		if p.Adaptive != nil && p.Adaptive.DependsOn != "" {
+			item["depends_on"] = p.Adaptive.DependsOn
+		}
+		if len(p.Skipped) > 0 {
+			item["skipped"] = p.Skipped
+		}
+		out = append(out, item)
+	}
+	ts, tsAlive := 0, 0
+	for _, x := range proxies {
+		if strings.EqualFold(x.Type, "tailscale") {
+			ts++
+			if x.Alive {
+				tsAlive++
+			}
+		}
+	}
+	if ts > 0 {
+		out = append(out, response{"name": "Tailscale", "kind": "tailscale", "total": ts, "alive": tsAlive})
 	}
 	return out
 }

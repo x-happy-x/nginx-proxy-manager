@@ -94,11 +94,7 @@ func TestHealthHistoryModesAndWorking(t *testing.T) {
 	tc := newTrafficCollector(filepath.Join(t.TempDir(), "traffic.json.gz"), time.Unix(1_800_000_000, 0))
 	yes, no := true, false
 	snap := func(mode string, avail ...*bool) map[string]providerSnapshot {
-		p := providerSnapshot{Adaptive: &adaptiveSnapshot{Mode: mode, Results: map[string]struct {
-			OK        bool   `json:"ok"`
-			Available *bool  `json:"available"`
-			Skipped   string `json:"skipped"`
-		}{}}}
+		p := providerSnapshot{Adaptive: &adaptiveSnapshot{Mode: mode, Results: map[string]adaptiveResult{}}}
 		for i, a := range avail {
 			name := string(rune('a' + i))
 			p.Proxies = append(p.Proxies, proxySnapshot{Name: name})

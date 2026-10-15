@@ -449,6 +449,8 @@ export const core = {
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   groups: (period: "24h" | "7d") => call<GroupsReport>(`/api/core/groups?period=${period}`),
   services: () => call<ServicesReport>("/api/core/services"),
+  node: (name: string, provider = "") => call<NodeDetail>(`/api/core/vpn/node?name=${enc(name)}${provider ? `&provider=${enc(provider)}` : ""}`),
+  nodeCheck: (name: string) => call<{ passed: boolean; ms?: number; error?: string }>(`/api/core/vpn/node/check?name=${enc(name)}`, json("POST", {})),
   board: (days: 7 | 30 = 7) => call<Board>(`/api/core/vpn/board${days === 30 ? "?days=30" : ""}`),
   nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
   saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
@@ -505,12 +507,23 @@ export function openStream<T>(path: string, onMessage: (data: T) => void, onStat
 export const DEFAULT_TEST_URL = "https://www.gstatic.com/generate_204";
 
 /* NPM-70: data of the redesigned VPN screens (GET /api/core/vpn/board) */
-export type BoardServer = { name: string; rate: number; ms: number; checks: number; stable: boolean; now: string; country?: string; selected?: string[] };
+export type BoardServer = { name: string; rate: number; ms: number; checks: number; stable: boolean; now: string; country?: string; selected?: string[]; hist?: string };
+export type BoardScan = { running: boolean; step: string; startedAt: string; endedAt: string; total: number; planned: number; rested: number; done: number; ok: number; fail: number; concurrency: number; probing?: string[] };
+export type BoardSource = { name: string; kind: "subscription" | "file" | "olcrtc" | "tailscale"; total: number; alive: number; updated_at?: string; adaptive?: boolean; depends_on?: string; skipped?: string[] };
+export type NodeGroup = { name: string; now: string; place: number; of: number; leads: boolean; via?: string };
+export type NodeDetail = {
+  name: string; provider: string; now?: string; country?: string; mode?: string;
+  probes?: { host: string; ok: boolean; ms: number; fail: string }[];
+  modes: Record<string, { rate: number; ms: number; checks: number; stable: boolean }>;
+  groups: NodeGroup[];
+  history?: { checks: { t: number; c: string; ms?: number }[] | null; week: string; base: number; recorded: boolean };
+};
 export type BoardDay = { day: string; normal: number; whitelist: number; offline: number; unknown: number; bypass: number; working: number };
 export type BoardService = { id: string; name: string; what: string; group: string; path?: string[]; checked: boolean; ok?: boolean; ms?: number; error?: string; since?: string };
 export type Board = {
   generated_at: string; core_error?: string;
-  provider?: { name: string; total: number; checked_at: string; pending: number; mode: string; updated_at?: string };
+  provider?: { name: string; total: number; checked_at: string; pending: number; mode: string; updated_at?: string; scan?: BoardScan | null; last_scan?: BoardScan | null; skipped?: string[] | null };
+  sources?: BoardSource[]; hours_week?: { t: number; working: number; whitelist: number }[];
   channel: { mode: string; since?: string; error?: string; observed?: string; direct?: { host: string; ok: boolean; ms: number; fail: string }[] };
   servers?: { answering: number; stable: Record<string, number>; fails: Record<string, number>; rows: Record<string, BoardServer[]>; bins: Record<string, number[]>; latency: Record<string, number[]>; latency_edges: number[] };
   week?: BoardDay[]; hours?: { t: number; working: number; whitelist: number }[];

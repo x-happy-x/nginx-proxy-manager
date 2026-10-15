@@ -96,3 +96,17 @@
 .vb-dayline{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:2px}.vb-dayline i{display:block}.vb-daylist small{color:var(--text-3);font-size:13px}
 .vb-big{font-size:32px;font-weight:800}.vb-plain{margin:0;padding-left:18px;display:grid;gap:4px}
 @media(max-width:900px){.vb-charts,.vb-rel{grid-template-columns:minmax(0,1fr)}.vb-daylist li{grid-template-columns:90px minmax(0,1fr)}.vb-daylist small{grid-column:2}}
+
+/* NPM-71: sections — a header, blocks to switch, the block's page below */
+.vb-section{display:grid;gap:16px;align-content:start;min-width:0;font-family:var(--font-sans);color:var(--text)}
+.vb-section-head{display:grid;gap:4px}.vb-section-head h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em}.vb-section-head p{margin:0;color:var(--text-2)}
+.vb-blocks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.vb-block{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--border);color:var(--text);text-decoration:none;min-width:0}
+.vb-block:hover{border-color:var(--border-strong)}.vb-block[aria-selected=true]{border-color:var(--accent);background:var(--accent-soft)}
+.vb-block-title{font-size:17px;font-weight:700}.vb-block-text{font-size:13px;color:var(--text-2)}
+.vb-subnav{display:flex;flex-wrap:wrap;gap:6px;padding:4px;border-radius:12px;background:var(--surface);border:1px solid var(--border);justify-self:start;max-width:100%;overflow-x:auto}
+.vb-subnav a{padding:7px 14px;border-radius:9px;color:var(--text-2);text-decoration:none;font-size:14px;white-space:nowrap}
+.vb-subnav a:hover{color:var(--text)}.vb-subnav a[aria-current=page]{background:var(--text);color:var(--bg);font-weight:700}
+.vb-section-body{min-width:0;display:grid;gap:16px}
+@media(max-width:800px){.vb-blocks{grid-template-columns:minmax(0,1fr)}}
+.vb-section-body .vb-pro-head h1,.vb-section-body .page-header h1{font-size:20px}

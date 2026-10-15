@@ -89,12 +89,24 @@ type adaptiveSnapshot struct {
 	Rankings map[string][]struct {
 		Stable bool `json:"stable"`
 	} `json:"rankings"`
-	Results map[string]struct {
-		OK        bool   `json:"ok"`
-		Available *bool  `json:"available"`
-		Skipped   string `json:"skipped"`
-	} `json:"results"`
+	Results map[string]adaptiveResult `json:"results"`
 	DependsOn string `json:"dependsOn"`
+}
+
+// adaptiveResult: a node's last probe as the fork reports it; At and the
+// probes let HomeNet keep each node's history of checks (NPM-71).
+type adaptiveResult struct {
+	OK        bool            `json:"ok"`
+	Available *bool           `json:"available"`
+	Skipped   string          `json:"skipped"`
+	At        time.Time       `json:"at"`
+	Probes    []adaptiveProbe `json:"probes"`
+}
+
+type adaptiveProbe struct {
+	OK   bool   `json:"ok"`
+	MS   int64  `json:"ms"`
+	Fail string `json:"fail"`
 }
 
 type providerSnapshot struct {
@@ -138,18 +150,10 @@ func stableCount(a *adaptiveSnapshot, mode string) int {
 // the mode unknown (NPM-51).
 func aliveSnapshot(p providerSnapshot) *adaptiveSnapshot {
 	ok := true
-	a := &adaptiveSnapshot{Results: map[string]struct {
-		OK        bool   `json:"ok"`
-		Available *bool  `json:"available"`
-		Skipped   string `json:"skipped"`
-	}{}}
+	a := &adaptiveSnapshot{Results: map[string]adaptiveResult{}}
 	for _, x := range p.Proxies {
 		if x.Alive {
-			a.Results[x.Name] = struct {
-				OK        bool   `json:"ok"`
-				Available *bool  `json:"available"`
-				Skipped   string `json:"skipped"`
-			}{OK: true, Available: &ok}
+			a.Results[x.Name] = adaptiveResult{OK: true, Available: &ok}
 		}
 	}
 	return a

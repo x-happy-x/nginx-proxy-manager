@@ -650,6 +650,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleNodesMeta(w)
 	case "/api/core/vpn/board":
 		a.handleVPNBoard(w, r)
+	case "/api/core/vpn/node":
+		a.handleVPNNode(w, r)
 	case "/api/core/config/version":
 		s, err := coreSettings()
 		if err != nil {
@@ -688,6 +690,8 @@ func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": true})
 	case "/api/core/traffic/reset":
 		a.handleCoreTrafficReset(w)
+	case "/api/core/vpn/node/check":
+		a.handleVPNNodeCheck(w, r)
 	case "/api/core/traffic/limit":
 		a.handleBypassLimit(w, r)
 	case "/api/core/olcrtc/setup", "/api/core/olcrtc/repick", "/api/core/olcrtc/resume", "/api/core/olcrtc/auto", "/api/core/olcrtc/check", "/api/core/olcrtc/main", "/api/core/olcrtc/remove", "/api/core/olcrtc/tidy", "/api/core/olcrtc/route":

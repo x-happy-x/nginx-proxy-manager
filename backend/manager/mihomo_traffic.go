@@ -138,6 +138,7 @@ func (a *app) startMihomoTraffic() {
 		return
 	}
 	traffic = newTrafficCollector(trafficStatePath(), time.Now())
+	nodes = newNodeHistory(nodeHistoryPath())
 	managedGo(func() {
 		tick := time.NewTicker(trafficPoll)
 		save := time.NewTicker(time.Minute)
@@ -147,6 +148,7 @@ func (a *app) startMihomoTraffic() {
 			select {
 			case <-workerContext.Done():
 				traffic.save()
+				nodes.save(true)
 				return
 			case <-tick.C:
 				var body struct {
@@ -164,6 +166,7 @@ func (a *app) startMihomoTraffic() {
 				if err := mihomoGet("/providers/proxies", &body); err == nil {
 					now := time.Now()
 					traffic.observeHealth(now, body.Providers)
+					nodes.observe(now, body.Providers)
 					traffic.observeUplink(now, channelNow(body.Providers).Mode)
 					var px struct {
 						Proxies map[string]proxySnapshot `json:"proxies"`
@@ -173,6 +176,7 @@ func (a *app) startMihomoTraffic() {
 					}
 				}
 				traffic.save()
+				nodes.save(false)
 			}
 		}
 	})
