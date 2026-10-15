@@ -41,6 +41,7 @@ export type PageKey =
   | "connections"
   | "traffic"
   | "vservers"
+  | "vstats"
   | "rules"
   | "corelog"
   | "coreconfig"

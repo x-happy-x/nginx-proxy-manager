@@ -334,8 +334,13 @@ export type InstallState = {
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
+    redirect: "manual",
     headers: { "X-HomeNet-UI": "1", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(init?.headers || {}) },
   });
+  if (res.type === "opaqueredirect") {
+    window.dispatchEvent(new Event("homenet:session-expired"));
+    throw new Error("Сессия входа истекла — войдите снова");
+  }
   const text = await res.text();
   let data: unknown = null;
   if (text) {
@@ -444,7 +449,7 @@ export const core = {
   traffic: (period: string) => call<TrafficReport>(`/api/core/traffic?period=${enc(period)}`),
   groups: (period: "24h" | "7d") => call<GroupsReport>(`/api/core/groups?period=${period}`),
   services: () => call<ServicesReport>("/api/core/services"),
-  board: () => call<Board>("/api/core/vpn/board"),
+  board: (days: 7 | 30 = 7) => call<Board>(`/api/core/vpn/board${days === 30 ? "?days=30" : ""}`),
   nodes: () => call<{ nodes: Record<string, NodeMeta> }>("/api/core/nodes"),
   saveServicesConfig: (c: ServiceConfig) => call<ServicesReport>("/api/core/services/config", json("POST", c)),
   checkServices: (id = "") => call<ServicesReport>(`/api/core/services/check${id ? `?id=${enc(id)}` : ""}`, json("POST", {})),

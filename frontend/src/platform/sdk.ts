@@ -31,7 +31,13 @@ export type IntegrationModule = {
 export async function request(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("X-HomeNet-UI", "1");
-  const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  // the access gateway answers an expired session with a redirect to Account;
+  // followed by fetch it fails as CORS, so it is caught here and said plainly
+  const response = await fetch(path, { ...init, headers, credentials: "same-origin", redirect: "manual" });
+  if (response.type === "opaqueredirect") { sessionExpired(); throw new Error("Сессия входа истекла — войдите снова"); }
   if (!response.ok) { const text=await response.text();let detail="";try{detail=JSON.parse(text).error||"";}catch{detail=text.slice(0,500);}throw new Error(response.status === 401 ? "Требуется вход в Account" : detail||`Ошибка запроса (${response.status})`); }
   return response;
 }
+
+/** NPM-70: tells Core's shell that the Account session expired (any module may notice first). */
+export function sessionExpired() { window.dispatchEvent(new Event("homenet:session-expired")); }

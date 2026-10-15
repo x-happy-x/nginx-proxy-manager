@@ -36,7 +36,7 @@ func TestVPNBoard(t *testing.T) {
 	services = nil
 	traffic = newTrafficCollector(filepath.Join(t.TempDir(), "t.json"), time.Now())
 
-	b := (&app{}).vpnBoard()
+	b := (&app{}).vpnBoard(7)
 	p := b["provider"].(response)
 	if p["name"] != "ROUTER" || p["total"] != 3 || p["pending"] != 2 {
 		t.Fatalf("provider %+v", p)
@@ -60,5 +60,14 @@ func TestVPNBoard(t *testing.T) {
 	}
 	if week := b["week"].([]boardDay); len(week) != 7 || week[6].Day != time.Now().Format("2006-01-02") {
 		t.Fatalf("week %+v", week)
+	}
+	// minutes counted twice never make a day longer than 24 hours
+	today := time.Now().Truncate(time.Hour).Unix()
+	traffic.st.Uplink = &providerHealth{Hours: []healthPoint{{T: today, Whitelist: 1500}, {T: today, Normal: 300}}}
+	if d := traffic.boardWeek("ROUTER", time.Now(), 7)[6]; d.Normal+d.Whitelist+d.Offline+d.Unknown != 1440 || d.Whitelist < d.Normal {
+		t.Fatalf("day over 24 h: %+v", d)
+	}
+	if month := (&app{}).vpnBoard(30)["week"].([]boardDay); len(month) != 30 {
+		t.Fatalf("month %d", len(month))
 	}
 }

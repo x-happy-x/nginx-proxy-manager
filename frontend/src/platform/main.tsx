@@ -18,6 +18,24 @@ import "./shell.css";
 declare global { var __HOMENET_RUNTIME__: { React: typeof React; ReactDOM: typeof ReactDOM; ReactDOMClient: { createRoot: typeof createRoot }; portalTarget?: Element | DocumentFragment }; }
 globalThis.__HOMENET_RUNTIME__ = { React, ReactDOM, ReactDOMClient: { createRoot } };
 
+// NPM-70: a request failing outright may be an expired Account session (the
+// gateway redirects to Account and fetch reports it as a network error). One
+// probe tells which, for every page and module in this window.
+const nativeFetch = window.fetch.bind(window);
+let probing = false;
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  try { return await nativeFetch(input, init); } catch (error) {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
+    if (url.origin === location.origin && !probing) {
+      probing = true;
+      nativeFetch("/api/platform", { redirect: "manual", headers: { "X-HomeNet-UI": "1" } })
+        .then(r => { if (r.type === "opaqueredirect" || r.status === 401) window.dispatchEvent(new Event("homenet:session-expired")); })
+        .catch(() => {}).finally(() => { probing = false; });
+    }
+    throw error;
+  }
+};
+
 const catalog = [
   { id: "proxy", name: "Прокси и домены", icon: "↗", description: "Сервисы на своих доменах, HTTPS, сертификаты и DNS.", detail: "Управление nginx с сохранением существующих маршрутов и сертификатов." },
   { id: "network", name: "Мониторинг связи", icon: "⌁", description: "Доступность интернета, LTE и состояние устройств.", detail: "История связи, диагностика, сканер и ресурсы роутеров и Proxmox." },
@@ -95,6 +113,8 @@ function App({onPortal}: {onPortal: () => void}) {
   const [mode, setModeState] = useState<HomeMode>(() => { try { return localStorage.getItem("homenet-home-mode") === "simple" ? "simple" : "pro"; } catch { return "pro"; } });
   const setMode = React.useCallback((m: HomeMode) => { setModeState(m); try { localStorage.setItem("homenet-home-mode", m); } catch { /* per-viewer convenience */ } window.dispatchEvent(new CustomEvent("homenet:mode", { detail: m })); }, []);
   const [attention, setAttention] = useState<Record<string, number>>({});
+  const [expired, setExpired] = useState(false);
+  useEffect(() => { const on = () => setExpired(true); window.addEventListener("homenet:session-expired", on); return () => window.removeEventListener("homenet:session-expired", on); }, []);
   const notify = React.useCallback((message: string) => setNotice(message), []);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem("homenet-theme", theme); } catch { /* per-viewer convenience */ } }, [theme]);
   useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
@@ -120,7 +140,7 @@ function App({onPortal}: {onPortal: () => void}) {
   return <div className="hn-layout">
     <Sidebar page={page} module={["overview", "integrations", "system"].includes(page) ? undefined : module} active={active} installedCount={installed.length} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} login={data.identity.login} attention={attention} onPortal={onPortal} />
     <div className="hn-workspace">
-      <main className="hn-main">{notice && <div className="hn-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Закрыть уведомление">×</button></div>}
+      <main className="hn-main">{expired && <div className="hn-expired" role="alert"><span>Сессия входа истекла — данные не обновляются.</span><button type="button" className="hn-primary" onClick={() => location.reload()}>Войти снова</button></div>}{notice && <div className="hn-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Закрыть уведомление">×</button></div>}
         {page === "overview" && installed.length > 0 && <Home installed={installed} notify={notify} onCatalog={choose} mode={mode} setMode={setMode} onAttention={setAttention} />}
         {page === "overview" && !installed.length && <><div className="hn-heading"><div><span className="hn-eyebrow">HOMENET</span><h1>{installed.length ? "Ваша домашняя сеть" : "Ваша сеть начинается здесь"}</h1><p>{installed.length ? "Управляйте подключёнными интеграциями в одном месте." : "HomeNet готов к настройке. Добавьте возможности, которые нужны вашей сети."}</p></div><span className="hn-badge">Ядро работает</span></div>
           <section className="hn-hero"><div><span className="hn-eyebrow">ОДНА ПАНЕЛЬ · ВАШ НАБОР ВОЗМОЖНОСТЕЙ</span><h2>{installed.length ? `${installed.length} интеграции установлено` : "Начните с первой интеграции"}</h2><p>Домены для сервисов, наблюдение за связью или управление VPN — каждый модуль подключается отдельно.</p><button className="hn-primary" onClick={choose}>Выбрать интеграции →</button></div><div className="hn-network-art" aria-hidden="true"><span>↗</span><b>H</b><span>◇</span></div></section>

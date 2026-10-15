@@ -24,7 +24,7 @@
   },
   {
     "id": "vpn", "name": "VPN и маршрутизация", "description": "mihomo, XKeen, подписки, Tailscale и OLCRTC", "port": 63503,
-    "pages": ["vpn", "vservers", "vnow", "vpnsvc", "subs", "torrents", "vroute", "why", "proxies", "checks", "connections", "traffic", "rules", "corelog", "coreconfig", "core"],
+    "pages": ["vpn", "vservers", "vstats", "vnow", "vpnsvc", "subs", "torrents", "vroute", "why", "proxies", "checks", "connections", "traffic", "rules", "corelog", "coreconfig", "core"],
     "paths": ["/api/core/", "/api/mihomo/"],
     "data": ["/opt/etc/homenet/mihomo"],
     "widgets": [
