@@ -127,7 +127,7 @@ func latencyBin(ms int) int {
 	return len(latencyEdges)
 }
 
-func (a *app) vpnBoard() response {
+func (a *app) vpnBoard(days int) response {
 	now := time.Now()
 	out := response{"ok": true, "generated_at": now.UTC().Format(time.RFC3339)}
 
@@ -227,7 +227,7 @@ func (a *app) vpnBoard() response {
 
 	// a week by local day: the channel's minutes, bypass traffic, answering servers
 	if traffic != nil {
-		out["week"] = traffic.boardWeek(main, now)
+		out["week"] = traffic.boardWeek(main, now, days)
 		out["hours"] = traffic.boardHours(main, now)
 		if logs := traffic.provLog(main); len(logs) > 0 {
 			out["provider_updates"] = logs
@@ -254,9 +254,10 @@ func (a *app) vpnBoard() response {
 	return out
 }
 
-func (t *trafficCollector) boardWeek(provider string, now time.Time) []boardDay {
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -6)
-	days := make([]boardDay, 7)
+// boardWeek: the last n local days (7 or 30), today last.
+func (t *trafficCollector) boardWeek(provider string, now time.Time, n int) []boardDay {
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(n - 1))
+	days := make([]boardDay, n)
 	for i := range days {
 		days[i].Day = start.AddDate(0, 0, i).Format("2006-01-02")
 	}
@@ -264,7 +265,7 @@ func (t *trafficCollector) boardWeek(provider string, now time.Time) []boardDay 
 		d := time.Unix(unix, 0).In(now.Location())
 		day := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, now.Location())
 		i := int(day.Sub(start).Hours()/24 + 0.5)
-		if i < 0 || i > 6 {
+		if i < 0 || i >= n {
 			return -1
 		}
 		return i
@@ -288,17 +289,38 @@ func (t *trafficCollector) boardWeek(provider string, now time.Time) []boardDay 
 		}
 	}
 	if h := t.st.Health[provider]; h != nil {
-		sum, n := make([]int, 7), make([]int, 7)
+		sum, cnt := make([]int, n), make([]int, n)
+		alt := make([]boardDay, n)
 		for _, p := range h.Hours {
 			if i := idx(p.T); i >= 0 {
 				sum[i] += p.Working
-				n[i]++
+				cnt[i]++
+				alt[i].Normal += p.Normal
+				alt[i].Whitelist += p.Whitelist
+				alt[i].Offline += p.Offline
+				alt[i].Unknown += p.Unknown
+			}
+		}
+		// the channel's own history began later (NPM-new, 12.10): before it, the
+		// main subscription's modes stand for the channel
+		for i := range days {
+			if days[i].Normal+days[i].Whitelist+days[i].Offline == 0 {
+				days[i].Normal, days[i].Whitelist, days[i].Offline, days[i].Unknown = alt[i].Normal, alt[i].Whitelist, alt[i].Offline, alt[i].Unknown
 			}
 		}
 		for i := range days {
-			if n[i] > 0 {
-				days[i].Working = round2(float64(sum[i]) / float64(n[i]))
+			if cnt[i] > 0 {
+				days[i].Working = round2(float64(sum[i]) / float64(cnt[i]))
 			}
+		}
+	}
+	// a day has 1440 minutes: older history counted some minutes twice (two
+	// collectors once wrote it), so a day over 24 hours is scaled back
+	for i := range days {
+		d := &days[i]
+		if sum := d.Normal + d.Whitelist + d.Offline + d.Unknown; sum > 1440 {
+			d.Normal, d.Whitelist, d.Offline = d.Normal*1440/sum, d.Whitelist*1440/sum, d.Offline*1440/sum
+			d.Unknown = 1440 - d.Normal - d.Whitelist - d.Offline
 		}
 	}
 	return days
@@ -332,5 +354,9 @@ func (t *trafficCollector) provLog(provider string) []provUpdate {
 }
 
 func (a *app) handleVPNBoard(w http.ResponseWriter, r *http.Request) {
-	a.writeJSON(w, http.StatusOK, a.vpnBoard())
+	days := 7
+	if r.URL.Query().Get("days") == "30" {
+		days = 30
+	}
+	a.writeJSON(w, http.StatusOK, a.vpnBoard(days))
 }

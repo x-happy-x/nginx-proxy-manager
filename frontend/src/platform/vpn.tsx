@@ -3,6 +3,7 @@ import { CoreGate } from "../features/mihomo/shared";
 import { VpnOverview } from "../features/mihomo/VpnOverview";
 import { VpnHome } from "../features/mihomo/board/VpnHome";
 import { VpnServers } from "../features/mihomo/board/VpnServers";
+import { VpnStats } from "../features/mihomo/board/VpnStats";
 import { VpnServices } from "../features/mihomo/VpnServices";
 import { VpnRoute } from "../features/mihomo/VpnRoute";
 import { Subscriptions } from "../features/mihomo/Subscriptions";
@@ -25,7 +26,7 @@ function VPNModule({ host }: { host: Host }) {
   const navigate = host.navigate;
   const config = () => navigate("coreconfig");
   const pages: Record<string, React.ReactNode> = {
-    vpn: <VpnHome onNavigate={navigate} />, vservers: <VpnServers />, vnow: <VpnOverview onNavigate={navigate} />, vpnsvc: <VpnServices onNavigate={navigate} />,
+    vpn: <VpnHome onNavigate={navigate} />, vservers: <VpnServers />, vstats: <VpnStats />, vnow: <VpnOverview onNavigate={navigate} />, vpnsvc: <VpnServices onNavigate={navigate} />,
     vroute: <VpnRoute onNavigate={navigate} />, subs: <Subscriptions />, proxies: <Proxies />,
     torrents: <Torrents />, checks: <Checks onConfig={config} />,
     connections: <Connections onAnalyze={() => navigate("why")} />, rules: <Rules onEdit={config} />,
