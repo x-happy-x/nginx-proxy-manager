@@ -11,12 +11,10 @@ type Plan = { simple: string[]; pro: Group[] };
 // First-party modules get the order of the mockups; any other module lists its
 // manifest pages as they are.
 const PLANS: Record<string, Plan> = {
+  // NPM-71: seven sections; their blocks (subs, checks, proxies…) live in the section
   vpn: {
-    simple: ["vpn", "vstats", "vpnsvc", "why"],
-    pro: [
-      { pages: ["vpn", "vservers", "checks", "vstats", "vroute", "subs", "vpnsvc", "traffic", "corelog"] },
-      { title: "Разбор и настройка", pages: ["why", "proxies", "connections", "rules", "torrents", "vnow", "coreconfig", "core"] },
-    ],
+    simple: ["vpn", "vpnsvc", "vstats"],
+    pro: [{ pages: ["vpn", "vservers", "vroute", "vpnsvc", "vstats", "corelog", "coreconfig"] }],
   },
   proxy: {
     simple: ["servers", "certs"],
@@ -33,7 +31,9 @@ const PLANS: Record<string, Plan> = {
     ],
   },
 };
-const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", proxies: "Узлы и группы", vnow: "Прежняя сводка", vstats: "Статистика", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx" };
+// a page inside a section lights up the section's menu entry
+const SECTION_OF: Record<string, string> = { subs: "vservers", checks: "vservers", proxies: "vroute", rules: "vroute", why: "vpnsvc", traffic: "vstats", vnow: "vstats", connections: "corelog", core: "coreconfig", torrents: "coreconfig" };
+const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx" };
 const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь" };
 
 export const pageTitle = (id: string, item?: Installed) =>
@@ -46,7 +46,7 @@ function sections(item: Installed, mode: HomeMode): Group[] {
   if (!plan) return [{ pages: item.manifest.ui.pages.map(p => p.id) }];
   const keep = (pages: string[]) => pages.filter(p => own.has(p));
   if (mode === "simple") return [{ pages: keep(plan.simple) }];
-  const listed = new Set(plan.pro.flatMap(g => g.pages));
+  const listed = new Set([...plan.pro.flatMap(g => g.pages), ...Object.keys(SECTION_OF)]);
   const rest = item.manifest.ui.pages.map(p => p.id).filter(p => !listed.has(p));
   const groups = plan.pro.map(g => ({ ...g, pages: keep(g.pages) }));
   if (rest.length) groups.push({ title: "Ещё", pages: rest });
@@ -58,7 +58,8 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
   theme: string; setTheme: (t: string) => void; login: string; attention: Record<string, number>; onPortal: () => void;
 }) {
   // aliases (olcrtc, tailscale) light up the page they belong to
-  const current = module?.manifest.ui.pages.find(p => p.id === page || p.aliases?.includes(page))?.id || page;
+  const own = module?.manifest.ui.pages.find(p => p.id === page || p.aliases?.includes(page))?.id || page;
+  const current = module && PLANS[module.manifest.id] ? SECTION_OF[own] || own : own;
   const link = (id: string, title: string, extra?: React.ReactNode) =>
     <a key={id} href={`#/${id}`} className={current === id ? "active" : ""} aria-current={current === id ? "page" : undefined}><span className="hn-nav-title">{title}</span>{extra}</a>;
   return <aside className="hn-sidebar" aria-label="Меню HomeNet">

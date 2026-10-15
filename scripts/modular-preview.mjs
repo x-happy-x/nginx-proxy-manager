@@ -35,6 +35,7 @@ const previewWidgets = {
   '/api/core/summary/tasks': { items: [{ id: 'olcrtc-setup', label: 'OLCRTC: настройка сервера', value: 3, total: 9, step: 'сборка olcrtc' }] },
 };
 const vpnBoard = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD, 'utf8') : '';
+const vpnNode = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD.replace(/board\.json$/, 'node.json'), 'utf8').catch(() => '') : '';
 const vpnBoard30 = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD.replace(/board\.json$/, 'board30.json'), 'utf8').catch(() => '') : '';
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
@@ -45,6 +46,8 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     const sample = previewWidgets[req.url.split('?')[0]];
     if (sample) { setTimeout(() => res.end(JSON.stringify(typeof sample === 'function' ? sample() : sample)), req.url.includes('olcrtc') ? 2500 : 0); return; }
     // NPM-70: PREVIEW_VPN_BOARD=<file> answers the VPN screens with a local snapshot (never committed)
+    if (item.id === 'vpn' && vpnNode && req.url.startsWith('/api/core/vpn/node/check')) { res.end(JSON.stringify({ ok: true, passed: true, ms: 612 })); return; }
+    if (item.id === 'vpn' && vpnNode && req.url.startsWith('/api/core/vpn/node')) { res.end(vpnNode); return; }
     if (item.id === 'vpn' && vpnBoard && req.url.startsWith('/api/core/vpn/board')) { res.end(req.url.includes('days=30') && vpnBoard30 ? vpnBoard30 : vpnBoard); return; }
     if (req.url === '/api/core/status') { res.end(JSON.stringify({ok:true,status:{installed:true,running:!!vpnBoard,controller_ok:!!vpnBoard}})); return; }
     res.writeHead(503); res.end(JSON.stringify({ok:false,error:'Изолированная проверка интерфейса: устройство не подключено'}));

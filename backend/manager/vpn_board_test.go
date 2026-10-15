@@ -14,14 +14,14 @@ func TestVPNBoard(t *testing.T) {
 	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/providers/proxies":
-			_, _ = w.Write([]byte(`{"providers":{"ROUTER":{"proxies":[{"name":"A"},{"name":"B"},{"name":"C"}],"adaptive":{"mode":"whitelist","checkedAt":"2026-10-14T23:36:31Z","pending":2,
+			_, _ = w.Write([]byte(`{"providers":{"ROUTER":{"vehicleType":"HTTP","skipped":["654 \"Обход XI\": invalid REALITY short ID"],"proxies":[{"name":"A"},{"name":"B"},{"name":"C"}],"adaptive":{"mode":"whitelist","checkedAt":"2026-10-14T23:36:31Z","pending":2,"scan":{"running":true,"step":"nodes","total":3,"planned":3,"done":1,"ok":1},
 "directAllowed":[{"url":"https://ya.ru","ok":true,"ms":217}],"directGlobal":[{"url":"https://www.google.com/generate_204","ok":false,"ms":5000,"fail":"silent"}],
 "rankings":{"whitelist":[{"name":"A","record":{"avgMs":463,"lastMs":431,"checks":1574},"successRate":0.83,"stable":true},{"name":"B","record":{"avgMs":900,"lastMs":-1,"checks":40},"successRate":0.05,"stable":false},{"name":"C","record":{"checks":0},"successRate":0.5,"stable":false}],
 "normal":[{"name":"A","record":{"avgMs":300,"lastMs":280,"checks":10},"successRate":0.9,"stable":true}]},
 "results":{"A":{"ok":true,"available":true},"B":{"ok":false,"available":false,"probes":[{"url":"https://www.google.com/","ok":false,"fail":"tls"}]},"C":{"skipped":"mode"}}}},
-"Cascade":{"proxies":[{"name":"X"}],"adaptive":{"dependsOn":"ROUTER"}}}}`))
+"Cascade":{"proxies":[{"name":"X"}],"vehicleType":"File","adaptive":{"dependsOn":"ROUTER"}}}}`))
 		case "/proxies":
-			_, _ = w.Write([]byte(`{"proxies":{"AUTO":{"type":"Fallback","now":"A"},"Headscale":{"type":"Fallback","now":"A"},"A":{"type":"Vless"}}}`))
+			_, _ = w.Write([]byte(`{"proxies":{"AUTO":{"type":"Fallback","now":"Обходы"},"Обходы":{"type":"Fallback","now":"A","all":["A","B"]},"Headscale":{"type":"Fallback","now":"A","all":["B","A"]},"A":{"type":"Vless"},"ts":{"type":"Tailscale","alive":true}}}`))
 		case "/network":
 			_, _ = w.Write([]byte(`{"mode":"whitelist","since":"2026-10-14T15:14:00Z"}`))
 		default:
@@ -60,6 +60,26 @@ func TestVPNBoard(t *testing.T) {
 	}
 	if week := b["week"].([]boardDay); len(week) != 7 || week[6].Day != time.Now().Format("2006-01-02") {
 		t.Fatalf("week %+v", week)
+	}
+	if sc := p["scan"].(*boardScan); sc == nil || !sc.Running || sc.Done != 1 || len(p["skipped"].([]string)) != 1 {
+		t.Fatalf("scan or skipped lost: %+v", p)
+	}
+	src := b["sources"].([]response)
+	if len(src) != 3 || src[0]["name"] != "ROUTER" || src[0]["alive"] != 1 || src[1]["depends_on"] != "ROUTER" || src[2]["kind"] != "tailscale" || src[2]["alive"] != 1 {
+		t.Fatalf("sources %+v", src)
+	}
+	n, code := (&app{}).vpnNode("A", "")
+	gs := n["groups"].([]nodeGroup)
+	if code != 200 || n["provider"] != "ROUTER" || n["now"] != "ok" || len(gs) != 2 || !gs[0].Leads || gs[0].Name != "Headscale" && gs[0].Name != "Обходы" {
+		t.Fatalf("node %+v", n)
+	}
+	for _, g := range gs {
+		if g.Name == "Обходы" && (g.Via != "AUTO" || g.Place != 1) || g.Name == "Headscale" && g.Place != 2 {
+			t.Fatalf("group %+v", g)
+		}
+	}
+	if m := n["modes"].(response); m["whitelist"] == nil || m["normal"] == nil {
+		t.Fatalf("modes %+v", m)
 	}
 	// minutes counted twice never make a day longer than 24 hours
 	today := time.Now().Truncate(time.Hour).Unix()

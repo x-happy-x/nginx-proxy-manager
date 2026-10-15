@@ -2,14 +2,13 @@ import { MihomoProvider } from "../features/mihomo/context";
 import { CoreGate } from "../features/mihomo/shared";
 import { VpnOverview } from "../features/mihomo/VpnOverview";
 import { VpnHome } from "../features/mihomo/board/VpnHome";
-import { VpnServers } from "../features/mihomo/board/VpnServers";
+import { ServersPage } from "../features/mihomo/board/ServersPage";
 import { VpnStats } from "../features/mihomo/board/VpnStats";
+import { SectionPage } from "../features/mihomo/board/Sections";
 import { VpnServices } from "../features/mihomo/VpnServices";
 import { VpnRoute } from "../features/mihomo/VpnRoute";
-import { Subscriptions } from "../features/mihomo/Subscriptions";
 import { Proxies } from "../features/mihomo/Proxies";
 import { Torrents } from "../features/mihomo/Torrents";
-import { Checks } from "../features/mihomo/Checks";
 import { Connections } from "../features/mihomo/Connections";
 import { Rules } from "../features/mihomo/Rules";
 import { Traffic } from "../features/mihomo/Traffic";
@@ -26,14 +25,14 @@ function VPNModule({ host }: { host: Host }) {
   const navigate = host.navigate;
   const config = () => navigate("coreconfig");
   const pages: Record<string, React.ReactNode> = {
-    vpn: <VpnHome onNavigate={navigate} />, vservers: <VpnServers />, vstats: <VpnStats />, vnow: <VpnOverview onNavigate={navigate} />, vpnsvc: <VpnServices onNavigate={navigate} />,
-    vroute: <VpnRoute onNavigate={navigate} />, subs: <Subscriptions />, proxies: <Proxies />,
-    torrents: <Torrents />, checks: <Checks onConfig={config} />,
+    vpn: <VpnHome onNavigate={navigate} />, vservers: <ServersPage navigate={navigate} />, vstats: <VpnStats />, vnow: <VpnOverview onNavigate={navigate} />, vpnsvc: <VpnServices onNavigate={navigate} />,
+    vroute: <VpnRoute onNavigate={navigate} />, subs: <ServersPage navigate={navigate} initial={raw === "olcrtc" ? "olcrtc" : raw === "tailscale" ? "Tailscale" : ""} />, proxies: <Proxies />,
+    torrents: <Torrents />, checks: <ServersPage navigate={navigate} />,
     connections: <Connections onAnalyze={() => navigate("why")} />, rules: <Rules onEdit={config} />,
     traffic: <Traffic />, corelog: <CoreLogs />, coreconfig: <Config />, core: <Core onConfig={config} />,
     why: <Why onNodes={() => navigate("proxies")} />,
   };
-  return <MihomoProvider active log={(title, body) => host.notify(`${title}: ${body}`)}><ModuleTabs ids={Object.keys(pages)} host={host} page={page} /><CoreGate>{pages[page] || pages.vpn}</CoreGate></MihomoProvider>;
+  return <MihomoProvider active log={(title, body) => host.notify(`${title}: ${body}`)}><ModuleTabs ids={Object.keys(pages)} host={host} page={page} /><CoreGate><SectionPage page={pages[page] ? page : "vpn"} navigate={navigate}>{pages[page] || pages.vpn}</SectionPage></CoreGate></MihomoProvider>;
 }
 export function mount(element: HTMLElement, host: Host) {
   if (host.protocol !== 1) throw new Error("Несовместимая версия HomeNet");
