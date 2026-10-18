@@ -142,7 +142,7 @@ apps:
 - id: bigfam
   name: BigFam
   upstream:
-    address: 192.168.99.20
+    address: 192.168.99.33
     port: 4173
     scheme: http
   ws_proxy:
@@ -153,13 +153,13 @@ apps:
 - id: sublab
   name: Sublab
   upstream:
-    address: 192.168.99.20
+    address: 192.168.99.33
     port: 4192
     scheme: http
 - id: account
   name: Account · вход в сервисы
   upstream:
-    address: 192.168.99.20
+    address: 192.168.99.33
     port: 4161
     scheme: http
 - id: xkeen-net
