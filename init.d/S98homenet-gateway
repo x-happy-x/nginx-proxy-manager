@@ -1,19 +1,50 @@
 #!/opt/bin/sh
-PID=/opt/var/run/homenet-gateway.pid
+PID="${HOME_NET_GATEWAY_PID:-/opt/var/run/homenet-gateway.pid}"
+LOG="${HOME_NET_GATEWAY_LOG:-/opt/var/log/homenet-gateway.log}"
+CONFIG="${HOME_NET_GATEWAY_CONFIG:-/opt/etc/homenet/gateway.json}"
 APP_DIR="${HOME_NET_APP_DIR:-/opt/etc/homenet/nginx}"
 [ ! -f "$APP_DIR/config/runtime.env" ] || . "$APP_DIR/config/runtime.env"
 BIN="${HOME_NET_BIN_DIR:-$APP_DIR/bin/linux-arm64}/gateway"
+
+running() {
+ [ -f "$PID" ] || return 1
+ GATEWAY_PID="$(cat "$PID")"
+ case "$GATEWAY_PID" in ''|0|*[!0-9]*) return 1 ;; esac
+ # /opt/var/run may survive a reboot; the PID can belong to another service.
+ EXPECTED="$(readlink -f "$BIN")" || return 1
+ [ -n "$EXPECTED" ] && [ "$(readlink "/proc/$GATEWAY_PID/exe" 2>/dev/null)" = "$EXPECTED" ] &&
+   kill -0 "$GATEWAY_PID" 2>/dev/null
+}
+start() {
+ running && return 0
+ [ -x "$BIN" ] && [ -f "$CONFIG" ] || { echo "Gateway binary or configuration missing" >&2; return 1; }
+ umask 077
+ mkdir -p "$(dirname "$PID")" "$(dirname "$LOG")" || return 1
+ rm -f "$PID" || return 1
+ nohup "$BIN" -config "$CONFIG" >>"$LOG" 2>&1 &
+ echo $! > "$PID"
+ sleep 1
+ if ! running; then
+   rm -f "$PID"
+   echo "Gateway failed to start; inspect $LOG" >&2
+   return 1
+ fi
+}
+stop() {
+ if running; then
+   kill "$GATEWAY_PID" || return 1
+   COUNT=0
+   while running; do
+     COUNT=$((COUNT+1))
+     [ "$COUNT" -lt 10 ] || { echo "Gateway shutdown still pending" >&2; return 1; }
+     sleep 1
+   done
+ fi
+ rm -f "$PID"
+}
 case "$1" in
- start)
-   if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; then exit 0; fi
-   umask 077
-   mkdir -p /opt/var/run /opt/var/log
-   nohup "$BIN" -config /opt/etc/homenet/gateway.json >>/opt/var/log/homenet-gateway.log 2>&1 &
-   echo $! > "$PID"
-   ;;
- stop)
-   if [ -f "$PID" ]; then kill "$(cat "$PID")" 2>/dev/null; rm -f "$PID"; fi
-   ;;
- restart) "$0" stop; sleep 1; "$0" start ;;
+ start) start ;;
+ stop) stop ;;
+ restart) stop && start ;;
  *) echo "Usage: $0 start|stop|restart"; exit 1 ;;
 esac
