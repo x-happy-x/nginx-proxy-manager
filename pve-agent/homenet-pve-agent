@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+"""HomeNet metrics agent for a Proxmox VE host (NPM-74).
+
+Runs as a systemd service on the host itself and samples it every 10 seconds:
+CPU, load, memory, network, disk I/O, temperatures, guests, storage, ZFS,
+SMART, updates, failed units and the hardware inventory. The latest snapshot
+and a 24-hour history are kept under /run/homenet-pve; the history also
+survives restarts in /var/lib/homenet-pve.
+
+HomeNet reads the data over SSH with a key restricted to the forced command
+`homenet-pve-agent serve`, which only prints one of the prepared documents.
+Standard library only: Proxmox ships python3, nothing else is installed.
+"""
+import glob
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+
+VERSION = "1.0.0"
+RUN = "/run/homenet-pve"
+LIB = "/var/lib/homenet-pve"
+INTERVAL = 10
+HISTORY_STEP = 60           # one node point per minute
+HISTORY_POINTS = 24 * 60    # a day
+GUEST_STEP = 300            # one guest point per 5 minutes
+GUEST_POINTS = 24 * 12
+
+def sh(args, timeout=20, any_rc=False):
+    try:
+        out = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        return out.stdout if out.returncode == 0 or any_rc else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+def sh_json(args, timeout=20, default=None, any_rc=False):
+    try:
+        return json.loads(sh(args, timeout, any_rc) or "null") or default
+    except ValueError:
+        return default
+
+def read(path, default=""):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+def write_json(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, separators=(",", ":"))
+    os.replace(tmp, path)
+
+# ---------- node ----------
+
+def cpu_times():
+    parts = read("/proc/stat").splitlines()[0].split()[1:]
+    v = [int(x) for x in parts]
+    idle = v[3] + v[4]
+    return sum(v[:8]), idle, v[4]
+
+def meminfo():
+    m = {}
+    for line in read("/proc/meminfo").splitlines():
+        k, _, rest = line.partition(":")
+        m[k] = int(rest.split()[0]) * 1024
+    return m
+
+def net_counters():
+    out = {}
+    for line in read("/proc/net/dev").splitlines()[2:]:
+        name, _, rest = line.partition(":")
+        name = name.strip()
+        f = rest.split()
+        out[name] = (int(f[0]), int(f[8]))
+    return out
+
+def physical_ifaces():
+    names = []
+    for p in sorted(glob.glob("/sys/class/net/*")):
+        n = os.path.basename(p)
+        if os.path.exists(p + "/device") or n.startswith("vmbr"):
+            names.append(n)
+    return names
+
+def disk_counters():
+    out = {}
+    for line in read("/proc/diskstats").splitlines():
+        f = line.split()
+        name = f[2]
+        if not os.path.exists("/sys/block/" + name) or name.startswith(("loop", "ram", "zd", "dm-", "sr")):
+            continue
+        out[name] = (int(f[5]) * 512, int(f[9]) * 512, int(f[12]))  # read B, written B, io ms
+    return out
+
+def cpu_freq():
+    vals = []
+    for p in glob.glob("/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq"):
+        try:
+            vals.append(int(read(p)) / 1000)
+        except ValueError:
+            pass
+    return round(sum(vals) / len(vals)) if vals else None
+
+def temperatures():
+    items = []
+    for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+        chip = read(d + "/name")
+        for t in sorted(glob.glob(d + "/temp*_input")):
+            raw = read(t)
+            if not raw.lstrip("-").isdigit():
+                continue
+            base = t[:-len("_input")]
+            label = read(base + "_label") or chip
+            item = {"chip": chip, "label": label, "c": round(int(raw) / 1000, 1)}
+            for k in ("crit", "max"):
+                v = read(base + "_" + k)
+                if v.lstrip("-").isdigit() and 0 < int(v) < 200000:
+                    item[k] = round(int(v) / 1000)
+            items.append(item)
+    fans = []
+    for f in sorted(glob.glob("/sys/class/hwmon/hwmon*/fan*_input")):
+        v = read(f)
+        if v.isdigit():
+            fans.append({"chip": read(os.path.dirname(f) + "/name"), "label": read(f[:-6] + "_label") or os.path.basename(f)[:-6], "rpm": int(v)})
+    return items, fans
+
+def cpu_temp(items):
+    cpu = [t["c"] for t in items if t["chip"] in ("coretemp", "k10temp", "zenpower", "cpu_thermal")
+           and (t["label"].startswith(("Package", "Tctl", "Tdie")) or t["chip"] == "cpu_thermal")]
+    if not cpu:
+        cpu = [t["c"] for t in items if t["chip"] in ("coretemp", "k10temp")]
+    return max(cpu) if cpu else None
+
+# ---------- Proxmox ----------
+
+NODE = socket.gethostname()
+
+def guests():
+    data = sh_json(["pvesh", "get", "/cluster/resources", "--type", "vm", "--output-format", "json"], 30, [])
+    out = []
+    for g in data:
+        if g.get("node") and g["node"] != NODE:
+            continue
+        out.append({
+            "vmid": g.get("vmid"), "name": g.get("name", ""), "type": g.get("type"), "status": g.get("status"),
+            "template": bool(g.get("template")), "cpu": round((g.get("cpu") or 0) * 100, 1), "cpus": g.get("maxcpu") or 0,
+            "mem": g.get("mem") or 0, "maxmem": g.get("maxmem") or 0, "disk": g.get("disk") or 0, "maxdisk": g.get("maxdisk") or 0,
+            "netin": g.get("netin") or 0, "netout": g.get("netout") or 0, "diskread": g.get("diskread") or 0, "diskwrite": g.get("diskwrite") or 0,
+            "uptime": g.get("uptime") or 0, "tags": g.get("tags", ""), "lock": g.get("lock", ""),
+        })
+    return sorted(out, key=lambda g: g["vmid"] or 0)
+
+def storage():
+    data = sh_json(["pvesh", "get", "/nodes/%s/storage" % NODE, "--output-format", "json"], 30, [])
+    return [{"name": s.get("storage"), "type": s.get("type"), "used": s.get("used") or 0, "total": s.get("total") or 0,
+             "active": bool(s.get("active")), "enabled": s.get("enabled", 1) != 0, "shared": bool(s.get("shared")),
+             "content": s.get("content", "")} for s in sorted(data, key=lambda s: s.get("storage", ""))]
+
+def zfs():
+    out = []
+    for line in sh(["zpool", "list", "-H", "-p", "-o", "name,size,alloc,free,frag,cap,health"]).splitlines():
+        f = line.split("\t")
+        if len(f) == 7:
+            num = lambda v: int(v) if v.isdigit() else None
+            out.append({"name": f[0], "size": num(f[1]), "alloc": num(f[2]), "free": num(f[3]), "frag": num(f[4].rstrip("%")),
+                        "cap": num(f[5].rstrip("%")), "health": f[6]})
+    return out
+
+def disks():
+    data = sh_json(["lsblk", "-d", "-b", "-J", "-o", "NAME,TYPE,SIZE,MODEL,SERIAL,ROTA,TRAN"], 10, {}) or {}
+    out = []
+    for d in data.get("blockdevices", []):
+        if d.get("type") != "disk" or d["name"].startswith(("zd", "loop", "rbd")):
+            continue
+        # smartctl's exit status is a bit mask (e.g. logged errors); its JSON is still valid
+        s = sh_json(["smartctl", "-j", "-a", "/dev/" + d["name"]], 30, {}, any_rc=True) or {}
+        nvme = s.get("nvme_smart_health_information_log") or {}
+        attrs = {a.get("name"): a for a in (s.get("ata_smart_attributes") or {}).get("table", [])}
+        wear = nvme.get("percentage_used")
+        if wear is None:
+            for name in ("Percent_Lifetime_Remain", "Wear_Leveling_Count", "SSD_Life_Left", "Media_Wearout_Indicator"):
+                if name in attrs:
+                    val = attrs[name].get("value")
+                    wear = 100 - val if isinstance(val, int) and 0 <= val <= 100 else None
+                    break
+        kind = "nvme" if d["name"].startswith("nvme") else ("hdd" if d.get("rota") else "ssd")
+        out.append({
+            "dev": d["name"], "kind": kind, "model": (d.get("model") or s.get("model_name") or "").strip(),
+            "serial": (d.get("serial") or s.get("serial_number") or "").strip(), "size": d.get("size") or 0,
+            "transport": d.get("tran") or "", "firmware": s.get("firmware_version", ""),
+            "health": (s.get("smart_status") or {}).get("passed"), "temp": (s.get("temperature") or {}).get("current"),
+            "hours": (s.get("power_on_time") or {}).get("hours"), "cycles": s.get("power_cycle_count"),
+            "wear": wear, "written": (nvme.get("data_units_written") or 0) * 512000 or None,
+            "media_errors": nvme.get("media_errors"),
+            "reallocated": (attrs.get("Reallocated_Sector_Ct") or {}).get("raw", {}).get("value"),
+        })
+    return out
+
+def updates():
+    return len([l for l in sh(["apt", "list", "--upgradable"], 60).splitlines() if "/" in l])
+
+def failed_units():
+    return [l.split()[0] for l in sh(["systemctl", "--failed", "--no-legend", "--plain"]).splitlines() if l.strip()]
+
+def backups():
+    data = sh_json(["pvesh", "get", "/nodes/%s/tasks" % NODE, "--typefilter", "vzdump", "--limit", "10", "--output-format", "json"], 30, [])
+    return [{"id": t.get("id", ""), "status": t.get("status", "running"), "start": t.get("starttime"), "end": t.get("endtime")} for t in data]
+
+def versions():
+    pve = sh(["pveversion"]).strip()
+    m = re.search(r"pve-manager/([\w.\-]+)", pve)
+    return {"pve": m.group(1) if m else pve, "kernel": os.uname().release, "agent": VERSION}
+
+def hardware():
+    dmi = lambda k: read("/sys/class/dmi/id/" + k)
+    clean = lambda v: "" if v in ("Default string", "To be filled by O.E.M.", "System Product Name", "") else v
+    lscpu = {x["field"].rstrip(":"): x["data"] for x in (sh_json(["lscpu", "-J"], 10, {}) or {}).get("lscpu", [])}
+    modules, slots = [], 0
+    block = {}
+    for line in sh(["dmidecode", "-t", "17"]).splitlines() + ["Handle"]:
+        if line.startswith("Handle"):
+            if block:
+                slots += 1
+                if block.get("Size", "").split(" ")[0].isdigit():
+                    modules.append({"slot": block.get("Locator", ""), "size": block.get("Size", ""), "type": block.get("Type", ""),
+                                    "speed": block.get("Configured Memory Speed") or block.get("Speed", ""),
+                                    "vendor": clean(block.get("Manufacturer", "")).replace("Unknown", ""), "part": block.get("Part Number", "").strip()})
+            block = {}
+        elif ":" in line and line.startswith("\t") and not line.startswith("\t\t"):
+            k, _, v = line.strip().partition(":")
+            block[k] = v.strip()
+    nics = []
+    for n in physical_ifaces():
+        if n.startswith("vmbr"):
+            continue
+        p = "/sys/class/net/" + n
+        speed = read(p + "/speed")
+        nics.append({"iface": n, "mac": read(p + "/address"), "driver": os.path.basename(os.path.realpath(p + "/device/driver")),
+                     "speed": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None, "state": read(p + "/operstate")})
+    pci = sh(["lspci"]).splitlines()
+    pick = lambda words: [l.split(": ", 1)[-1] for l in pci if any(w in l for w in words)]
+    return {
+        "vendor": clean(dmi("sys_vendor")), "product": clean(dmi("product_name")),
+        "board": " ".join(x for x in (clean(dmi("board_vendor")), clean(dmi("board_name"))) if x),
+        "bios": " · ".join(x for x in (dmi("bios_version"), dmi("bios_date")) if x),
+        "cpu": {"model": lscpu.get("Model name", ""), "threads": int(lscpu.get("CPU(s)", "0") or 0),
+                "cores": int(lscpu.get("Core(s) per socket", "0") or 0) * int(lscpu.get("Socket(s)", "1") or 1),
+                "sockets": int(lscpu.get("Socket(s)", "1") or 1), "max_mhz": round(float(lscpu.get("CPU max MHz", "0") or 0)) or None,
+                "virt": lscpu.get("Virtualization", ""), "arch": lscpu.get("Architecture", "")},
+        "memory": {"total": meminfo().get("MemTotal", 0), "slots": slots, "modules": modules},
+        "nics": nics, "gpus": pick(["VGA compatible", "3D controller", "Display controller"]),
+        "controllers": pick(["SATA controller", "Non-Volatile memory", "RAID bus", "SCSI storage"]),
+    }
+
+# ---------- loop ----------
+
+class Agent:
+    def __init__(self):
+        self.prev = None
+        self.slow = {}          # name -> (next time, value)
+        self.history = {"step": HISTORY_STEP, "points": [], "guests": {}}
+        self.bucket = []
+        self.guest_bucket = {}
+        self.last_point = 0
+        self.last_guest_point = 0
+        self.last_persist = 0
+        self.prev_guests = {}
+        try:
+            with open(LIB + "/history.json") as f:
+                h = json.load(f)
+            if h.get("step") == HISTORY_STEP:
+                self.history = h
+        except (OSError, ValueError):
+            pass
+
+    def every(self, name, period, fn):
+        due, value = self.slow.get(name, (0, None))
+        if time.time() >= due:
+            try:
+                value = fn()
+            except Exception as e:  # one broken source must not stop the agent
+                sys.stderr.write("%s: %s\n" % (name, e))
+            self.slow[name] = (time.time() + period, value)
+        return value
+
+    def sample(self):
+        now = time.time()
+        cpu = cpu_times()
+        nets = net_counters()
+        dsk = disk_counters()
+        if self.prev is None:
+            self.prev = (now, cpu, nets, dsk)
+            time.sleep(1)
+            return self.sample()
+        dt = max(now - self.prev[0], 0.001)
+        total, idle, iowait = cpu[0] - self.prev[1][0], cpu[1] - self.prev[1][1], cpu[2] - self.prev[1][2]
+        cpu_pct = round(100 * (1 - idle / total), 1) if total > 0 else 0
+        io_pct = round(100 * iowait / total, 1) if total > 0 else 0
+        net = []
+        for n in physical_ifaces():
+            if n in nets and n in self.prev[2]:
+                speed = read("/sys/class/net/%s/speed" % n)
+                net.append({"iface": n, "rx": max(0, round((nets[n][0] - self.prev[2][n][0]) / dt)),
+                            "tx": max(0, round((nets[n][1] - self.prev[2][n][1]) / dt)), "state": read("/sys/class/net/%s/operstate" % n),
+                            "speed": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None, "bridge": n.startswith("vmbr")})
+        io = []
+        for d, v in dsk.items():
+            if d in self.prev[3]:
+                p = self.prev[3][d]
+                io.append({"dev": d, "r": max(0, round((v[0] - p[0]) / dt)), "w": max(0, round((v[1] - p[1]) / dt)),
+                           "util": min(100, round((v[2] - p[2]) / (dt * 10), 1))})
+        self.prev = (now, cpu, nets, dsk)
+        mem = meminfo()
+        temps, fans = temperatures()
+        g = self.every("guests", INTERVAL, guests) or []
+        # pvestatd refreshes guest counters every ~10 s, out of step with this loop: a rate is
+        # computed only when the counters moved, over the time since they last moved.
+        keys = ("netin", "netout", "diskread", "diskwrite")
+        for x in g:
+            key = str(x["vmid"])
+            p = self.prev_guests.get(key)
+            rates = {}
+            if p and any(x[k] != p[1][k] for k in keys):
+                d = max(now - p[0], 1)
+                rates = {k + "_rate": max(0, round((x[k] - p[1][k]) / d)) for k in keys}
+                self.prev_guests[key] = (now, {k: x[k] for k in keys}, rates)
+            elif p and now - p[0] < 60:
+                rates = p[2]
+            else:
+                self.prev_guests[key] = (now, {k: x[k] for k in keys}, {})
+            x.update(rates)
+        load = os.getloadavg()
+        phys = [n for n in net if not n["bridge"]] or net
+        snap = {
+            "v": 1, "host": NODE, "ts": int(now), "interval": INTERVAL,
+            "node": {"cpu": cpu_pct, "iowait": io_pct, "load": [round(x, 2) for x in load], "threads": os.cpu_count(),
+                     "freq_mhz": cpu_freq(), "uptime": int(float(read("/proc/uptime", "0").split()[0])),
+                     "mem": {"total": mem.get("MemTotal", 0), "avail": mem.get("MemAvailable", 0),
+                             "used": mem.get("MemTotal", 0) - mem.get("MemAvailable", 0), "cached": mem.get("Cached", 0) + mem.get("Buffers", 0),
+                             "ksm": int(read("/sys/kernel/mm/ksm/pages_sharing", "0") or 0) * 4096},
+                     "swap": {"total": mem.get("SwapTotal", 0), "used": mem.get("SwapTotal", 0) - mem.get("SwapFree", 0)},
+                     "cpu_temp": cpu_temp(temps)},
+            "temps": temps, "fans": fans, "net": net, "io": io, "guests": g,
+            "storage": self.every("storage", 60, storage) or [],
+            "zfs": self.every("zfs", 60, zfs) or [],
+            "disks": self.every("disks", 1800, disks) or [],
+            "updates": self.every("updates", 3600, updates),
+            "failed_units": self.every("failed", 60, failed_units) or [],
+            "backups": self.every("backups", 600, backups) or [],
+            "versions": self.every("versions", 3600, versions) or {},
+        }
+        point = {"cpu": cpu_pct, "io": io_pct, "load": round(load[0], 2), "mem": snap["node"]["mem"]["used"],
+                 "temp": snap["node"]["cpu_temp"], "rx": sum(n["rx"] for n in phys), "tx": sum(n["tx"] for n in phys),
+                 "r": sum(x["r"] for x in io), "w": sum(x["w"] for x in io)}
+        self.record(now, point, g)
+        return snap
+
+    def record(self, now, point, g):
+        self.bucket.append(point)
+        for x in g:
+            if x["status"] == "running":
+                self.guest_bucket.setdefault(str(x["vmid"]), []).append((x["cpu"], x["mem"]))
+        if now - self.last_point >= HISTORY_STEP:
+            avg = {}
+            for k in point:
+                vals = [p[k] for p in self.bucket if p[k] is not None]
+                avg[k] = round(sum(vals) / len(vals), 2) if vals else None
+            avg["t"] = int(now)
+            pts = self.history["points"]
+            pts.append(avg)
+            del pts[:-HISTORY_POINTS]
+            self.bucket, self.last_point = [], now
+        if now - self.last_guest_point >= GUEST_STEP:
+            hist = self.history["guests"]
+            live = {str(x["vmid"]) for x in g}
+            for key in list(hist):
+                if key not in live:
+                    del hist[key]
+            for key in live:
+                vals = self.guest_bucket.get(key) or [(0, 0)]
+                row = hist.setdefault(key, [])
+                row.append([int(now), round(sum(v[0] for v in vals) / len(vals), 1), round(sum(v[1] for v in vals) / len(vals))])
+                del row[:-GUEST_POINTS]
+            self.guest_bucket, self.last_guest_point = {}, now
+
+    def run(self):
+        os.makedirs(RUN, exist_ok=True)
+        os.makedirs(LIB, exist_ok=True)
+        while True:
+            started = time.time()
+            try:
+                snap = self.sample()
+                write_json(RUN + "/current.json", snap)
+                write_json(RUN + "/history.json", self.history)
+                if time.time() - self.last_persist >= 300:
+                    write_json(LIB + "/history.json", self.history)
+                    self.last_persist = time.time()
+                hw = self.every("hardware", 6 * 3600, hardware)
+                if hw:
+                    write_json(RUN + "/hardware.json", dict(hw, host=NODE, ts=int(time.time())))
+            except Exception as e:
+                sys.stderr.write("sample failed: %s\n" % e)
+            time.sleep(max(1, INTERVAL - (time.time() - started)))
+
+def serve():
+    """Forced command: print one prepared document, nothing else is reachable."""
+    request = (os.environ.get("SSH_ORIGINAL_COMMAND") or (sys.argv[2] if len(sys.argv) > 2 else "")).strip()
+    names = {"current": "current.json", "history": "history.json", "hardware": "hardware.json"}
+    if request == "ping":
+        print(json.dumps({"ok": True, "agent": VERSION, "host": NODE}))
+        return 0
+    if request == "bundle":
+        out = {}
+        for k in ("current", "hardware"):
+            try:
+                with open(RUN + "/" + names[k]) as f:
+                    out[k] = json.load(f)
+            except (OSError, ValueError):
+                out[k] = None
+        sys.stdout.write(json.dumps(out, separators=(",", ":")))
+        return 0
+    if request not in names:
+        sys.stderr.write("unsupported request\n")
+        return 2
+    try:
+        with open(RUN + "/" + names[request]) as f:
+            sys.stdout.write(f.read())
+        return 0
+    except OSError:
+        sys.stderr.write("not collected yet\n")
+        return 3
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        sys.exit(serve())
+    Agent().run()

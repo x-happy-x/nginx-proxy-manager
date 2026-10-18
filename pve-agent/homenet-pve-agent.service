@@ -1,0 +1,19 @@
+[Unit]
+Description=HomeNet metrics agent (CPU, memory, temperatures, guests, storage, SMART)
+After=pve-cluster.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/homenet-pve-agent
+Restart=always
+RestartSec=5
+Nice=10
+IOSchedulingClass=idle
+RuntimeDirectory=homenet-pve
+RuntimeDirectoryPreserve=yes
+StateDirectory=homenet-pve
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

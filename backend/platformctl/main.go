@@ -24,7 +24,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: platformctl migrate|recover")
+		return fmt.Errorf("usage: platformctl migrate|recover|apply")
 	}
 	switch os.Args[1] {
 	case "ready-url", "verify-migration":
@@ -109,6 +109,48 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		return server.Lifecycle.Recover(ctx)
+	case "apply":
+		// Root on the router stands in for the console when the change cannot wait for a
+		// signed-in administrator: the same plan → apply journal, under Core's lock.
+		fs := flag.NewFlagSet("apply", flag.ContinueOnError)
+		file := fs.String("config", "/opt/etc/homenet/core/config.json", "Core config; stop Core before offline changes")
+		changes := fs.String("changes", "", `JSON list, e.g. [{"id":"pve","action":"install","version":"1.0.0"}]`)
+		dry := fs.Bool("dry-run", true, "plan only; set false to apply the plan")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			return err
+		}
+		var list []integration.Change
+		if err := json.Unmarshal([]byte(*changes), &list); err != nil {
+			return fmt.Errorf("invalid -changes: %w", err)
+		}
+		b, err := os.ReadFile(*file)
+		if err != nil {
+			return err
+		}
+		var cfg core.Config
+		if err = json.Unmarshal(b, &cfg); err != nil {
+			return err
+		}
+		unlock, err := integration.LockState(cfg.StateDir)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+		server, err := core.New(cfg, runtime.GOARCH)
+		if err != nil {
+			return err
+		}
+		op, err := server.Lifecycle.Plan(list)
+		if err != nil {
+			return err
+		}
+		if !*dry {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			op, err = server.Lifecycle.Apply(ctx, op.ID)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"id": op.ID, "status": op.Status, "step": op.Step, "error": op.Error, "dry_run": *dry})
+		return err
 	default:
 		return fmt.Errorf("unknown command")
 	}

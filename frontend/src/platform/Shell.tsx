@@ -23,6 +23,11 @@ const PLANS: Record<string, Plan> = {
       { title: "Настройка", pages: ["dns", "advanced", "routing", "proxy-system"] },
     ],
   },
+  // NPM-74
+  pve: {
+    simple: ["pve", "pveguests"],
+    pro: [{ pages: ["pve", "pveguests", "pvehw", "pvestorage"] }],
+  },
   network: {
     simple: ["network", "antenna"],
     pro: [
@@ -33,8 +38,8 @@ const PLANS: Record<string, Plan> = {
 };
 // a page inside a section lights up the section's menu entry
 const SECTION_OF: Record<string, string> = { subs: "vservers", checks: "vservers", proxies: "vroute", rules: "vroute", why: "vpnsvc", traffic: "vstats", vnow: "vstats", connections: "corelog", core: "coreconfig", torrents: "coreconfig" };
-const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx" };
-const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь" };
+const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx", pve: "Обзор", pveguests: "Машины", pvehw: "Железо и температуры", pvestorage: "Хранилища" };
+const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь", pve: "Proxmox" };
 
 export const pageTitle = (id: string, item?: Installed) =>
   TITLES[id] || NAV.find(n => n.id === id)?.tab || item?.manifest.ui.pages.find(p => p.id === id)?.title || id;
