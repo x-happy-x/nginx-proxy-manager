@@ -28,7 +28,7 @@ func main() {
 	manifestFile := flags.String("manifest", "", "Installed integration manifest")
 	tokenFile := flags.String("token-file", "", "Server-only Core credential")
 	flags.Parse()
-	if workerID != "proxy" && workerID != "network" && workerID != "vpn" {
+	if workerID != "proxy" && workerID != "network" && workerID != "vpn" && workerID != "pve" {
 		log.Fatal("worker identity not set at build time")
 	}
 	var manifest integration.Manifest
@@ -80,6 +80,8 @@ func main() {
 		a.startOlcrtc()
 		a.startExits()
 		a.startTorrents()
+	case "pve":
+		a.startPVE()
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
@@ -107,6 +109,10 @@ func main() {
 				http.Error(w, err.Error(), 409)
 				return
 			}
+		}
+		if workerID == "pve" {
+			a.handlePVE(w, r)
+			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 		if strings.HasPrefix(r.URL.Path, mihomoAPIPrefix+"/") {

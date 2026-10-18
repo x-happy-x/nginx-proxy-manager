@@ -36,5 +36,18 @@
       {"id": "olcrtc", "title": "OLCRTC", "kind": "status", "sizes": ["s", "m"], "data": "/api/core/widgets/olcrtc", "refresh": 60, "modes": ["simple", "pro"], "default": {"pro": 70}, "page": "olcrtc"}
     ],
     "summary": {"attention": "/api/core/summary/attention", "tasks": "/api/core/summary/tasks"}
+  },
+  {
+    "id": "pve", "name": "Proxmox", "description": "Хосты Proxmox: нагрузка, температуры, машины, диски и железо", "port": 63504,
+    "pages": ["pve", "pveguests", "pvehw", "pvestorage"],
+    "titles": {"pve": "Обзор", "pveguests": "Машины", "pvehw": "Железо и температуры", "pvestorage": "Хранилища"},
+    "paths": ["/api/pve/"],
+    "data": ["/opt/etc/homenet/pve"],
+    "widgets": [
+      {"id": "hosts", "title": "Proxmox", "kind": "status", "sizes": ["s", "m"], "data": "/api/pve/widgets/hosts", "refresh": 30, "modes": ["simple", "pro"], "default": {"simple": 40, "pro": 40}, "page": "pve"},
+      {"id": "guests", "title": "Виртуальные машины", "kind": "stat", "sizes": ["s", "m"], "data": "/api/pve/widgets/guests", "refresh": 30, "modes": ["simple", "pro"], "default": {"pro": 42}, "page": "pveguests"},
+      {"id": "temps", "title": "Температуры Proxmox", "kind": "list", "sizes": ["m", "l"], "data": "/api/pve/widgets/temps", "refresh": 60, "modes": ["pro"], "default": {"pro": 44}, "page": "pvehw"}
+    ],
+    "summary": {"attention": "/api/pve/summary/attention"}
   }
 ]

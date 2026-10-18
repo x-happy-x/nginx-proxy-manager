@@ -37,11 +37,38 @@ const previewWidgets = {
 const vpnBoard = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD, 'utf8') : '';
 const vpnNode = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD.replace(/board\.json$/, 'node.json'), 'utf8').catch(() => '') : '';
 const vpnBoard30 = process.env.PREVIEW_VPN_BOARD ? await readFile(process.env.PREVIEW_VPN_BOARD.replace(/board\.json$/, 'board30.json'), 'utf8').catch(() => '') : '';
+// NPM-74: PREVIEW_PVE_KEY=<ssh key> PREVIEW_PVE_HOSTS=s1@192.168.99.10,pve3@192.168.99.30 answers the
+// Proxmox screens with live agent data read from this PC (dev only; the key never leaves it).
+const pveHosts = (process.env.PREVIEW_PVE_HOSTS || '').split(',').filter(Boolean).map(s => { const [id, address] = s.split('@'); return { id, name: id, address }; });
+const pveCache = new Map();
+function pveRead(h, request) {
+  const key = `${h.id}/${request}`, hit = pveCache.get(key);
+  if (hit && Date.now() - hit.at < 8000) return hit.value;
+  const r = spawnSync('ssh', ['-i', process.env.PREVIEW_PVE_KEY, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', `root@${h.address}`, `/usr/local/bin/homenet-pve-agent serve ${request}`], { encoding: 'utf8', timeout: 12000 });
+  const value = r.status === 0 ? { ok: true, body: r.stdout } : { ok: false, error: (r.stderr || 'ssh failed').trim().split('\n').pop() };
+  pveCache.set(key, { at: Date.now(), value });
+  return value;
+}
+function pveOverview() {
+  return { configured: pveHosts.length > 0, error: '', hosts: pveHosts.map(h => {
+    const r = pveRead(h, 'bundle'); const b = r.ok ? JSON.parse(r.body) : {};
+    return { ...h, online: r.ok, error: r.error || '', latency_ms: 12, checked_at: iso(Date.now()), last_ok: r.ok ? iso(Date.now()) : undefined, current: b.current || null, hardware: b.hardware || null };
+  }) };
+}
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
+    if (item.id === 'pve' && pveHosts.length) {
+      const url = new URL(req.url, 'http://x');
+      if (url.pathname === '/api/pve/overview') { res.end(JSON.stringify(pveOverview())); return; }
+      if (url.pathname === '/api/pve/history') { const h = pveHosts.find(x => x.id === url.searchParams.get('host')); const r = h && pveRead(h, 'history'); if (r?.ok) res.end(r.body); else { res.writeHead(502); res.end(JSON.stringify({ error: r?.error || 'unknown host' })); } return; }
+      if (url.pathname === '/api/pve/widgets/hosts') { const o = pveOverview(); res.end(JSON.stringify({ state: 'ok', updated_at: iso(Date.now()), note: 'пример', body: { label: 'Хосты Proxmox', items: o.hosts.map(h => ({ text: `${h.name} · CPU ${Math.round(h.current?.node.cpu || 0)}% · ${Math.round(h.current?.node.cpu_temp || 0)} °C`, ok: h.online })) } })); return; }
+      if (url.pathname === '/api/pve/widgets/guests') { const o = pveOverview(); const g = o.hosts.flatMap(h => h.current?.guests || []).filter(x => !x.template); res.end(JSON.stringify({ state: 'ok', updated_at: iso(Date.now()), note: `всего ${g.length}`, body: { value: String(g.filter(x => x.status === 'running').length), unit: 'запущено' } })); return; }
+      if (url.pathname === '/api/pve/widgets/temps') { const o = pveOverview(); res.end(JSON.stringify({ state: 'ok', updated_at: iso(Date.now()), body: { items: o.hosts.map(h => ({ text: `${h.name} · процессор`, value: `${Math.round(h.current?.node.cpu_temp || 0)} °C`, state: 'ok', page: 'pvehw' })) } })); return; }
+      if (url.pathname === '/api/pve/summary/attention') { res.end(JSON.stringify({ items: [] })); return; }
+    }
     // NPM-66: sample home widgets so the page can be checked without a router
     const sample = previewWidgets[req.url.split('?')[0]];
     if (sample) { setTimeout(() => res.end(JSON.stringify(typeof sample === 'function' ? sample() : sample)), req.url.includes('olcrtc') ? 2500 : 0); return; }

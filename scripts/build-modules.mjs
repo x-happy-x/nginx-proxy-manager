@@ -10,6 +10,9 @@ const version = process.argv[3] || '1.0.0';
 if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Invalid package version');
 const output = path.join(root, '.runtime', 'modules', `linux-${arch}`);
 const catalog = JSON.parse(await readFile(path.join(root, 'integrations/catalog.json'), 'utf8'));
+// --only pve,network builds just those modules (Core is still built: it is cheap and needed by platformctl)
+const onlyArg = process.argv.find(a => a.startsWith('--only='));
+const only = onlyArg ? new Set(onlyArg.slice(7).split(',')) : null;
 function run(command, args, cwd, env = {}) {
   const result = spawnSync(command, args, { cwd, env: { ...process.env, ...env }, stdio: 'inherit', shell: false });
   if (result.error) throw result.error;
@@ -29,6 +32,7 @@ await cp(path.join(frontend, 'static/core'), path.join(output, 'core/ui'), { rec
 await cp(path.join(root,'init.d/S99homenet-core'),path.join(output,'core/S99homenet-core'));
 await cp(path.join(root,'scripts/activate-modular.sh'),path.join(output,'core/activate-modular.sh'));
 for (const item of catalog) {
+  if (only && !only.has(item.id)) continue;
   const destination = path.join(output, item.id, version);
   await mkdir(destination, { recursive: true });
   run('go', ['build', '-trimpath', '-tags=integration_worker', `-ldflags=-s -w -X main.workerID=${item.id}`, '-o', path.join(destination, 'worker'), './manager'], path.join(root, 'backend'), goEnv);
@@ -39,7 +43,7 @@ for (const item of catalog) {
   await cp(path.join(frontend, 'static/integrations', item.id), path.join(destination, 'ui'), { recursive: true });
   const manifest = {
     schema: 1, id: item.id, name: item.name, description: item.description, version, arch, core_api: 1, ui_api: item.widgets ? 2 : 1,
-    ui: { entry: 'entry.js', css: ['style.css'], pages: item.pages.map(id => ({ id, title: id, ...(id === 'subs' ? { aliases: ['tailscale', 'olcrtc'] } : {}) })), ...(item.widgets ? { widgets: item.widgets, summary: item.summary } : {}) },
+    ui: { entry: 'entry.js', css: ['style.css'], pages: item.pages.map(id => ({ id, title: item.titles?.[id] || id, ...(id === 'subs' ? { aliases: ['tailscale', 'olcrtc'] } : {}) })), ...(item.widgets ? { widgets: item.widgets, summary: item.summary } : {}) },
     backend: { endpoint: `http://127.0.0.1:${item.port}`, health: '/health', paths: item.paths, service: `S90homenet-${item.id}` },
     data_schema: 1, data_directories: item.data, package: `homenet-${item.id}`,
   };

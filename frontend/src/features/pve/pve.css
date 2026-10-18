@@ -1,0 +1,182 @@
+/* NPM-74: «Proxmox» module. Built on HomeNet tokens, so both themes follow the console. */
+
+.pve-module { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.pve-page { display: grid; gap: 20px; min-width: 0; align-content: start; }
+.pve-muted { color: var(--text-3); }
+.pve-small { font-size: 12px; margin: 0; }
+.pve-mono { font-family: var(--font-mono); font-size: 12px; }
+
+/* tones shared by dots, pills, rings and bars */
+.pve-module { --tone-ok: var(--status-good); --tone-warn: var(--status-warning); --tone-bad: var(--status-critical); --tone-idle: var(--text-3); --tone-accent: var(--accent); }
+.tone-ok { --tone: var(--tone-ok); }
+.tone-warn { --tone: var(--tone-warn); }
+.tone-bad { --tone: var(--tone-bad); }
+.tone-idle { --tone: var(--tone-idle); }
+.tone-accent { --tone: var(--tone-accent); }
+.tone-text-ok { color: var(--success); }
+.tone-text-warn { color: var(--warning); }
+.tone-text-bad { color: var(--danger); }
+.tone-text-idle { color: var(--text-3); }
+
+/* ---------- health line ---------- */
+.pve-health { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 14px; border: 1px solid var(--success-border); background: var(--success-soft); border-radius: var(--radius-lg); font-size: 13px; }
+.pve-health.bad { border-color: var(--danger-border); background: var(--danger-soft); }
+.pve-health .pve-muted { margin-left: auto; font-size: 12px; }
+.pve-health-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-good) 22%, transparent); }
+.pve-health.bad .pve-health-dot { background: var(--status-critical); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-critical) 22%, transparent); }
+
+/* ---------- small parts ---------- */
+.pve-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--tone); }
+.pve-dot.pulse { animation: pve-pulse 2.4s ease-out infinite; }
+@keyframes pve-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+@media (prefers-reduced-motion: reduce) { .pve-dot.pulse { animation: none; } }
+
+.pve-pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: color-mix(in srgb, var(--tone) 80%, var(--text)); background: color-mix(in srgb, var(--tone) 12%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 28%, transparent); }
+
+.pve-bar { position: relative; display: block; height: 8px; border-radius: 999px; background: var(--surface-3); overflow: visible; }
+.pve-bar.thin { height: 5px; }
+.pve-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--tone); transition: width .4s ease; }
+.pve-bar-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--border-strong); opacity: .7; }
+
+.pve-spark { display: block; width: 100%; height: 28px; }
+.pve-spark.empty { height: 28px; border-bottom: 1px dashed var(--border); }
+.pve-spark-line { fill: none; stroke: var(--tone); stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.pve-spark-area { fill: color-mix(in srgb, var(--tone) 14%, transparent); }
+
+.pve-empty { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 36px 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); }
+.pve-empty p { margin: 0; color: var(--text-3); max-width: 46ch; }
+.pve-skeleton { height: 220px; border-radius: var(--radius-lg); background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: pve-shimmer 1.4s linear infinite; }
+.pve-skeleton.tall { height: 360px; }
+@keyframes pve-shimmer { to { background-position: -200% 0; } }
+
+.pve-section { display: grid; gap: 12px; min-width: 0; }
+.pve-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
+.pve-section-head h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+.pve-section-head p { margin: 2px 0 0; font-size: 13px; color: var(--text-3); }
+.pve-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.pve-card-head h3 { margin: 0; font-size: 14px; }
+
+/* ---------- host cards ---------- */
+.pve-hosts { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .pve-hosts.count-2, .pve-hosts.count-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pve-host { position: relative; display: grid; gap: 14px; padding: 18px; border-radius: var(--radius-xl); transition: border-color .15s, box-shadow .15s; }
+.pve-host::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: linear-gradient(90deg, var(--status-good), color-mix(in srgb, var(--status-good) 10%, transparent)); opacity: .8; }
+.pve-host.offline::before { background: linear-gradient(90deg, var(--status-critical), transparent); }
+.pve-host:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.pve-host.selected { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border), var(--shadow-sm); }
+.pve-host-hit { position: absolute; inset: 0; border: 0; background: none; border-radius: inherit; cursor: pointer; }
+.pve-host-hit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pve-host > :not(.pve-host-hit) { position: relative; pointer-events: none; }
+.pve-host-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.pve-host-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pve-host-title h3 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.pve-host-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.pve-host-sub { margin: -6px 0 0; font-size: 13px; color: var(--text-2); }
+.pve-host-error { padding: 10px 12px; border-radius: var(--radius); background: var(--danger-soft); border: 1px solid var(--danger-border); font-size: 13px; }
+
+.pve-rings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.pve-ring { position: relative; display: grid; justify-items: center; gap: 2px; margin: 0; min-width: 0; }
+.pve-ring svg { width: 100%; max-width: 112px; aspect-ratio: 1; overflow: visible; }
+.pve-ring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.pve-ring-track { stroke: var(--surface-3); }
+.pve-ring-value { stroke: var(--tone); transition: stroke-dasharray .5s ease; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--tone) 35%, transparent)); }
+.pve-ring-text { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 112px; aspect-ratio: 1; display: grid; place-content: center; text-align: center; }
+.pve-ring-text strong { font-size: clamp(15px, 2.2vw, 20px); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.pve-ring-text small { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.pve-ring figcaption { margin-top: -8px; font-size: 12px; color: var(--text-2); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+.pve-host-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; border-radius: var(--radius-lg); overflow: hidden; background: var(--border); border: 1px solid var(--border); }
+.pve-stat { display: grid; gap: 2px; padding: 10px 12px; background: var(--surface-2); min-width: 0; }
+.pve-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+.pve-stat-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pve-stat-sub { font-size: 12px; color: var(--text-3); }
+.pve-stat.tone-warn .pve-stat-value { color: var(--warning); }
+.pve-updown { display: grid; gap: 1px; font-size: 13px; }
+
+/* ---------- charts ---------- */
+.pve-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); }
+.pve-chart { padding: 14px 16px 10px; display: grid; gap: 6px; min-width: 0; }
+.pve-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pve-chart-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.pve-chart-head strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+
+/* ---------- guests ---------- */
+.pve-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pve-toolbar-search { margin-left: auto; min-width: min(100%, 240px); }
+.pve-summary-line { margin: -8px 0 0; font-size: 13px; }
+.pve-guests { overflow: hidden; }
+.pve-guest { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(110px, .9fr) minmax(90px, .9fr) minmax(120px, 1fr) minmax(170px, 1.3fr) minmax(90px, .7fr); gap: 16px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); min-width: 0; }
+.pve-guest:first-child { border-top: 0; }
+.pve-guest.head { padding-block: 8px; background: var(--surface-2); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+.pve-guest.off { color: var(--text-3); }
+.pve-guest:not(.head):hover { background: var(--surface-2); }
+.pve-guest-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pve-guest-name > div { display: grid; min-width: 0; margin-right: auto; }
+.pve-guest-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.pve-guest.off .pve-guest-name strong { color: var(--text-2); }
+.pve-guest-cpu, .pve-guest-mem { display: grid; gap: 5px; min-width: 0; }
+.pve-guest-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pve-guest-metric small { font-size: 11px; font-weight: 500; color: var(--text-3); }
+.pve-guest-io, .pve-guest-up { display: grid; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; }
+@media (max-width: 900px) {
+  .pve-guest.head { display: none; }
+  .pve-guest { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 16px; }
+  .pve-guest-name, .pve-guest-spark { grid-column: 1 / -1; }
+}
+
+/* ---------- hardware ---------- */
+.pve-hw-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .pve-hw-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.pve-passport, .pve-temps, .pve-list { padding: 16px; min-width: 0; }
+.pve-specs { display: grid; gap: 0; margin: 0; }
+.pve-spec { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.pve-spec:first-child { border-top: 0; padding-top: 0; }
+.pve-spec dt { font-size: 12px; color: var(--text-3); padding-top: 1px; }
+.pve-spec dd { display: grid; gap: 3px; margin: 0; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .pve-spec { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+.pve-sensors { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.pve-sensor { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(80px, 1.3fr) 54px; align-items: center; gap: 12px; font-size: 13px; }
+.pve-sensor-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.pve-sensor strong { text-align: right; font-variant-numeric: tabular-nums; }
+.pve-fans { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 13px; }
+.pve-temps .pve-small { margin-top: 12px; }
+.pve-temps-chart { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 4px; }
+.pve-temps-chart .pve-chart-head span { font-size: 12px; }
+
+.pve-disks { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.pve-disk { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
+.pve-disk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.pve-disk-head > div { display: grid; gap: 2px; min-width: 0; }
+.pve-disk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pve-disk-grid span { display: grid; gap: 1px; min-width: 0; }
+.pve-disk-grid small { font-size: 11px; color: var(--text-3); }
+.pve-disk-grid b { font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pve-wear { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; gap: 10px; align-items: center; font-size: 12px; color: var(--text-2); }
+
+/* ---------- storage ---------- */
+.pve-storage-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .pve-storage-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
+.pve-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.pve-store { display: grid; gap: 7px; padding: 12px 0; border-top: 1px solid var(--border); }
+.pve-card-head + .pve-store { border-top: 0; padding-top: 0; }
+.pve-store-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pve-store-head > :last-child { margin-left: auto; }
+.pve-store-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12px; }
+.pve-io { display: grid; grid-template-columns: 80px 1fr 1fr minmax(90px, 1fr); gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pve-card-head + .pve-io { border-top: 0; }
+.pve-io-util { display: grid; gap: 3px; }
+.pve-io-util small { color: var(--text-3); }
+.pve-backup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.pve-card-head + .pve-backup { border-top: 0; }
+.pve-backup small { flex-basis: 100%; }
+
+@media (max-width: 640px) {
+  .pve-rings { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .pve-host-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pve-host { padding: 14px; }
+  .pve-health .pve-muted { margin-left: 0; }
+  .pve-io { grid-template-columns: 1fr 1fr; }
+  .pve-disk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
