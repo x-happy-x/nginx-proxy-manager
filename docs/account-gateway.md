@@ -88,6 +88,13 @@ sensitive administration. No credentials belong in URLs or access logs.
 
 Build: `scripts/build-windows.ps1`; tests: `cd backend; go test ./...`.
 Install `init.d/S98homenet-gateway` as `/opt/etc/init.d/S98homenet-gateway`.
+The init script checks `/proc/<pid>/exe` before treating a PID as the gateway or
+signalling it. Persistent PID files can survive a router reboot and refer to a
+different service; `start` replaces those stale files, and `stop` only removes
+them. A failed launch returns an error and removes its PID file. Linux regression
+checks: `python3 scripts/test_gateway_init.py`.
+For an isolated check, `HOME_NET_GATEWAY_PID`, `HOME_NET_GATEWAY_LOG` and
+`HOME_NET_GATEWAY_CONFIG` override the default PID, log and configuration paths.
 Before activation back up the installed binaries, dedicated proxy configuration,
 editable routes and `.runtime/applied.yml`. Base the candidate on **applied**
 routes, preserve any unapplied draft separately, start and probe the gateway,
