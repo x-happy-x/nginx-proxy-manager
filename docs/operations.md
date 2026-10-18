@@ -70,12 +70,12 @@ bin/linux-arm64/nginx --config routes.yml --dry-run
 
 ## Как проверять Sublab
 
-Рабочий маршрут: приложение `192.168.99.20:4192`, локальное имя `sub.local`, публичное `sub.crubs.crazedns.ru`, IP прокси `192.168.1.2`, отдельный внешний порт `24192`. Если порт выбран автоматически, используйте фактическое значение сохранённого маршрута. Для входа Sublab также настроен `account.local` → `192.168.99.20:4161`; публичный вход использует существующий `account.crubs.crazedns.ru`.
+Рабочий маршрут: приложение `192.168.99.33:4192`, локальное имя `sub.local`, публичное `sub.crubs.crazedns.ru`, IP прокси `192.168.1.2`, отдельный внешний порт `24192`. Если порт выбран автоматически, используйте фактическое значение сохранённого маршрута. Для входа Sublab также настроен `account.local` → `192.168.99.33:4161`; публичный вход использует существующий `account.crubs.crazedns.ru`.
 
 С Windows, сначала upstream:
 
 ```powershell
-curl.exe --max-time 10 -s -o NUL -w '%{http_code}' http://192.168.99.20:4192/
+curl.exe --max-time 10 -s -o NUL -w '%{http_code}' http://192.168.99.33:4192/
 Resolve-DnsName sub.local -Server 192.168.1.1
 Resolve-DnsName sub.crubs.crazedns.ru -Server 192.168.1.1
 curl.exe --max-time 10 -s -o NUL -w '%{http_code}' http://sub.local/
