@@ -32,6 +32,7 @@ export type PveCurrent = {
   disks: PveDisk[]; updates: number | null; failed_units: string[];
   backups: { id: string; status: string; start: number; end: number | null }[];
   versions: { pve?: string; kernel?: string; agent?: string };
+  cluster?: { name?: string; quorate?: boolean; nodes?: { name: string; ip: string; online: boolean; local: boolean }[] };
 };
 export type PveHardware = {
   vendor: string; product: string; board: string; bios: string;
@@ -92,6 +93,10 @@ function usePoll<T>(host: Host, path: string | null, every: number): { data: T |
 }
 
 export const useOverview = (host: Host) => usePoll<PveOverview>(host, "/api/pve/overview", 10);
+export type PveConfigHost = { id: string; name: string; address: string; port: number; user: string; pinned?: boolean };
+export type PveConfig = { hosts: PveConfigHost[]; public_key: string; key_error?: string };
+export type PveTest = { ok: boolean; error?: string; agent?: string; host?: string; latency_ms?: number; pinned?: boolean; fingerprint?: string };
+
 export const useHistory = (host: Host, id: string | null) =>
   usePoll<PveHistory>(host, id ? `/api/pve/history?host=${encodeURIComponent(id)}` : null, 60);
 

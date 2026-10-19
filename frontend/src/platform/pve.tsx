@@ -4,18 +4,20 @@ import { Hardware } from "../features/pve/Hardware";
 import { ago, useOverview, type PveHost } from "../features/pve/model";
 import { Overview } from "../features/pve/Overview";
 import { Empty } from "../features/pve/parts";
+import { Settings } from "../features/pve/Settings";
 import { Storage } from "../features/pve/Storage";
 import "../features/pve/pve.css";
 import { ModuleBoundary, usePage } from "./module-base";
 import type { Host } from "./sdk";
 
-// NPM-74: Proxmox hosts over SSH. Core's menu lists these sections; when the
+// NPM-74/NPM-75: «Сервера» — Proxmox hosts over SSH. Core's menu lists these sections; when the
 // module runs without Core's menu it shows the same list as its own tabs.
 const PAGES: { id: string; title: string }[] = [
   { id: "pve", title: "Обзор" },
   { id: "pveguests", title: "Машины" },
   { id: "pvehw", title: "Железо и температуры" },
   { id: "pvestorage", title: "Хранилища" },
+  { id: "pvesettings", title: "Настройка" },
 ];
 
 function Tabs({ page, host }: { page: string; host: Host }) {
@@ -32,6 +34,9 @@ function Tabs({ page, host }: { page: string; host: Host }) {
 
 function HealthLine({ hosts, updated }: { hosts: PveHost[]; updated?: string }) {
   const offline = hosts.filter((h) => !h.online);
+  // members of one cluster report the same thing; the first one that knows it is enough
+  const cluster = hosts.map((h) => h.current?.cluster).find((c) => c?.name);
+  const down = (cluster?.nodes || []).filter((n) => !n.online).map((n) => n.name);
   return (
     <div className={`pve-health${offline.length ? " bad" : ""}`} role="status">
       <span className="pve-health-dot" aria-hidden="true" />
@@ -40,6 +45,11 @@ function HealthLine({ hosts, updated }: { hosts: PveHost[]; updated?: string }) 
           ? `Нет связи: ${offline.map((h) => h.name).join(", ")}. Остальные хосты на связи.`
           : `Все хосты на связи: ${hosts.map((h) => h.name).join(", ")}.`}
       </span>
+      {cluster ? (
+        <span className={`pve-cluster${cluster.quorate && !down.length ? "" : " bad"}`}>
+          Кластер <b>{cluster.name}</b> · {cluster.quorate ? "кворум есть" : "нет кворума"} · узлов {(cluster.nodes || []).length}{down.length ? ` · не в сети: ${down.join(", ")}` : ""}
+        </span>
+      ) : null}
       <span className="pve-muted">Обновлено {ago(updated)} · сбор на хостах каждые 10 с</span>
     </div>
   );
@@ -56,7 +66,8 @@ function PveModule({ host }: { host: Host }) {
   let body;
   if (loading && !data) body = <div className="pve-page"><div className="pve-skeleton" /><div className="pve-skeleton tall" /></div>;
   else if (!data) body = <Empty title="Интеграция не отвечает">{error}</Empty>;
-  else if (!data.configured) body = <Empty title="Хосты Proxmox не настроены">{data.error || "Добавьте хосты в /opt/etc/homenet/pve/hosts.json и установите агент."}</Empty>;
+  else if (current === "pvesettings") body = <Settings host={host} />;
+  else if (!data.configured) body = <Empty title="Сервера не настроены">{data.error || "Добавьте их на странице «Настройка»."}</Empty>;
   else if (current === "pveguests") body = <Guests host={host} hosts={hosts} />;
   else if (current === "pvehw") body = <Hardware host={host} hosts={hosts} />;
   else if (current === "pvestorage") body = <Storage hosts={hosts} />;
@@ -64,7 +75,7 @@ function PveModule({ host }: { host: Host }) {
   return (
     <div className="pve-module">
       <Tabs page={current} host={host} />
-      {data?.configured ? <HealthLine hosts={hosts} updated={updated} /> : null}
+      {data?.configured && current !== "pvesettings" ? <HealthLine hosts={hosts} updated={updated} /> : null}
       {error && data ? <div className="pve-health bad" role="alert"><span className="pve-health-dot" aria-hidden="true" />Не удалось обновить: {error}. Показаны последние данные.</div> : null}
       {body}
     </div>

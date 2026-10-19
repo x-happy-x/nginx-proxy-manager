@@ -68,6 +68,10 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
       if (url.pathname === '/api/pve/widgets/guests') { const o = pveOverview(); const g = o.hosts.flatMap(h => h.current?.guests || []).filter(x => !x.template); res.end(JSON.stringify({ state: 'ok', updated_at: iso(Date.now()), note: `всего ${g.length}`, body: { value: String(g.filter(x => x.status === 'running').length), unit: 'запущено' } })); return; }
       if (url.pathname === '/api/pve/widgets/temps') { const o = pveOverview(); res.end(JSON.stringify({ state: 'ok', updated_at: iso(Date.now()), body: { items: o.hosts.map(h => ({ text: `${h.name} · процессор`, value: `${Math.round(h.current?.node.cpu_temp || 0)} °C`, state: 'ok', page: 'pvehw' })) } })); return; }
       if (url.pathname === '/api/pve/summary/attention') { res.end(JSON.stringify({ items: [] })); return; }
+      // NPM-75: settings page — a read-only view of the preview hosts; saving is refused here
+      if (url.pathname === '/api/pve/config' && req.method === 'GET') { res.end(JSON.stringify({ hosts: pveHosts.map(h => ({ id: h.id, name: h.name, address: h.address, port: 22, user: 'root', pinned: true })), public_key: 'ssh-ed25519 AAAA…preview homenet-servers@router' })); return; }
+      if (url.pathname === '/api/pve/config/test') { let body = ''; req.on('data', c => body += c); req.on('end', () => { const b = JSON.parse(body || '{}'); const h = { id: 't', name: 't', address: b.address }; const r = pveRead(h, 'ping'); res.end(JSON.stringify(r.ok ? { ok: true, pinned: true, latency_ms: 40, ...JSON.parse(r.body) } : { ok: false, pinned: true, error: r.error })); }); return; }
+      if (url.pathname === '/api/pve/config') { res.writeHead(409); res.end(JSON.stringify({ ok: false, error: 'В превью сохранение отключено' })); return; }
     }
     // NPM-66: sample home widgets so the page can be checked without a router
     const sample = previewWidgets[req.url.split('?')[0]];
