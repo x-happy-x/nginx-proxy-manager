@@ -55,6 +55,49 @@ function pveOverview() {
     return { ...h, online: r.ok, error: r.error || '', latency_ms: 12, checked_at: iso(Date.now()), last_ok: r.ok ? iso(Date.now()) : undefined, current: b.current || null, hardware: b.hardware || null };
   }) };
 }
+// NPM-76: the «Умный дом» module runs its real worker. PREVIEW_HA=fake points it at a small
+// fake Home Assistant below; PREVIEW_HA_URL + PREVIEW_HA_TOKEN_FILE at a real one (read-only API,
+// the token stays in .local). Without either the settings page starts empty.
+async function fakeHomeAssistant() {
+  const ago = m => new Date(Date.now() - m * 60e3).toISOString();
+  const dev = (id, name, area, ids) => [id, name, area, ids, false];
+  const devices = [dev('bridge', 'Zigbee2MQTT Bridge', '', 'mqtt:zigbee2mqtt_bridge_0x1'), dev('ups', 'ИБП', 'Серверная', 'tuya:1'), dev('street', 'Лампа GX53 Улица 1', 'Улица', 'matter:1'),
+    dev('door', 'Датчик двери', 'Коридор', 'mqtt:zigbee2mqtt_0xa1'), dev('remote', 'Пульт гостиной', 'Гостиная', 'mqtt:zigbee2mqtt_0xa2'), dev('motion', 'Датчик движения', 'Прихожая', 'mqtt:zigbee2mqtt_0xa3'),
+    dev('lock', 'Замок', 'Прихожая', 'matter:2'), dev('kitchen', 'Свет на кухне', 'Кухня', 'mqtt:zigbee2mqtt_0xa4'), dev('hall', 'Свет в прихожей', 'Прихожая', 'mqtt:zigbee2mqtt_0xa5'), dev('core', 'Home Assistant Core', '', 'hassio:core')];
+  const st = (entity_id, state, minutes, attributes = {}, device) => ({ entity_id, state, last_changed: ago(minutes), attributes, device });
+  const states = [
+    st('binary_sensor.zigbee2mqtt_bridge_connection_state', 'on', 600, { friendly_name: 'Zigbee2MQTT Bridge Connection state' }, 'bridge'),
+    st('switch.ups', 'unavailable', 300, { friendly_name: 'ИБП' }, 'ups'), st('light.street_1', 'unavailable', 2000, { friendly_name: 'Улица 1' }, 'street'),
+    st('sensor.door_battery', '14', 60, { device_class: 'battery', unit_of_measurement: '%' }, 'door'), st('binary_sensor.door', 'off', 60, {}, 'door'),
+    st('sensor.remote_battery', '6', 60, { device_class: 'battery', unit_of_measurement: '%' }, 'remote'), st('sensor.motion_battery', '87', 60, { device_class: 'battery', unit_of_measurement: '%' }, 'motion'),
+    st('binary_sensor.lock_battery', 'on', 60, { device_class: 'battery', friendly_name: 'Замок батарея' }, 'lock'),
+    st('light.kitchen', 'on', 30, { friendly_name: 'Кухня' }, 'kitchen'), st('light.hall', 'on', 30, { friendly_name: 'Прихожая' }, 'hall'),
+    st('light.all', 'on', 30, { friendly_name: 'Весь свет', entity_id: ['light.kitchen', 'light.hall'] }),
+    st('update.home_assistant_core_update', 'on', 600, { title: 'Home Assistant Core', installed_version: '2026.7.2', latest_version: '2026.10.2' }, 'core'),
+    st('update.zigbee2mqtt_update', 'on', 600, { title: 'Zigbee2MQTT', installed_version: '2.13.0', latest_version: '2.14.2' }),
+    st('update.piper_update', 'on', 600, { title: 'Piper', installed_version: '2.3.2', latest_version: '2.5.2' }),
+    st('sensor.backup_last_successful_automatic_backup', 'unknown', 600, { device_class: 'timestamp' }),
+  ];
+  const map = { e: states.filter(x => x.device).map(x => [x.entity_id, x.device]), d: devices };
+  return listen((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/api/config') res.end(JSON.stringify({ version: '2026.7.2', location_name: 'Дом (пример)', external_url: 'https://ha.example.org', state: 'RUNNING' }));
+    else if (req.url === '/api/states') res.end(JSON.stringify(states.map(({ device, ...x }) => x)));
+    else if (req.url === '/api/template' && req.method === 'POST') { req.resume(); req.on('end', () => res.end(JSON.stringify(map))); }
+    else { res.writeHead(404); res.end('{}'); }
+  });
+}
+async function startHAWorker(item, manifestPath, tokenPath) {
+  const dir = path.join(state, 'ha'); await mkdir(dir, { recursive: true });
+  if (process.env.PREVIEW_HA === 'fake') await writeFile(path.join(dir, 'config.json'), JSON.stringify({ url: await fakeHomeAssistant(), token: 'preview-token-for-the-fake-home-assistant' }));
+  else if (process.env.PREVIEW_HA_URL && process.env.PREVIEW_HA_TOKEN_FILE) await writeFile(path.join(dir, 'config.json'), JSON.stringify({ url: process.env.PREVIEW_HA_URL, token: (await readFile(process.env.PREVIEW_HA_TOKEN_FILE, 'utf8')).trim() }));
+  const binary = path.join(state, process.platform === 'win32' ? 'ha-worker.exe' : 'ha-worker');
+  const built = spawnSync('go', ['build', '-tags=integration_worker', '-ldflags=-X main.workerID=ha', '-o', binary, './manager'], { cwd: path.join(root, 'backend'), stdio: 'inherit' });
+  if (built.status !== 0) throw new Error('ha worker build failed');
+  const worker = spawn(binary, ['-manifest', manifestPath, '-token-file', tokenPath], { cwd: state, stdio: 'inherit', env: { ...process.env, HA_DIR: dir } });
+  process.on('exit', () => worker.kill());
+}
+async function freePort() { const s = createServer(); await new Promise(r => s.listen(0, '127.0.0.1', r)); const p = s.address().port; await new Promise(r => s.close(r)); return p; }
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
@@ -84,7 +127,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     res.writeHead(503); res.end(JSON.stringify({ok:false,error:'Изолированная проверка интерфейса: устройство не подключено'}));
   });
   const manifest = JSON.parse(await readFile(path.join(root, '.runtime/modules/linux-amd64', item.id, '1.0.0/manifest.json'), 'utf8'));
-  manifest.arch = 'amd64'; manifest.backend.endpoint = endpoint;
+  manifest.arch = 'amd64'; manifest.backend.endpoint = item.id === 'ha' ? `http://127.0.0.1:${await freePort()}` : endpoint;
   // a custom widget the VPN entry does not export: shows the «не отрисовался» path
   if (item.id === 'vpn' && manifest.ui.widgets) manifest.ui.widgets.push({ id: 'preview-custom', title: 'Свой виджет (проверка ошибки)', kind: 'custom', sizes: ['m'], modes: ['pro'], default: { pro: 99 } });
   items.push({ manifest, enabled:true, connection:'unconfigured' });
@@ -92,6 +135,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
   const destination=path.join(state,'packages',item.id,'1.0.0');
   await cp(path.join(root,'.runtime/modules/linux-amd64',item.id,'1.0.0'),destination,{recursive:true});
   await writeFile(path.join(destination,'manifest.json'),JSON.stringify(manifest));
+  if (item.id === 'ha') await startHAWorker(item, path.join(destination, 'manifest.json'), path.join(state, 'credentials', 'ha.token'));
 }
 await writeFile(path.join(state, 'registry.json'), JSON.stringify({schema:1,items}));
 await writeFile(path.join(state, 'config.json'), JSON.stringify({manage_workers:false,listen:`127.0.0.1:${port}`,state_dir:state,static_dir:path.join(root,'frontend/static/core'),packages_dir:path.join(state,'packages'),account_url:account,dms_url:'http://127.0.0.1:48660',dms_token_file:path.join(state,'absent-dms-token')}));
