@@ -77,6 +77,15 @@ type pvhSnapshot struct {
 		Temp   *float64 `json:"temp"`
 		Wear   *float64 `json:"wear"`
 	} `json:"disks"`
+	Cluster struct {
+		Name    string `json:"name"`
+		Quorate bool   `json:"quorate"`
+		Nodes   []struct {
+			Name   string `json:"name"`
+			IP     string `json:"ip"`
+			Online bool   `json:"online"`
+		} `json:"nodes"`
+	} `json:"cluster"`
 	FailedUnits []string `json:"failed_units"`
 	Updates     *int     `json:"updates"`
 	Backups     []struct {
@@ -116,17 +125,33 @@ func pvhDir() string { return getenv("PVE_DIR", "/opt/etc/homenet/pve") }
 func newPVHMonitor() *pvhMonitor {
 	m := &pvhMonitor{dir: pvhDir(), client: getenv("PVE_SSH_CLIENT", "/opt/bin/dbclient")}
 	b, err := os.ReadFile(filepath.Join(m.dir, "hosts.json"))
+	if os.IsNotExist(err) {
+		return m // nothing configured yet: the «Настройка» page adds servers
+	}
 	if err != nil {
-		m.loadErr = "Нет списка хостов: " + filepath.Join(m.dir, "hosts.json")
+		m.loadErr = "Список серверов не читается: " + err.Error()
 		return m
 	}
+	hosts, err := parsePVHConfig(b)
+	if err != nil {
+		m.loadErr = "Список серверов повреждён: " + err.Error()
+		return m
+	}
+	for _, h := range hosts {
+		m.hosts = append(m.hosts, &pvhHost{Config: h})
+	}
+	return m
+}
+
+// parsePVHConfig fills defaults; entries without an id or address are skipped as before.
+func parsePVHConfig(b []byte) ([]pvhHostConfig, error) {
 	var cfg struct {
 		Hosts []pvhHostConfig `json:"hosts"`
 	}
-	if err = json.Unmarshal(b, &cfg); err != nil {
-		m.loadErr = "Список хостов повреждён: " + err.Error()
-		return m
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return nil, err
 	}
+	out := []pvhHostConfig{}
 	for _, h := range cfg.Hosts {
 		if h.ID == "" || h.Address == "" {
 			continue
@@ -140,17 +165,28 @@ func newPVHMonitor() *pvhMonitor {
 		if h.Name == "" {
 			h.Name = h.ID
 		}
-		m.hosts = append(m.hosts, &pvhHost{Config: h})
+		out = append(out, h)
 	}
-	return m
+	return out, nil
 }
 
+// One loop over the current list: servers added or removed on the settings page
+// are picked up on the next round without restarting the worker.
 func (a *app) startPVE() {
 	pvh = newPVHMonitor()
-	for _, h := range pvh.hosts {
-		host := h
-		every(15*time.Second, func() { pvh.poll(host) })
+	every(15*time.Second, pvh.pollAll)
+}
+
+func (m *pvhMonitor) pollAll() {
+	m.mu.Lock()
+	hosts := append([]*pvhHost(nil), m.hosts...)
+	m.mu.Unlock()
+	var wg sync.WaitGroup
+	for _, h := range hosts {
+		wg.Add(1)
+		go func(h *pvhHost) { defer wg.Done(); m.poll(h) }(h)
 	}
+	wg.Wait()
 }
 
 // fetch runs the agent's forced command. The key is accepted by the host only for
@@ -182,7 +218,10 @@ func (m *pvhMonitor) fetch(ctx context.Context, h pvhHostConfig, request string)
 
 func (m *pvhMonitor) poll(h *pvhHost) {
 	started := time.Now()
-	b, err := m.fetch(workerContext, h.Config, "bundle")
+	m.mu.Lock()
+	cfg := h.Config
+	m.mu.Unlock()
+	b, err := m.fetch(workerContext, cfg, "bundle")
 	var bundle struct {
 		Current  json.RawMessage `json:"current"`
 		Hardware json.RawMessage `json:"hardware"`
@@ -253,6 +292,10 @@ func rawOrNull(b json.RawMessage) json.RawMessage {
 func (a *app) handlePVE(w http.ResponseWriter, r *http.Request) {
 	if pvh == nil {
 		http.Error(w, "integration not started", 503)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/pve/config") {
+		a.handlePVEConfig(w, r)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -551,6 +594,24 @@ func (m *pvhMonitor) attentionLocked() []response {
 			if b.Status != "OK" && b.Status != "running" && b.End > 0 && time.Since(time.Unix(b.End, 0)) < 48*time.Hour {
 				add(id+"-backup-"+b.ID, "warning", fmt.Sprintf("%s: резервная копия %s завершилась с ошибкой: %s", name, b.ID, b.Status), "pvestorage", time.Unix(b.End, 0))
 				break
+			}
+		}
+	}
+	// A cluster is reported by each of its members: say it once.
+	seen := map[string]bool{}
+	for _, h := range m.hosts {
+		if !h.Online || h.Parsed == nil || h.Parsed.Cluster.Name == "" {
+			continue
+		}
+		c := h.Parsed.Cluster
+		if !c.Quorate && !seen["quorum"] {
+			seen["quorum"] = true
+			add("cluster-quorum", "critical", fmt.Sprintf("Кластер %s без кворума: изменения конфигурации и запуск машин заблокированы", c.Name), "pve", time.Time{})
+		}
+		for _, n := range c.Nodes {
+			if !n.Online && !seen["node-"+n.Name] {
+				seen["node-"+n.Name] = true
+				add("cluster-node-"+n.Name, "critical", fmt.Sprintf("Кластер %s: узел %s (%s) не в сети", c.Name, n.Name, n.IP), "pve", time.Time{})
 			}
 		}
 	}

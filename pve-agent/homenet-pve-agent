@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 RUN = "/run/homenet-pve"
 LIB = "/var/lib/homenet-pve"
 INTERVAL = 10
@@ -211,6 +211,16 @@ def backups():
     data = sh_json(["pvesh", "get", "/nodes/%s/tasks" % NODE, "--typefilter", "vzdump", "--limit", "10", "--output-format", "json"], 30, [])
     return [{"id": t.get("id", ""), "status": t.get("status", "running"), "start": t.get("starttime"), "end": t.get("endtime")} for t in data]
 
+def cluster():
+    """Cluster name, quorum and members as this node sees them (empty for a standalone host)."""
+    data = sh_json(["pvesh", "get", "/cluster/status", "--output-format", "json"], 30, [])
+    head = next((x for x in data if x.get("type") == "cluster"), None)
+    if not head:
+        return {}
+    nodes = [{"name": x.get("name"), "ip": x.get("ip"), "online": bool(x.get("online")), "local": bool(x.get("local"))}
+             for x in data if x.get("type") == "node"]
+    return {"name": head.get("name"), "quorate": bool(head.get("quorate")), "nodes": sorted(nodes, key=lambda n: n["name"] or "")}
+
 def versions():
     pve = sh(["pveversion"]).strip()
     m = re.search(r"pve-manager/([\w.\-]+)", pve)
@@ -353,6 +363,7 @@ class Agent:
             "failed_units": self.every("failed", 60, failed_units) or [],
             "backups": self.every("backups", 600, backups) or [],
             "versions": self.every("versions", 3600, versions) or {},
+            "cluster": self.every("cluster", 60, cluster) or {},
         }
         point = {"cpu": cpu_pct, "io": io_pct, "load": round(load[0], 2), "mem": snap["node"]["mem"]["used"],
                  "temp": snap["node"]["cpu_temp"], "rx": sum(n["rx"] for n in phys), "tx": sum(n["tx"] for n in phys),
