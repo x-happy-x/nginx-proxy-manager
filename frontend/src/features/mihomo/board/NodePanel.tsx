@@ -68,9 +68,9 @@ export function NodePanel({ name, provider, onClose, navigate }: { name: string;
   const reserve = d?.groups.filter(g => !g.leads) || [];
   return <>
     <div className="vs-scrim" onClick={onClose} aria-hidden="true" />
-    <aside ref={panel} tabIndex={-1} className="vs-panel" role="dialog" aria-modal="true" aria-labelledby="vs-panel-h">
-      <header className="vs-panel-head">
-        <div><span className="vs-muted">{provider}{d?.country ? ` · выходит в интернет: ${d.country}` : ""}</span><h2 id="vs-panel-h">{name}</h2>
+    <aside ref={panel} tabIndex={-1} className="vs-node-panel" role="dialog" aria-modal="true" aria-labelledby="vs-node-panel-h">
+      <header className="vs-node-panel-head">
+        <div><span className="vs-muted">{provider}{d?.country ? ` · выходит в интернет: ${d.country}` : ""}</span><h2 id="vs-node-panel-h">{name}</h2>
           {d && <span className="vs-now" data-ok={d.now === "ok" ? "yes" : undefined}><i />{NOW_TEXT[d.now || "unknown"] || d.now}{rate?.stable ? " · надёжный" : ""}{rate?.ms ? ` · ${rate.ms} мс` : ""}</span>}</div>
         <button type="button" className="vs-close" aria-label="Закрыть" onClick={onClose}>×</button>
       </header>
@@ -90,7 +90,7 @@ export function NodePanel({ name, provider, onClose, navigate }: { name: string;
           {d.groups.length ? <p>{leading.length ? <>Сейчас ведёт трафик {leading.map((g, i) => <span key={g.name}>{i ? ", " : ""}группы <b>{g.name}</b>{g.via ? ` (и через неё — ${g.via})` : ""}</span>)}. </> : "Сейчас трафик через него не идёт. "}
             {reserve.length ? <>Запасной в {reserve.slice(0, 4).map((g, i) => <span key={g.name}>{i ? ", " : ""}<b>{g.name}</b> — {g.place}-й из {g.of}</span>)}{reserve.length > 4 ? ` и ещё ${reserve.length - 4} группах` : ""}.</> : null}</p> : <p className="vs-muted">Ни одна группа его не использует.</p>}
           <button type="button" className="vs-link" onClick={() => navigate("vroute")}>Открыть маршруты</button></section>
-        <footer className="vs-panel-foot">
+        <footer className="vs-node-panel-foot">
           {note && <p role="status" className="vs-muted">{note}</p>}
           <div className="vs-actions">
             <button type="button" disabled={!!busy} onClick={() => void check()}>{busy === "check" ? "Проверяю…" : "Проверить сейчас"}</button>
