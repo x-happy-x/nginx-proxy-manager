@@ -1,0 +1,22 @@
+/* NPM-76: «Умный дом». Builds on the «Сервера» module styles (pve.css). */
+
+.ha-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ha-list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.ha-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; min-width: 0; }
+.ha-row:first-child { border-top: 0; }
+.ha-row-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ha-row-side { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ha-battery-bar { flex: 0 1 160px; min-width: 60px; }
+.ha-ok { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 13px; }
+.ha-note { margin: 0; padding: 10px 14px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; }
+.ha-note.bad { border-color: var(--danger-border); background: var(--danger-soft); }
+.ha-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ha-health-link { margin-left: auto; }
+.pve-cfg-fields.ha-cfg-fields { grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr); }
+
+@media (max-width: 700px) {
+  .ha-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ha-battery-bar { display: none; }
+  .ha-row { padding: 10px 12px; }
+}
+@media (max-width: 900px) { .pve-cfg-fields.ha-cfg-fields { grid-template-columns: minmax(0, 1fr); } }

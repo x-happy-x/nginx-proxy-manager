@@ -49,5 +49,16 @@
       {"id": "temps", "title": "Температуры серверов", "kind": "list", "sizes": ["m", "l"], "data": "/api/pve/widgets/temps", "refresh": 60, "modes": ["pro"], "default": {"pro": 44}, "page": "pvehw"}
     ],
     "summary": {"attention": "/api/pve/summary/attention"}
+  },
+  {
+    "id": "ha", "name": "Умный дом", "description": "Home Assistant: устройства на связи, Zigbee2MQTT, батарейки, обновления и резервные копии", "port": 63505,
+    "pages": ["ha", "hasettings"],
+    "titles": {"ha": "Обзор", "hasettings": "Настройка"},
+    "paths": ["/api/ha/"],
+    "data": ["/opt/etc/homenet/ha"],
+    "widgets": [
+      {"id": "home", "title": "Умный дом", "kind": "status", "sizes": ["s", "m"], "data": "/api/ha/widgets/home", "refresh": 60, "modes": ["simple", "pro"], "default": {"simple": 45, "pro": 46}, "page": "ha"}
+    ],
+    "summary": {"attention": "/api/ha/summary/attention"}
   }
 ]
