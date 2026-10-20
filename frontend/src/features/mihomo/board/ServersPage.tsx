@@ -54,9 +54,9 @@ function ScanProgress({ scan, last, onStop }: { scan: BoardScan; last?: BoardSca
   return <section className="vs-scan" aria-label="Идёт проверка серверов">
     <div className="vs-scan-head"><b>Идёт проверка серверов · {step}</b><span>{eta > 0 ? `осталось около ${minutes(eta)}` : ""}{scan.rested ? ` · ${scan.rested} давно молчащих пропущены в этот раз` : ""}</span>{onStop && <span />}</div>
     <div className="vs-scan-bar" role="progressbar" aria-valuemin={0} aria-valuemax={scan.planned} aria-valuenow={scan.done} aria-label="Проверено серверов">
-      <i className="vs-ok" style={{ width: `${scan.ok / total * 100}%` }} /><i className="vs-fail" style={{ width: `${scan.fail / total * 100}%` }} />
+      <i className="vs-scan-ok" style={{ width: `${scan.ok / total * 100}%` }} /><i className="vs-scan-fail" style={{ width: `${scan.fail / total * 100}%` }} />
     </div>
-    <div className="vs-scan-meta"><span><i className="vs-ok" /> работают: {scan.ok}</span><span><i className="vs-fail" /> не прошли: {scan.fail}</span><span>осталось: {Math.max(0, scan.planned - scan.done)}</span>{scan.probing?.length ? <span>сейчас: {scan.probing.slice(0, 4).map(short).join(", ")}</span> : null}</div>
+    <div className="vs-scan-meta"><span><i className="vs-scan-ok" /> работают: {scan.ok}</span><span><i className="vs-scan-fail" /> не прошли: {scan.fail}</span><span>осталось: {Math.max(0, scan.planned - scan.done)}</span>{scan.probing?.length ? <span>сейчас: {scan.probing.slice(0, 4).map(short).join(", ")}</span> : null}</div>
     <span className="sr-only">Проверено {pct}%</span>
   </section>;
 }
@@ -97,7 +97,7 @@ function Tiles({ rows, onOpen, open }: { rows: BoardServer[]; onOpen: (name: str
       <Strip hist={r.hist} />
       <span className="vs-tile-foot"><span>проходит {Math.round(r.rate * 100)}% проверок</span><span>{r.selected?.join(", ")}</span></span>
     </button>)}</div>
-    {rows.length > limit && <button type="button" className="vs-more" onClick={() => setLimit(l => l + PAGE * 2)}>ещё {Math.min(PAGE * 2, rows.length - limit)} из {rows.length - limit}</button>}
+    {rows.length > limit && <button type="button" className="vs-show-more" onClick={() => setLimit(l => l + PAGE * 2)}>ещё {Math.min(PAGE * 2, rows.length - limit)} из {rows.length - limit}</button>}
   </>;
 }
 
