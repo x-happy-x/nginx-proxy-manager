@@ -1,0 +1,128 @@
+/* NPM-79: Windows / Linux computers share HomeNet's light and dark tokens. */
+.pc-module { min-width: 0; }
+.pc-page { display: grid; gap: 20px; min-width: 0; align-content: start; }
+.pc-module .pve-btn { gap: 6px; justify-content: center; }
+.pc-eyebrow { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.pc-hero { border: 1px solid var(--border); border-radius: var(--radius-xl); overflow: hidden; background: var(--surface); }
+.pc-hero > div:first-child { padding: 22px; background: linear-gradient(110deg, var(--accent-soft), transparent 80%); }
+.pc-hero h2, .pc-heading h2 { font-size: 25px; letter-spacing: -.035em; margin: 5px 0; }
+.pc-hero p, .pc-heading p { margin: 0; color: var(--text-3); font-size: 13px; }
+.pc-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); }
+.pc-summary .pve-stat { padding: 16px 22px; background: none; border-left: 1px solid var(--border); gap: 5px; }
+.pc-summary .pve-stat:first-child { border-left: 0; }
+.pc-summary .pve-stat-value { font-size: 25px; letter-spacing: -.03em; }
+.pc-computers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; }
+.pc-computer { padding: 18px; display: grid; gap: 16px; align-content: start; border-radius: var(--radius-xl); position: relative; }
+.pc-computer.selected { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border); }
+.pc-computer > header, .pc-container > header, .pc-distro > header { display: flex; gap: 10px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.pc-computer > header > div, .pc-container > header > div, .pc-distro > header > div { flex: 1; min-width: 100px; display: grid; gap: 3px; }
+.pc-computer h3, .pc-container h3, .pc-distro h3 { margin: 0; font-size: 19px; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.pc-system-icon, .pc-container-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: none; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+.pc-system-icon.linux { color: var(--success); background: var(--success-soft); border-color: var(--success-border); }
+.pc-machine-meta { margin: -8px 0 -1px; font-size: 12px; color: var(--text-3); }
+.pc-meter { display: grid; gap: 7px; min-width: 0; }
+.pc-meter > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.pc-meter strong { font-size: 18px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pc-meter strong small { font-size: 12px; font-weight: 500; color: var(--text-3); }
+.pc-meter > small { font-size: 11px; color: var(--text-3); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.pc-computer.outdated .pc-meter { opacity: .55; }
+.pc-machine-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.pc-machine-facts .pve-stat { padding: 10px; }
+.pc-machine-facts .pve-stat-value { font-size: 17px; }
+.pc-computer > footer { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--border); }
+.pc-computer > footer > span { margin-left: auto; font-size: 11px; }
+.pc-error { padding: 11px 13px; border: 1px solid var(--danger-border); border-radius: var(--radius); background: var(--danger-soft); color: var(--text); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.pc-diagnostics { padding: 10px; background: var(--warning-soft); border: 1px solid var(--warning-border); border-radius: var(--radius); color: var(--text-2); font-size: 12px; }
+.pc-diagnostics summary, .pc-context-errors summary { cursor: pointer; font-weight: 600; }
+.pc-diagnostics summary .icon, .pc-context-errors summary .icon { margin-right: 6px; vertical-align: text-bottom; }
+.pc-diagnostics ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 5px; overflow-wrap: anywhere; }
+.pc-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.pc-chart { padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.pc-chart h3, .pc-disks h3, .pc-networks h3 { font-size: 14px; margin: 0; }
+.pc-resource-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.pc-disks, .pc-networks { padding: 16px; min-width: 0; }
+.pc-disk { display: grid; gap: 7px; padding: 12px 0; border-top: 1px solid var(--border); }
+.pc-disk > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; font-size: 12px; }
+.pc-disk > small { font-size: 11px; color: var(--text-3); }
+.pc-network { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 12px; }
+.pc-network strong { min-width: 0; overflow-wrap: anywhere; }
+.pc-network span { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.pc-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.pc-total { display: grid; gap: 2px; text-align: right; font-size: 30px; letter-spacing: -.03em; font-weight: 700; }
+.pc-total small { font-size: 11px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
+.pc-filters { display: grid; gap: 12px; padding: 14px; }
+.pc-filter-main { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.pc-filter-main .search { margin-left: auto; min-width: min(100%, 280px); }
+.pc-filter-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; font-size: 12px; }
+.pc-filter-extra label { display: flex; gap: 8px; align-items: center; color: var(--text-3); }
+.pc-filter-extra > span { margin-left: auto; }
+.pc-filter-extra select { max-width: 280px; min-width: 130px; height: 32px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 28px 0 9px; font: inherit; font-size: 12px; }
+.pc-filter-extra select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pc-containers, .pc-distros { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 12px; }
+.pc-container, .pc-distro { padding: 16px; display: grid; gap: 13px; align-content: start; min-width: 0; }
+.pc-container h3, .pc-distro h3 { font-size: 16px; }
+.pc-container-location, .pc-distro header .pve-muted { font-size: 12px; color: var(--text-3); }
+.pc-container-info { display: grid; gap: 4px; font-size: 12px; min-width: 0; }
+.pc-container-info .pve-mono { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pc-container.outdated .pc-container-info { opacity: .55; }
+.pc-container-details { border-top: 1px solid var(--border); padding-top: 10px; font-size: 12px; }
+.pc-container-details summary { cursor: pointer; color: var(--text-3); }
+.pc-container-details dl { display: grid; grid-template-columns: 55px minmax(0, 1fr); gap: 7px 10px; margin: 10px 0 0; }
+.pc-container-details dt { color: var(--text-3); }
+.pc-container-details dd { margin: 0; overflow-wrap: anywhere; }
+.pc-context-errors { padding: 12px 14px; font-size: 13px; }
+.pc-context-errors > div { margin-top: 10px; display: grid; gap: 8px; }
+.pc-context-errors p { display: grid; gap: 3px; font-size: 12px; margin: 0; }
+.pc-context-errors p span { color: var(--text-3); overflow-wrap: anywhere; }
+.pc-controls { display: grid; gap: 7px; }
+.pc-button-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.pc-button-row .pve-btn { font-size: 12px; height: 32px; }
+.pc-control-note { display: flex; align-items: flex-start; gap: 5px; color: var(--text-3); font-size: 11px; line-height: 1.5; }
+.pc-control-note .icon { flex: none; margin-top: 2px; }
+.pc-distro-docker { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); padding: 10px; margin: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
+.pc-distro-docker .icon { flex: none; }
+.pc-note { display: flex; align-items: flex-start; gap: 8px; color: var(--text-3); font-size: 12px; line-height: 1.6; }
+.pc-note .icon { flex: none; margin-top: 2px; color: var(--accent); }
+.pc-journal { overflow: hidden; }
+.pc-journal > header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; font-size: 13px; }
+.pc-journal > header > button { margin-left: auto; }
+.pc-journal > .pc-error { margin: 0 12px 12px; }
+.pc-job { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; }
+.pc-job > .pve-dot { margin-top: 5px; }
+.pc-job > div { display: grid; gap: 3px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pc-job-state { display: grid; gap: 4px; text-align: right; flex: none; }
+.pc-job-state small { color: var(--text-3); font-size: 11px; }
+.pc-confirm { display: grid; gap: 16px; }
+.pc-confirm p { margin: 0; color: var(--text-2); line-height: 1.6; }
+.pc-confirm-target { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.pc-confirm-target > .icon { color: var(--accent); flex: none; }
+.pc-confirm-target > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.pc-confirm-target span { color: var(--text-3); font-size: 12px; }
+.pc-confirm label { font-size: 13px; line-height: 1.5; }
+.pc-confirm input { width: 100%; display: block; margin-top: 8px; height: 38px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 0 10px; font: inherit; }
+.pc-confirm input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.pc-setup { padding: 18px; display: grid; gap: 18px; }
+.pc-setup > .segmented { justify-self: start; }
+.pc-setup ol { padding-left: 20px; margin: 0; display: grid; gap: 18px; font-size: 13px; line-height: 1.6; }
+.pc-permissions { display: grid; gap: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; }
+.pc-setup details { font-size: 13px; }
+.pc-setup summary { cursor: pointer; }
+.pc-setup .pve-code { line-height: 1.5; }
+.pc-welcome { display: grid; justify-items: center; gap: 16px; text-align: center; padding: 48px 24px; }
+.pc-welcome h2 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
+.pc-welcome p { max-width: 55ch; margin: 0; color: var(--text-3); }
+.pc-welcome .pc-system-icon { width: 60px; height: 60px; border-radius: 18px; }
+@media (max-width: 720px) {
+  .pc-resource-details { grid-template-columns: minmax(0, 1fr); }
+  .pc-hero > div:first-child { padding: 18px; }
+  .pc-hero h2, .pc-heading h2 { font-size: 21px; }
+  .pc-summary .pve-stat { padding: 12px; }
+  .pc-summary .pve-stat-value { font-size: 21px; }
+  .pc-machine-facts .pve-stat-sub { font-size: 10px; }
+  .pc-filter-main .search { width: 100%; }
+  .pc-filter-extra label { width: 100%; justify-content: space-between; }
+  .pc-filter-extra select { width: 65%; max-width: none; }
+  .pc-job { flex-wrap: wrap; }
+  .pc-job-state { margin-left: 19px; display: flex; gap: 8px; align-items: baseline; }
+  .pc-module .pve-health > .pve-btn { margin-left: auto; }
+}

@@ -40,6 +40,7 @@ const catalog = [
   { id: "proxy", name: "Прокси и домены", icon: "↗", description: "Сервисы на своих доменах, HTTPS, сертификаты и DNS.", detail: "Управление nginx с сохранением существующих маршрутов и сертификатов." },
   { id: "network", name: "Мониторинг связи", icon: "⌁", description: "Доступность интернета, LTE и состояние устройств.", detail: "История связи, диагностика, сканер и ресурсы роутеров и Proxmox." },
   { id: "vpn", name: "VPN и маршрутизация", icon: "◇", description: "Подписки, узлы, правила и проверка обхода ограничений.", detail: "mihomo / XKeen, Tailscale и OLCRTC, включая режим «Всё через OLCRTC»." },
+  { id: "pc", name: "Компьютеры", icon: "▣", description: "Ресурсы Windows и Linux, контейнеры Docker и дистрибутивы WSL.", detail: "Мониторинг компьютеров через SSH, история нагрузки и управление Docker и WSL с отдельными разрешениями." },
 ];
 type Platform = { identity: { login: string; admin: boolean }; protocol: number; integrations: Installed[] };
 type Job = { id: string; status: string; app?: string; error?: string };
