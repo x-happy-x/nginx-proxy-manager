@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
+import { fakePve } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await mkdir(path.join(root,'.local'),{recursive:true});
 const state = await mkdtemp(path.join(root, '.local/modular-preview-'));
@@ -105,6 +106,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
     if (item.id === 'pc' && process.env.PREVIEW_PC === 'fake' && fakePc(req, res)) return;
+    if (item.id === 'pve' && process.env.PREVIEW_PVE === 'fake' && fakePve(req, res)) return;
     if (item.id === 'pve' && pveHosts.length) {
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/api/pve/overview') { res.end(JSON.stringify(pveOverview())); return; }

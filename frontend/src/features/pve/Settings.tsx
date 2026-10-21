@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Host } from "../../platform/sdk";
 import type { PveConfig, PveConfigHost, PveTest } from "./model";
 import { Dot, Empty, Section } from "./parts";
+import { Switch } from "../../components/ui/controls";
 
 // NPM-75: servers of the «Сервера» section, edited here and stored by the worker in hosts.json.
 
@@ -45,13 +46,15 @@ function ServerRow({ r, onChange, onRemove, onTest }: { r: Row; onChange: (r: Ro
   );
 }
 
-export function Settings({ host }: { host: Host }) {
+export function Settings({ host, onSaved }: { host: Host; onSaved?: () => void }) {
   const [cfg, setCfg] = useState<PveConfig | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
+  const [allowGuests, setAllowGuests] = useState(false);
+  const [allowNodes, setAllowNodes] = useState(false);
   const load = async () => {
     try {
       const c = (await (await host.api("/api/pve/config")).json()) as PveConfig;
@@ -79,6 +82,7 @@ export function Settings({ host }: { host: Host }) {
       await host.api("/api/pve/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hosts: plain }) });
       host.notify("Список серверов сохранён — опрос начнётся через несколько секунд");
       await load();
+      onSaved?.();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -86,8 +90,8 @@ export function Settings({ host }: { host: Host }) {
     try { await navigator.clipboard.writeText(text); setCopied(what); window.setTimeout(() => setCopied(""), 1600); } catch { /* clipboard is optional */ }
   };
   const install = useMemo(() => cfg?.public_key
-    ? `scp -r pve-agent root@<адрес>:/tmp/ && ssh root@<адрес> "sh /tmp/pve-agent/install.sh '${cfg.public_key}'"`
-    : "", [cfg]);
+    ? `scp -r pve-agent root@<адрес>:/tmp/ && ssh root@<адрес> "sh /tmp/pve-agent/install.sh '${cfg.public_key}'${allowGuests ? " --allow-guest-actions" : ""}${allowNodes ? " --allow-node-actions" : ""}"`
+    : "", [cfg, allowGuests, allowNodes]);
 
   if (!cfg) return error ? <Empty title="Настройки недоступны">{error}</Empty> : <div className="pve-skeleton" />;
   return (
@@ -106,7 +110,7 @@ export function Settings({ host }: { host: Host }) {
         {dirty ? <p className="pve-muted pve-small">Есть несохранённые изменения.</p> : null}
       </Section>
 
-      <Section title="Подключение нового сервера" hint="HomeNet читает только данные агента: ключ роутера на сервере разрешён лишь для команды агента.">
+      <Section title="Подключение и обновление агента" hint="Агент передаёт состояние сервера и выполняет разрешённые операции с машинами и питанием.">
         <div className="card pve-howto">
           <ol>
             <li>
@@ -118,14 +122,17 @@ export function Settings({ host }: { host: Host }) {
             </li>
             <li>
               <b>Агент.</b> Из папки репозитория HomeNet выполните на своём ПК (замените <span className="pve-mono">&lt;адрес&gt;</span>):
+              <div className="pve-install-permissions"><Switch checked={allowGuests} onChange={setAllowGuests} label="Управление машинами" hint="Запуск, выключение и перезагрузка VM и CT" /><Switch checked={allowNodes} onChange={setAllowNodes} label="Питание сервера" hint="Перезагрузка и выключение всего Proxmox-хоста" /></div>
               <div className="pve-code">
                 <code>{install || "—"}</code>
                 {install ? <button type="button" className="pve-btn ghost" onClick={() => void copy(install, "cmd")}>{copied === "cmd" ? "Скопировано" : "Копировать"}</button> : null}
               </div>
             </li>
             <li><b>Сервер в списке.</b> Добавьте его выше, нажмите «Проверить и доверять», затем «Сохранить».</li>
+            <li><b>Управление.</b> Для уже подключённых серверов обновите агент той же командой из актуальной копии репозитория, предварительно выбрав нужные разрешения выше. Без разрешений агент только читает данные. Старые версии также продолжают работать в режиме мониторинга.</li>
           </ol>
           <p className="pve-muted pve-small">Агент собирает данные каждые 10 с и хранит сутки истории на самом сервере. В кластере ставьте его на каждый узел.</p>
+          <p className="pve-muted pve-small">Ключ ограничен командой агента: произвольные команды через HomeNet не выполняются. Перед перезагрузкой сервера или принудительной остановкой машины интерфейс попросит ввести её идентификатор.</p>
         </div>
       </Section>
     </div>

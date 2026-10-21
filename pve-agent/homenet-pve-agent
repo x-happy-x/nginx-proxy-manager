@@ -8,7 +8,8 @@ and a 24-hour history are kept under /run/homenet-pve; the history also
 survives restarts in /var/lib/homenet-pve.
 
 HomeNet reads the data over SSH with a key restricted to the forced command
-`homenet-pve-agent serve`, which only prints one of the prepared documents.
+`homenet-pve-agent serve`, which is read-only by default. Explicit flags in
+the forced command enable a small allowlist of local power operations.
 Standard library only: Proxmox ships python3, nothing else is installed.
 """
 import glob
@@ -20,7 +21,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 RUN = "/run/homenet-pve"
 LIB = "/var/lib/homenet-pve"
 INTERVAL = 10
@@ -418,15 +419,138 @@ class Agent:
                 sys.stderr.write("sample failed: %s\n" % e)
             time.sleep(max(1, INTERVAL - (time.time() - started)))
 
-def serve():
-    """Forced command: print one prepared document, nothing else is reachable."""
-    request = (os.environ.get("SSH_ORIGINAL_COMMAND") or (sys.argv[2] if len(sys.argv) > 2 else "")).strip()
+GUEST_ACTIONS = ("start", "shutdown", "reboot", "stop")
+NODE_ACTIONS = ("reboot", "shutdown")
+
+
+class RequestError(Exception):
+    """A rejected command or a failed/ambiguous Proxmox API request."""
+    def __init__(self, message, unknown=False):
+        super().__init__(message)
+        self.unknown = unknown
+
+
+def capabilities(allow_guests=False, allow_node=False):
+    return {"control": allow_guests or allow_node,
+            "guest_actions": list(GUEST_ACTIONS) if allow_guests else [],
+            "node_actions": list(NODE_ACTIONS) if allow_node else []}
+
+
+def pve_request(method, path, *options):
+    """Call the local API without a shell; preserve failures instead of hiding them."""
+    args = ["pvesh", method, path, *options, "--output-format", "json"]
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=20)
+    except subprocess.TimeoutExpired:
+        raise RequestError("Proxmox request timed out; result is unknown. Refresh state before retrying.", unknown=method == "create")
+    except OSError:
+        raise RequestError("Cannot execute pvesh on this host")
+    if result.returncode != 0:
+        detail = " ".join((result.stderr or result.stdout or "request failed").split())[:500]
+        raise RequestError("Proxmox: " + detail)
+    try:
+        return json.loads(result.stdout.strip() or "null")
+    except ValueError:
+        raise RequestError("Invalid Proxmox response; result is unknown. Refresh state before retrying.", unknown=method == "create")
+
+
+def validate_upid(upid):
+    # No slashes, whitespace, options or shell metacharacters. Tasks must belong
+    # to this host; pvesh must never proxy a request to another cluster member.
+    pattern = (r"UPID:([A-Za-z0-9][A-Za-z0-9_.-]{0,62}):[0-9A-Fa-f]{8,16}:"
+               r"[0-9A-Fa-f]{8,16}:[0-9A-Fa-f]{8,16}:[A-Za-z][A-Za-z0-9_-]*:"
+               r"[A-Za-z0-9_.-]*:[A-Za-z0-9_.@!+-]+:")
+    match = re.fullmatch(pattern, upid) if isinstance(upid, str) and len(upid) <= 256 else None
+    if not match or match[1] != NODE:
+        raise RequestError("Invalid task ID or task belongs to a different host")
+    return upid
+
+
+def control_guest(kind, vmid, action):
+    if kind not in ("qemu", "lxc") or not re.fullmatch(r"[1-9][0-9]{2,8}", vmid) or action not in GUEST_ACTIONS:
+        raise RequestError("Invalid guest type, VMID or action")
+    base = "/nodes/%s/%s" % (NODE, kind)
+    local_guests = pve_request("get", base)
+    if not isinstance(local_guests, list) or not any(isinstance(g, dict) and str(g.get("vmid")) == vmid for g in local_guests):
+        raise RequestError("Guest does not exist on this host")
+    base += "/" + vmid
+    config = pve_request("get", base + "/config")
+    state = pve_request("get", base + "/status/current")
+    if not isinstance(config, dict) or not isinstance(state, dict):
+        raise RequestError("Cannot verify guest configuration and state")
+    if config.get("template") or state.get("template"):
+        raise RequestError("Templates cannot be controlled")
+    if config.get("lock") or state.get("lock"):
+        raise RequestError("Guest is locked; wait for the current Proxmox operation to finish")
+    required = "stopped" if action == "start" else "running"
+    if state.get("status") != required:
+        raise RequestError("Guest must be %s for this action; refresh its state" % required)
+    # Proxmox remains responsible for locks, HA and races after these checks.
+    # Never pass skiplock, forceStop or overrule-shutdown.
+    upid = pve_request("create", base + "/status/" + action)
+    try:
+        validate_upid(upid)
+    except RequestError:
+        return {"ok": True, "message": "Action accepted without a usable task ID; refresh the guest state"}
+    return {"ok": True, "upid": upid}
+
+
+def dispatch_control(request, allow_guests=False, allow_node=False):
+    # A tiny whitespace protocol, not shell syntax. Reject control characters
+    # instead of allowing a newline to turn two commands into one request.
+    if len(request) > 512 or any(ord(c) < 32 or ord(c) > 126 for c in request):
+        raise RequestError("Invalid command")
+    args = request.split()
+    if len(args) == 5 and args[:2] == ["control", "guest"]:
+        if not allow_guests:
+            raise RequestError("Guest control is disabled for this SSH key")
+        return control_guest(*args[2:])
+    if len(args) == 3 and args[:2] == ["control", "node"]:
+        if not allow_node:
+            raise RequestError("Host control is disabled for this SSH key")
+        if args[2] not in NODE_ACTIONS:
+            raise RequestError("Invalid host action")
+        pve_request("create", "/nodes/%s/status" % NODE, "--command", args[2])
+        # The node power endpoint returns null, not a task ID. Its successful
+        # response acknowledges the request, not completion of reboot/shutdown.
+        return {"ok": True, "message": "Host power request accepted; the host may disconnect"}
+    if len(args) == 2 and args[0] == "task":
+        upid = validate_upid(args[1])
+        task = pve_request("get", "/nodes/%s/tasks/%s/status" % (NODE, upid))
+        if not isinstance(task, dict) or task.get("status") not in ("running", "stopped"):
+            raise RequestError("Invalid Proxmox task status")
+        result = {"ok": True, "status": task["status"]}
+        if isinstance(task.get("exitstatus"), str):
+            result["exitstatus"] = task["exitstatus"][:500]
+        return result
+    raise RequestError("Unsupported request")
+
+
+def serve(argv=None):
+    """Forced command: permissions come only from administrator-owned argv."""
+    args = list(sys.argv[2:] if argv is None else argv)
+    allow_guests, allow_node = False, False
+    while args and args[0].startswith("--"):
+        option = args.pop(0)
+        if option == "--allow-guest-actions":
+            allow_guests = True
+        elif option == "--allow-node-actions":
+            allow_node = True
+        else:
+            sys.stderr.write("unsupported serve option\n")
+            return 2
+    # An SSH client cannot grant itself capabilities by changing its request.
+    request = os.environ.get("SSH_ORIGINAL_COMMAND", " ".join(args))
     names = {"current": "current.json", "history": "history.json", "hardware": "hardware.json"}
     if request == "ping":
-        print(json.dumps({"ok": True, "agent": VERSION, "host": NODE}))
+        print(json.dumps({"ok": True, "agent": VERSION, "host": NODE,
+                          "capabilities": capabilities(allow_guests, allow_node)}))
+        return 0
+    if request == "capabilities":
+        print(json.dumps(capabilities(allow_guests, allow_node)))
         return 0
     if request == "bundle":
-        out = {}
+        out = {"capabilities": capabilities(allow_guests, allow_node)}
         for k in ("current", "hardware"):
             try:
                 with open(RUN + "/" + names[k]) as f:
@@ -436,8 +560,15 @@ def serve():
         sys.stdout.write(json.dumps(out, separators=(",", ":")))
         return 0
     if request not in names:
-        sys.stderr.write("unsupported request\n")
-        return 2
+        try:
+            print(json.dumps(dispatch_control(request, allow_guests, allow_node)))
+            return 0
+        except RequestError as e:
+            if e.unknown:
+                print(json.dumps({"ok": True, "unknown": True, "message": str(e)}))
+                return 0
+            print(json.dumps({"ok": False, "error": str(e)}))
+            return 2
     try:
         with open(RUN + "/" + names[request]) as f:
             sys.stdout.write(f.read())
