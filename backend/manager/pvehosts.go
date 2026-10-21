@@ -3,7 +3,8 @@ package main
 // NPM-74: the «Proxmox» integration. Each host runs homenet-pve-agent, which
 // samples itself every 10 s and keeps a day of history. This worker reads the
 // prepared documents over SSH with a key that the host restricts to the
-// agent's read-only forced command, and serves them to the module UI.
+// agent's forced command, and serves them to the module UI. Power operations
+// require capabilities explicitly enabled for that key when installing the agent.
 // Widget and attention endpoints answer from memory and never touch the network.
 
 import (
@@ -56,8 +57,10 @@ type pvhSnapshot struct {
 	Guests []struct {
 		VMID     int    `json:"vmid"`
 		Name     string `json:"name"`
+		Type     string `json:"type"`
 		Status   string `json:"status"`
 		Template bool   `json:"template"`
+		Lock     string `json:"lock"`
 	} `json:"guests"`
 	Storage []struct {
 		Name    string  `json:"name"`
@@ -96,18 +99,19 @@ type pvhSnapshot struct {
 }
 
 type pvhHost struct {
-	Config    pvhHostConfig
-	Online    bool
-	Error     string
-	Checked   time.Time
-	LastOK    time.Time
-	Since     time.Time // when the current online/offline state began
-	LatencyMS int64
-	Current   json.RawMessage
-	Hardware  json.RawMessage
-	Parsed    *pvhSnapshot
-	History   json.RawMessage
-	HistoryAt time.Time
+	Config       pvhHostConfig
+	Online       bool
+	Error        string
+	Checked      time.Time
+	LastOK       time.Time
+	Since        time.Time // when the current online/offline state began
+	LatencyMS    int64
+	Current      json.RawMessage
+	Hardware     json.RawMessage
+	Parsed       *pvhSnapshot
+	History      json.RawMessage
+	HistoryAt    time.Time
+	Capabilities pvhCapabilities
 }
 
 type pvhMonitor struct {
@@ -116,6 +120,8 @@ type pvhMonitor struct {
 	client  string
 	hosts   []*pvhHost
 	loadErr string
+	tasks   []*pvhTask
+	request func(context.Context, pvhHostConfig, string) ([]byte, error)
 }
 
 var pvh *pvhMonitor
@@ -187,11 +193,15 @@ func (m *pvhMonitor) pollAll() {
 		go func(h *pvhHost) { defer wg.Done(); m.poll(h) }(h)
 	}
 	wg.Wait()
+	m.pollTasks()
 }
 
 // fetch runs the agent's forced command. The key is accepted by the host only for
-// `homenet-pve-agent serve`, so the request word is all that can be chosen here.
+// `homenet-pve-agent serve`; the agent independently validates every request.
 func (m *pvhMonitor) fetch(ctx context.Context, h pvhHostConfig, request string) ([]byte, error) {
+	if m.request != nil {
+		return m.request(ctx, h, request)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	args := []string{"-T", "-i", filepath.Join(m.dir, "id_dropbear"), "-p", strconv.Itoa(h.Port), h.User + "@" + h.Address, request}
@@ -211,7 +221,7 @@ func (m *pvhMonitor) fetch(ctx context.Context, h pvhHostConfig, request string)
 		if i := strings.LastIndex(msg, "\n"); i >= 0 {
 			msg = msg[i+1:]
 		}
-		return nil, fmt.Errorf("%s", msg)
+		return out.Bytes(), fmt.Errorf("%s", msg)
 	}
 	return out.Bytes(), nil
 }
@@ -223,8 +233,9 @@ func (m *pvhMonitor) poll(h *pvhHost) {
 	m.mu.Unlock()
 	b, err := m.fetch(workerContext, cfg, "bundle")
 	var bundle struct {
-		Current  json.RawMessage `json:"current"`
-		Hardware json.RawMessage `json:"hardware"`
+		Current      json.RawMessage `json:"current"`
+		Hardware     json.RawMessage `json:"hardware"`
+		Capabilities pvhCapabilities `json:"capabilities"`
 	}
 	var snap pvhSnapshot
 	if err == nil {
@@ -260,6 +271,7 @@ func (m *pvhMonitor) poll(h *pvhHost) {
 		h.Hardware = bundle.Hardware
 	}
 	h.Parsed = &snap
+	h.Capabilities = bundle.Capabilities
 }
 
 func humanAge(sec int64) string {
@@ -298,6 +310,10 @@ func (a *app) handlePVE(w http.ResponseWriter, r *http.Request) {
 		a.handlePVEConfig(w, r)
 		return
 	}
+	if r.URL.Path == "/api/pve/actions" || r.URL.Path == "/api/pve/tasks" {
+		a.handlePVEActions(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", 405)
 		return
@@ -328,6 +344,7 @@ func (m *pvhMonitor) overview() response {
 		item := response{
 			"id": h.Config.ID, "name": h.Config.Name, "address": h.Config.Address, "online": h.Online, "error": h.Error,
 			"latency_ms": h.LatencyMS, "current": rawOrNull(h.Current), "hardware": rawOrNull(h.Hardware),
+			"capabilities": h.Capabilities,
 		}
 		if !h.Checked.IsZero() {
 			item["checked_at"] = h.Checked.UTC().Format(time.RFC3339)

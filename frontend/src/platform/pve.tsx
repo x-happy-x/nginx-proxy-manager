@@ -6,6 +6,9 @@ import { Overview } from "../features/pve/Overview";
 import { Empty } from "../features/pve/parts";
 import { Settings } from "../features/pve/Settings";
 import { Storage } from "../features/pve/Storage";
+import { Management } from "../features/pve/Actions";
+import { Icon } from "../components/ui/Icon";
+import { stale } from "../features/pve/model";
 import "../features/pve/pve.css";
 import { ModuleBoundary, usePage } from "./module-base";
 import type { Host } from "./sdk";
@@ -32,18 +35,21 @@ function Tabs({ page, host }: { page: string; host: Host }) {
   );
 }
 
-function HealthLine({ hosts, updated }: { hosts: PveHost[]; updated?: string }) {
+function HealthLine({ hosts, updated, reload }: { hosts: PveHost[]; updated?: string; reload: () => Promise<void> }) {
   const offline = hosts.filter((h) => !h.online);
+  const old = hosts.filter((h) => h.online && stale(h));
+  const [refreshing, setRefreshing] = useState(false);
   // members of one cluster report the same thing; the first one that knows it is enough
   const cluster = hosts.map((h) => h.current?.cluster).find((c) => c?.name);
   const down = (cluster?.nodes || []).filter((n) => !n.online).map((n) => n.name);
   return (
-    <div className={`pve-health${offline.length ? " bad" : ""}`} role="status">
+    <div className={`pve-health${offline.length || old.length || cluster?.quorate === false ? " bad" : ""}`} role="status">
       <span className="pve-health-dot" aria-hidden="true" />
       <span>
         {offline.length
-          ? `Нет связи: ${offline.map((h) => h.name).join(", ")}. Остальные хосты на связи.`
-          : `Все хосты на связи: ${hosts.map((h) => h.name).join(", ")}.`}
+          ? `Нет связи: ${offline.map((h) => h.name).join(", ")}.`
+          : old.length ? `Устаревшие данные: ${old.map((h) => h.name).join(", ")}.`
+          : `На связи: ${hosts.map((h) => h.name).join(", ")}.`}
       </span>
       {cluster ? (
         <span className={`pve-cluster${cluster.quorate && !down.length ? "" : " bad"}`}>
@@ -51,22 +57,23 @@ function HealthLine({ hosts, updated }: { hosts: PveHost[]; updated?: string }) 
         </span>
       ) : null}
       <span className="pve-muted">Обновлено {ago(updated)} · сбор на хостах каждые 10 с</span>
+      <button type="button" className="pve-btn ghost" disabled={refreshing} onClick={() => { setRefreshing(true); void reload().finally(() => setRefreshing(false)); }}><Icon name="refresh" size={14} />{refreshing ? "Обновляю…" : "Обновить"}</button>
     </div>
   );
 }
 
 function PveModule({ host }: { host: Host }) {
   const page = usePage();
-  const { data, error, loading } = useOverview(host);
+  const { data, error, loading, reload } = useOverview(host);
   const [selected, setSelected] = useState("");
   const hosts = data?.hosts || [];
-  useEffect(() => { if (!selected && hosts.length) setSelected(hosts[0].id); }, [hosts, selected]);
+  useEffect(() => { if (hosts.length && !hosts.some((h) => h.id === selected)) setSelected(hosts[0].id); }, [hosts, selected]);
   const current = PAGES.some((p) => p.id === page) ? page : "pve";
   const updated = hosts.map((h) => h.checked_at || "").sort().slice(-1)[0];
   let body;
   if (loading && !data) body = <div className="pve-page"><div className="pve-skeleton" /><div className="pve-skeleton tall" /></div>;
   else if (!data) body = <Empty title="Интеграция не отвечает">{error}</Empty>;
-  else if (current === "pvesettings") body = <Settings host={host} />;
+  else if (current === "pvesettings") body = <Settings host={host} onSaved={reload} />;
   else if (!data.configured) body = <Empty title="Сервера не настроены">{data.error || "Добавьте их на странице «Настройка»."}</Empty>;
   else if (current === "pveguests") body = <Guests host={host} hosts={hosts} />;
   else if (current === "pvehw") body = <Hardware host={host} hosts={hosts} />;
@@ -75,9 +82,9 @@ function PveModule({ host }: { host: Host }) {
   return (
     <div className="pve-module">
       <Tabs page={current} host={host} />
-      {data?.configured && current !== "pvesettings" ? <HealthLine hosts={hosts} updated={updated} /> : null}
+      {data?.configured && current !== "pvesettings" ? <HealthLine hosts={hosts} updated={updated} reload={reload} /> : null}
       {error && data ? <div className="pve-health bad" role="alert"><span className="pve-health-dot" aria-hidden="true" />Не удалось обновить: {error}. Показаны последние данные.</div> : null}
-      {body}
+      <Management host={host} hosts={hosts} enabled={!!data?.configured} onRefresh={reload}>{body}</Management>
     </div>
   );
 }

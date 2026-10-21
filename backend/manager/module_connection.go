@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 func (a *app) moduleConnection() string {
 	switch moduleKind {
@@ -28,6 +31,24 @@ func (a *app) moduleConnection() string {
 			return "unconfigured"
 		}
 		return "connected"
+	case "pve":
+		if pvh == nil {
+			return "unconfigured"
+		}
+		pvh.mu.Lock()
+		defer pvh.mu.Unlock()
+		if pvh.loadErr != "" {
+			return "unavailable"
+		}
+		if len(pvh.hosts) == 0 {
+			return "unconfigured"
+		}
+		for _, h := range pvh.hosts {
+			if h.Online && h.Parsed != nil && time.Now().Unix()-h.Parsed.TS < 90 {
+				return "connected"
+			}
+		}
+		return "unavailable"
 	}
 	return "unavailable"
 }
