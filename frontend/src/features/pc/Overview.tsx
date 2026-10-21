@@ -41,7 +41,7 @@ export function Overview({ host, computers }: { host: Host; computers: Computer[
   return <div className="pc-page">
     <section className="pc-hero"><div><span className="pc-eyebrow">Домашние компьютеры</span><h2>Всё важное о ваших ПК</h2><p>Windows и Linux, ресурсы, Docker и окружения WSL.</p></div><div className="pc-summary"><Stat label="На связи" value={`${current.length} / ${computers.length}`} /><Stat label="Контейнеры работают" value={containers.filter(({ c }) => c.state === "running").length} /><Stat label="Требуют внимания" value={problems.length} tone={problems.length ? "warn" : undefined} /></div></section>
     <div className="pc-computers">{computers.map((c) => <ComputerCard key={c.id} h={c} selected={c.id === h?.id} select={() => setSelected(c.id)} navigate={host.navigate} />)}</div>
-    {h ? <Section title={`Ресурсы · ${h.name}`} hint="История собирается, пока интеграция работает. Точки — раз в минуту."
+    {h ? <Section title={`Ресурсы · ${h.name}`} hint="История за сутки сохраняется между перезапусками. Точки — раз в минуту, пока интеграция работает."
       actions={<Segmented label="Период" value={period} onChange={setPeriod} options={[{ value: "1h", label: "Час" }, { value: "6h", label: "6 часов" }, { value: "24h", label: "Сутки" }]} />}>
       {history.error ? <div className="pc-error" role="alert">История не обновлена: {history.error}</div> : null}
       {points.length > 1 ? <div className="pc-charts">

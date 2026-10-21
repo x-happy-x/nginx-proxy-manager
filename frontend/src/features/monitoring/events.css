@@ -1,0 +1,65 @@
+/* Saved event inbox shared by the PC and Proxmox modules. */
+.monitor-events { overflow: hidden; min-width: 0; }
+.monitor-events.has-unread { border-color: var(--accent-border); }
+.monitor-events-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.monitor-events-toggle { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; border: 0; background: none; color: var(--text); padding: 0; font: inherit; cursor: pointer; text-align: left; }
+.monitor-events-icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--surface-2); color: var(--text-3); }
+.has-unread .monitor-events-icon { background: var(--accent-soft); color: var(--accent); }
+.monitor-events-title { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.monitor-events-title > strong { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.monitor-events-title > small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-3); font-size: 12px; }
+.monitor-events-count { display: inline-grid; place-items: center; min-width: 20px; height: 19px; padding: 0 5px; background: var(--accent); color: var(--on-accent); border-radius: 999px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.monitor-events-toggle > .icon { flex: none; color: var(--text-3); }
+.monitor-events-toggle > .icon.expanded { transform: rotate(180deg); }
+.monitor-events button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 5px; }
+.monitor-events-read-all, .monitor-events-refresh, .monitor-events-retry, .monitor-event-read, .monitor-events-more { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text-2); padding: 7px 10px; min-height: 32px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.monitor-events button:disabled { opacity: .5; cursor: default; }
+.monitor-events-read-all:hover:not(:disabled), .monitor-events-refresh:hover:not(:disabled), .monitor-events-retry:hover:not(:disabled), .monitor-event-read:hover:not(:disabled), .monitor-events-more:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.monitor-events-read-all { flex: none; }
+.monitor-events-alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px; margin: 0 14px 12px; border: 1px solid var(--danger-border); border-radius: var(--radius); background: var(--danger-soft); color: var(--text); font-size: 12px; }
+.monitor-events-alert > .icon { flex: none; margin-top: 1px; color: var(--danger); }
+.monitor-events-alert > div { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.monitor-events-alert strong { font-size: 13px; }
+.monitor-events-alert p { margin: 0; line-height: 1.5; }
+.monitor-events-alert small { color: var(--text-2); font-size: 11px; overflow-wrap: anywhere; }
+.monitor-events-alert.storage { background: var(--warning-soft); border-color: var(--warning-border); }
+.monitor-events-alert.storage > .icon { color: var(--warning); }
+.monitor-events-panel { border-top: 1px solid var(--border); }
+.monitor-events-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px 0; }
+.monitor-events-hint { margin: 8px 14px 12px; font-size: 12px; color: var(--text-3); line-height: 1.5; }
+.monitor-events-list { list-style: none; margin: 0; padding: 0; }
+.monitor-event { display: flex; align-items: flex-start; gap: 12px; padding: 15px 16px; border-top: 1px solid var(--border); }
+.monitor-event.unread { background: color-mix(in srgb, var(--accent) 3%, transparent); }
+.monitor-event-kind { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); color: var(--text-3); }
+.monitor-event.severity-error .monitor-event-kind { color: var(--danger); background: var(--danger-soft); }
+.monitor-event.severity-warning .monitor-event-kind { color: var(--warning); background: var(--warning-soft); }
+.monitor-event.severity-info .monitor-event-kind { color: var(--success); background: var(--success-soft); }
+.monitor-event-body { flex: 1; min-width: 0; display: grid; gap: 5px; overflow-wrap: anywhere; }
+.monitor-event-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--text-3); }
+.monitor-event-meta > span:first-child { color: var(--text-2); font-weight: 600; }
+.monitor-event-meta time { font-variant-numeric: tabular-nums; }
+.monitor-event-new { color: var(--accent); font-size: 10px; font-weight: 700; }
+.monitor-event-body > strong { font-size: 13px; }
+.monitor-event-body p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.5; }
+.monitor-event-body > small { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+.monitor-event-read { flex: none; font-size: 11px; background: transparent; }
+.monitor-event-done { display: inline-flex; align-items: center; gap: 4px; color: var(--text-3); font-size: 11px; padding-top: 8px; flex: none; }
+.monitor-events-empty { padding: 28px 18px; display: grid; gap: 7px; justify-items: center; text-align: center; border-top: 1px solid var(--border); }
+.monitor-events-empty > .icon { color: var(--text-3); }
+.monitor-events-empty strong { font-size: 13px; }
+.monitor-events-empty p { margin: 0; max-width: 52ch; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.monitor-events-more { margin: 0 16px 14px; width: calc(100% - 32px); }
+.monitor-journal-hint { margin: 0 14px 12px; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+@media (max-width: 640px) {
+  .monitor-events-head { flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .monitor-events-toggle { flex-basis: 100%; }
+  .monitor-events-read-all { margin-left: 44px; }
+  .monitor-event { gap: 9px; padding: 13px 12px; flex-wrap: wrap; }
+  .monitor-event-body { flex-basis: calc(100% - 45px); }
+  .monitor-event-read, .monitor-event-done { margin-left: 41px; }
+  .monitor-event-done { padding-top: 0; }
+  .monitor-events-alert { flex-wrap: wrap; margin-inline: 12px; }
+  .monitor-events-retry { margin-left: 27px; }
+  .monitor-events-toolbar { padding-inline: 12px; }
+  .monitor-events-toolbar > .segmented { flex-wrap: wrap; }
+}
