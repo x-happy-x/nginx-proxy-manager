@@ -107,6 +107,7 @@ type pcMonitor struct {
 	hosts    []*pcHost
 	tasks    []*pcTask
 	loadErr  string
+	journal  monitorJournal
 	request  func(context.Context, pcHostConfig, string, bool) ([]byte, string, error)
 }
 
@@ -114,6 +115,7 @@ var pcm *pcMonitor
 
 func newPCMonitor() *pcMonitor {
 	m := &pcMonitor{dir: getenv("PC_DIR", "/opt/etc/homenet/pc"), client: getenv("PC_SSH_CLIENT", "/opt/bin/dbclient")}
+	defer m.restoreState()
 	b, err := os.ReadFile(filepath.Join(m.dir, "hosts.json"))
 	if os.IsNotExist(err) {
 		return m
@@ -230,8 +232,16 @@ func (m *pcMonitor) poll(h *pcHost) {
 	h.Checked = time.Now()
 	h.LatencyMS = time.Since(start).Milliseconds()
 	h.Online = err == nil
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	transition := m.journal.connection(cfg.ID, cfg.Name, pcConnectionIdentity(cfg), h.Online, message)
 	if err != nil {
 		h.Error = err.Error()
+		if transition || time.Since(m.journal.lastSave) >= time.Minute {
+			m.saveStateLocked()
+		}
 		return
 	}
 	h.Error = ""
@@ -267,6 +277,9 @@ func (m *pcMonitor) poll(h *pcHost) {
 	if len(h.History) > 1440 {
 		h.History = h.History[len(h.History)-1440:]
 	}
+	if transition || time.Since(m.journal.lastSave) >= time.Minute {
+		m.saveStateLocked()
+	}
 }
 
 func (a *app) handlePC(w http.ResponseWriter, r *http.Request) {
@@ -276,6 +289,12 @@ func (a *app) handlePC(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/pc/config") {
 		a.handlePCConfig(w, r)
+		return
+	}
+	if r.URL.Path == "/api/pc/events" || r.URL.Path == "/api/pc/events/read" {
+		pcm.mu.Lock()
+		defer pcm.mu.Unlock()
+		handleMonitorEvents(a, w, r, &pcm.journal, pcm.saveStateLocked)
 		return
 	}
 	if r.URL.Path == "/api/pc/actions" || r.URL.Path == "/api/pc/tasks" {
@@ -325,7 +344,7 @@ func (m *pcMonitor) overview() response {
 		}
 		hosts = append(hosts, item)
 	}
-	return response{"hosts": hosts, "configured": len(m.hosts) > 0, "error": m.loadErr}
+	return response{"hosts": hosts, "configured": len(m.hosts) > 0, "error": m.loadErr, "storage_error": m.journal.storageError()}
 }
 
 func (m *pcMonitor) widget() response {
@@ -368,6 +387,14 @@ func (m *pcMonitor) attention() []response {
 	}
 	if m.loadErr != "" {
 		add("config", m.loadErr)
+	}
+	if s := m.journal.storageError(); s != "" {
+		add("storage", s)
+	}
+	for _, e := range m.journal.Events {
+		if e.ReadAt == "" {
+			add("event-"+e.ID, e.Title+": "+e.Message)
+		}
 	}
 	for _, h := range m.hosts {
 		if !h.Online {

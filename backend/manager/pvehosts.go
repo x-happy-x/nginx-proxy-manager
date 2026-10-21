@@ -121,6 +121,7 @@ type pvhMonitor struct {
 	hosts   []*pvhHost
 	loadErr string
 	tasks   []*pvhTask
+	journal monitorJournal
 	request func(context.Context, pvhHostConfig, string) ([]byte, error)
 }
 
@@ -130,6 +131,7 @@ func pvhDir() string { return getenv("PVE_DIR", "/opt/etc/homenet/pve") }
 
 func newPVHMonitor() *pvhMonitor {
 	m := &pvhMonitor{dir: pvhDir(), client: getenv("PVE_SSH_CLIENT", "/opt/bin/dbclient")}
+	defer m.restoreState()
 	b, err := os.ReadFile(filepath.Join(m.dir, "hosts.json"))
 	if os.IsNotExist(err) {
 		return m // nothing configured yet: the «Настройка» page adds servers
@@ -250,6 +252,9 @@ func (m *pvhMonitor) poll(h *pvhHost) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
+	if m.find(cfg.ID) != h || h.Config.Address != cfg.Address || h.Config.Port != cfg.Port || h.Config.User != cfg.User {
+		return
+	}
 	h.Checked = now
 	h.LatencyMS = time.Since(started).Milliseconds()
 	online := err == nil && now.Unix()-snap.TS < 90
@@ -260,8 +265,16 @@ func (m *pvhMonitor) poll(h *pvhHost) {
 		h.Since = now
 	}
 	h.Online = online
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	transition := m.journal.connection(cfg.ID, cfg.Name, pvhConnectionIdentity(cfg), online, message)
 	if err != nil {
 		h.Error = err.Error()
+		if transition || time.Since(m.journal.lastSave) >= time.Minute {
+			m.saveStateLocked()
+		}
 		return
 	}
 	h.Error = ""
@@ -272,6 +285,9 @@ func (m *pvhMonitor) poll(h *pvhHost) {
 	}
 	h.Parsed = &snap
 	h.Capabilities = bundle.Capabilities
+	if transition || time.Since(m.journal.lastSave) >= time.Minute {
+		m.saveStateLocked()
+	}
 }
 
 func humanAge(sec int64) string {
@@ -308,6 +324,12 @@ func (a *app) handlePVE(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/pve/config") {
 		a.handlePVEConfig(w, r)
+		return
+	}
+	if r.URL.Path == "/api/pve/events" || r.URL.Path == "/api/pve/events/read" {
+		pvh.mu.Lock()
+		defer pvh.mu.Unlock()
+		handleMonitorEvents(a, w, r, &pvh.journal, pvh.saveStateLocked)
 		return
 	}
 	if r.URL.Path == "/api/pve/actions" || r.URL.Path == "/api/pve/tasks" {
@@ -354,7 +376,7 @@ func (m *pvhMonitor) overview() response {
 		}
 		hosts = append(hosts, item)
 	}
-	return response{"hosts": hosts, "configured": len(m.hosts) > 0, "error": m.loadErr}
+	return response{"hosts": hosts, "configured": len(m.hosts) > 0, "error": m.loadErr, "storage_error": m.journal.storageError()}
 }
 
 // History is a day of minute points (~100 KB); it is fetched when the UI asks and
@@ -558,6 +580,21 @@ func (m *pvhMonitor) attentionLocked() []response {
 	}
 	if m.loadErr != "" {
 		add("config", "warning", "Proxmox: "+m.loadErr, "pve", time.Time{})
+	}
+	if s := m.journal.storageError(); s != "" {
+		add("storage", "warning", s, "pve", time.Time{})
+	}
+	for _, e := range m.journal.Events {
+		if e.ReadAt == "" {
+			severity := "warning"
+			if e.Severity == "error" {
+				severity = "critical"
+			}
+			if e.Severity == "info" {
+				severity = "info"
+			}
+			add("event-"+e.ID, severity, e.Title+": "+e.Message, "pve", time.Time{})
+		}
 	}
 	for _, h := range m.hosts {
 		name, id := h.Config.Name, h.Config.ID
