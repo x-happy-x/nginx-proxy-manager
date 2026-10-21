@@ -74,6 +74,7 @@ type Host struct {
 	AccessIPPort      int        `yaml:"access_ip_port,omitempty" json:"access_ip_port,omitempty"`
 	AccessApp         string     `yaml:"access_app,omitempty" json:"access_app,omitempty"`
 	AccessPassthrough []string   `yaml:"access_passthrough,omitempty" json:"access_passthrough,omitempty"`
+	AccessPublic      bool       `yaml:"access_public,omitempty" json:"access_public,omitempty"` // proxy without the Account gateway
 	Host              string     `yaml:"host" json:"host"`
 	Kind              string     `yaml:"kind" json:"kind"`
 	AppID             string     `yaml:"app_id" json:"app_id"`

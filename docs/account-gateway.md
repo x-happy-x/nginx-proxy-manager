@@ -59,7 +59,15 @@ Network administration panels require `homenet=admin`; native applications keep
 their own roles. `access_passthrough` lists exact paths or prefixes ending `/`
 whose authentication remains the upstream's responsibility: e.g. signed
 subscription links, Home Assistant API tokens and Proxmox API tickets.
-No blanket Authorization-header bypass exists. Direct LAN backend addresses and
+No blanket Authorization-header bypass exists.
+
+`access_public: true` on a host keeps the proxy but takes the host out of the
+gateway entirely: the manager does not assign `access_app` to it on save, the
+generator emits no `auth_request`, and it is absent from `gateway-hosts.json`.
+Use it only for upstreams that authenticate every request themselves, such as
+Home Assistant with its own Account (OIDC) login, whose mobile app cannot pass
+the gateway. `access_public` together with `access_app` is rejected. In the UI it
+is the «Без шлюза Account» switch in the route editor. Direct LAN backend addresses and
 the management port remain available; this feature does not change firewalls.
 
 LMS Android can use its existing HTTP Basic username/password fields with

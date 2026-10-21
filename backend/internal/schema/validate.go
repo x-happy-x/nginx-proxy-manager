@@ -134,6 +134,9 @@ func ValidateRoutes(r Routes) error {
 				return fmt.Errorf("host %q: invalid access_passthrough", host.Host)
 			}
 		}
+		if host.AccessPublic && host.AccessApp != "" {
+			return fmt.Errorf("host %q: access_public excludes access_app", host.Host)
+		}
 		if host.AccessApp != "" && !identifierPattern.MatchString(host.AccessApp) {
 			return fmt.Errorf("host %q: invalid access_app", host.Host)
 		}

@@ -308,24 +308,8 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if os.Getenv("HOMENET_ACCESS_ENABLED") == "1" {
-			routes.Globals.AccessGateway = true
 			previous, _ := schema.LoadRoutes(a.routesPath())
-			for i := range routes.Hosts {
-				h := &routes.Hosts[i]
-				if h.AppID != "account" {
-					h.AccessApp = "homenet"
-					if h.AppID == "lms-client" {
-						h.AccessApp = "lms_node"
-					}
-				}
-				if len(previous.Hosts) > 0 {
-					for _, old := range previous.Hosts {
-						if old.Host == h.Host && h.AccessIPPort == 0 {
-							h.AccessIPPort = old.AccessIPPort
-						}
-					}
-				}
-			}
+			applyAccessDefaults(&routes, previous)
 		}
 		if routes.SchemaVersion != "2.1" {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "schema_version_must_be_2_1"})
@@ -560,4 +544,26 @@ func (a *app) writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+// applyAccessDefaults puts every host behind the Account gateway except Account
+// itself and hosts marked access_public, which check logins on their own.
+func applyAccessDefaults(routes *schema.Routes, previous schema.Routes) {
+	routes.Globals.AccessGateway = true
+	for i := range routes.Hosts {
+		h := &routes.Hosts[i]
+		if h.AccessPublic {
+			h.AccessApp = ""
+		} else if h.AppID != "account" {
+			h.AccessApp = "homenet"
+			if h.AppID == "lms-client" {
+				h.AccessApp = "lms_node"
+			}
+		}
+		for _, old := range previous.Hosts {
+			if old.Host == h.Host && h.AccessIPPort == 0 {
+				h.AccessIPPort = old.AccessIPPort
+			}
+		}
+	}
 }
