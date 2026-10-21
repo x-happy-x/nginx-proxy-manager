@@ -17,7 +17,7 @@ const Context = createContext<Controls>({ choose: () => undefined, pending: () =
 function reason(h: PveHost, g?: PveGuest): string {
   if (!h.online) return "Сервер не отвечает. Управление станет доступно после восстановления связи.";
   if (stale(h)) return "Данные устарели. Дождитесь свежего состояния сервера.";
-  if (!h.capabilities?.control) return "Установите новую версию агента с поддержкой управления. Инструкция — в настройках.";
+  if (!h.capabilities?.control) return "Управление не разрешено. Обновите агент и включите нужные разрешения по инструкции в настройках.";
   if (g?.template) return "Шаблоны не запускаются. Создайте машину из шаблона в Proxmox.";
   if (g?.lock) return `Машина занята: ${g.lock}. Дождитесь завершения операции.`;
   return "";

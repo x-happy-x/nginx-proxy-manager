@@ -60,5 +60,16 @@
       {"id": "home", "title": "Умный дом", "kind": "status", "sizes": ["s", "m"], "data": "/api/ha/widgets/home", "refresh": 60, "modes": ["simple", "pro"], "default": {"simple": 45, "pro": 46}, "page": "ha"}
     ],
     "summary": {"attention": "/api/ha/summary/attention"}
+  },
+  {
+    "id": "pc", "name": "Компьютеры", "description": "Windows и Linux по SSH: ресурсы, WSL и Docker в системе и дистрибутивах", "port": 63506,
+    "pages": ["pc", "pcwsl", "pcdocker", "pcsettings"],
+    "titles": {"pc": "Обзор", "pcwsl": "WSL", "pcdocker": "Docker", "pcsettings": "Настройка"},
+    "paths": ["/api/pc/"],
+    "data": ["/opt/etc/homenet/pc"],
+    "widgets": [
+      {"id": "hosts", "title": "Компьютеры", "kind": "status", "sizes": ["s", "m"], "data": "/api/pc/widgets/hosts", "refresh": 30, "modes": ["simple", "pro"], "default": {"pro": 48}, "page": "pc"}
+    ],
+    "summary": {"attention": "/api/pc/summary/attention"}
   }
 ]

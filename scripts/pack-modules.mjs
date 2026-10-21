@@ -5,7 +5,12 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const [arch,client,version='1.0.0',dmsRoot]=process.argv.slice(2);
+const args=process.argv.slice(2);
+const [arch,client,version='1.0.0',dmsRoot]=args.filter(a=>!a.startsWith('--only='));
+const onlyArg=args.find(a=>a.startsWith('--only='));
+const only=onlyArg?new Set(onlyArg.slice(7).split(',')):null;
+const catalog=JSON.parse(await readFile(path.join(root,'integrations/catalog.json'),'utf8'));
+if(only)for(const id of only)if(!catalog.some(item=>item.id===id))throw new Error(`Unknown module ${id}`);
 if(!['amd64','arm64','arm','mips','mipsle'].includes(arch)||!client||!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Usage: node scripts/pack-modules.mjs ARCH /absolute/path/dms-client [VERSION]');
 const build=path.join(root,'.runtime/modules',`linux-${arch}`);
 const output=path.join(root,'.runtime/release',`linux-${arch}`);await mkdir(output,{recursive:true});
@@ -25,7 +30,8 @@ const coreName=`homenet-core-${version}-linux-${arch}.dms.tar.gz`;const coreFile
 const coreResult=spawnSync(path.resolve(client),['pack','--config',coreConfig,'--output',coreFile],{stdio:'inherit',shell:false});
 if(coreResult.error)throw coreResult.error;if(coreResult.status!==0)throw new Error('Core packaging failed');
 const coreBody=await readFile(coreFile);release.packages.push({id:'core',version,file:coreName,bytes:coreBody.length,sha256:createHash('sha256').update(coreBody).digest('hex')});
-for(const id of ['proxy','network','vpn']){
+for(const {id} of catalog){
+ if(only&&!only.has(id))continue;
  const module=JSON.parse(await readFile(path.join(build,id,version,'manifest.json'),'utf8'));
  if(module.version!==version||module.arch!==arch)throw new Error('Candidate identity mismatch');
  const manifest={version:'1',app:`homenet-${id}`,metadata:{name:module.name,description:module.description,version,os:'linux',arch},integration:{staged:true,schema:1,id,core_api:1,ui_api:module.ui_api,data_schema:module.data_schema,dependencies:module.dependencies||[]},artifacts:[{source:`${id}/${version}`,destination:`/opt/share/homenet/integrations/${id}/${version}`,mode:493}]};

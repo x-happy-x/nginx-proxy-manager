@@ -20,7 +20,7 @@ function hostRuntime(): Plugin {
   };
 }
 export default defineConfig(({ mode }) => {
-  if (!["proxy", "network", "vpn", "pve", "ha"].includes(mode)) throw new Error("Choose --mode proxy, network, vpn, pve or ha");
+  if (!["proxy", "network", "vpn", "pve", "pc", "ha"].includes(mode)) throw new Error("Choose --mode proxy, network, vpn, pve, pc or ha");
   return { plugins: [hostRuntime(), react()], base: "./", css: { postcss: { plugins: [{ postcssPlugin: "homenet-shadow-css", Rule(rule) {
     rule.selector = rule.selector.replace(/:root\[data-theme="dark"\]/g, ':host([data-theme="dark"])').replace(/:root/g, ":host").replace(/^html\b/g, ":host").replace(/^body\b/g, ".homenet-module-root");
   } }] } }, build: {
