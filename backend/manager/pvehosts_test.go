@@ -24,7 +24,7 @@ const pvhFixture = `{"v":1,"host":"s1","ts":%TS%,"interval":10,
 
 func pvhTestMonitor(t *testing.T, ts int64) *pvhMonitor {
 	t.Helper()
-	m := &pvhMonitor{hosts: []*pvhHost{{Config: pvhHostConfig{ID: "s1", Name: "s1", Address: "192.168.99.10"}}}}
+	m := &pvhMonitor{dir: t.TempDir(), hosts: []*pvhHost{{Config: pvhHostConfig{ID: "s1", Name: "s1", Address: "192.168.99.10"}}}}
 	raw := json.RawMessage(strings.ReplaceAll(pvhFixture, "%TS%", itoa64(ts)))
 	var snap pvhSnapshot
 	if err := json.Unmarshal(raw, &snap); err != nil {

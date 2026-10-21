@@ -133,6 +133,7 @@ func (m *pvhMonitor) applyHosts(hosts []pvhHostConfig) {
 		next = append(next, &pvhHost{Config: c})
 	}
 	m.hosts, m.loadErr = next, ""
+	m.saveStateLocked()
 }
 
 func (a *app) handlePVEConfig(w http.ResponseWriter, r *http.Request) {

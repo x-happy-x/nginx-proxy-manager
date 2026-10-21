@@ -159,6 +159,10 @@ func (m *pcMonitor) submitAction(a pcAction) (pcTask, int, error) {
 	now := time.Now()
 	task := &pcTask{ID: hex.EncodeToString(id[:]), Host: a.Host, Target: a.Target, Context: a.Context, ResourceID: a.ID, Name: name, Action: a.Action, Status: "running", Message: "Команда отправляется агенту", CreatedAt: now.UTC().Format(time.RFC3339), UpdatedAt: now.UTC().Format(time.RFC3339), created: now, config: h.Config}
 	m.tasks = append(m.tasks, task)
+	if err := m.saveStateLocked(); err != nil {
+		m.tasks = m.tasks[:len(m.tasks)-1]
+		return pcTask{}, 503, fmt.Errorf("Команда не отправлена: %s", m.journal.storageError())
+	}
 	// Strip UI-only fields before sending a small structured command to the agent.
 	payload := map[string]string{"target": a.Target, "action": a.Action}
 	if a.Target == "wsl" {
@@ -199,6 +203,8 @@ func (m *pcMonitor) runTask(task *pcTask, command string) {
 			task.Message = "Команда выполнена; состояние обновится при следующем опросе"
 		}
 	}
+	m.journal.result(task.Host, task.ID, task.Status, task.Message)
+	m.saveStateLocked()
 }
 
 func (m *pcMonitor) taskList() []pcTask {
@@ -213,7 +219,11 @@ func (m *pcMonitor) taskList() []pcTask {
 
 func (a *app) handlePCActions(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/api/pc/tasks" && r.Method == http.MethodGet {
-		a.writeJSON(w, 200, response{"tasks": pcm.taskList()})
+		tasks := pcm.taskList()
+		pcm.mu.Lock()
+		storage := pcm.journal.storageError()
+		pcm.mu.Unlock()
+		a.writeJSON(w, 200, response{"tasks": tasks, "storage_error": storage})
 		return
 	}
 	if r.URL.Path != "/api/pc/actions" || r.Method != http.MethodPost {

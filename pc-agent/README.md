@@ -72,7 +72,7 @@ powershell.exe -NoProfile -File install.ps1 -PublicKey 'ssh-ed25519 AAAA... home
 Enter the last command in a PowerShell session on the target (run
 `powershell.exe -NoProfile` first if SSH opens `cmd.exe`). Add
 `-AllowDockerActions` and/or `-AllowWSLActions` as needed. Windows installs to
-`%LOCALAPPDATA%\HomeNet\pc-agent.exe`, with the public key in the current
+`%USERPROFILE%\.local\share\HomeNet\pc-agent.exe`, with the public key in the current
 profile's `.ssh\authorized_keys`. It does not install a Windows service and
 must run as that user, not SYSTEM or a separate administrator profile: WSL
 registrations are per Windows user.
@@ -80,8 +80,12 @@ registrations are per Windows user.
 For an account in the local Administrators group, default Windows OpenSSH
 configuration reads `%ProgramData%\ssh\administrators_authorized_keys` instead.
 Run the installer in an elevated PowerShell session **as the same account**
-with `-AdministratorKeyFile`; it applies the required Administrators/SYSTEM
-ACL. If SSH has been configured to use another key-file location or a different
+with `-AdministratorKeyFile`; it installs the binary to
+`%ProgramData%\HomeNet\pc-agent.exe` and applies the required Administrators/SYSTEM
+ACL to the key file. `-InstallDirectory PATH` overrides the binary directory.
+These locations avoid MSIX AppData redirection when installing from packaged
+desktop apps: OpenSSH must see the same physical binary as the installer.
+If SSH has been configured to use another key-file location or a different
 default shell, adapt that configuration explicitly. The generated Windows
 forced command assumes the normal `cmd.exe` OpenSSH default shell. Prefer a
 dedicated ordinary account when its WSL/Docker access meets your needs.

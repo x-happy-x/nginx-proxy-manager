@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icon } from "../components/ui/Icon";
 import { Management } from "../features/pc/Actions";
+import { EventCenter } from "../features/monitoring/EventCenter";
 import { Overview } from "../features/pc/Overview";
 import { Settings } from "../features/pc/Settings";
 import { Docker, Wsl } from "../features/pc/Workloads";
@@ -34,6 +35,7 @@ function Computers({ host }: { host: Host }) {
     {!host.shellNav ? <nav className="section-tabs module-tabs" aria-label="Компьютеры">{pages.map((p) => <a className="section-tab" key={p.id} href={`#/${p.id}`} aria-current={p.id === page ? "page" : undefined} onClick={(e) => { e.preventDefault(); host.navigate(p.id); }}>{p.title}</a>)}</nav> : null}
     {data?.configured && page !== "pcsettings" ? <div className={`pve-health${unavailable.length ? " bad" : ""}`} role="status"><span className="pve-health-dot" /><span>{unavailable.length ? `Нет свежих данных: ${unavailable.map((h) => h.name).join(", ")}` : `На связи: ${computers.map((h) => h.name).join(", ")}`}</span><span className="pve-muted">Обновлено {ago(latest)}</span><button type="button" className="pve-btn ghost" disabled={refreshing} onClick={() => { setRefreshing(true); void reload().finally(() => setRefreshing(false)); }}><Icon name="refresh" size={14} />{refreshing ? "Обновляю…" : "Обновить"}</button></div> : null}
     {error && data ? <div className="pc-error" role="alert">Не удалось обновить данные: {error}. Показан последний полученный снимок.</div> : null}
+    <EventCenter host={host} service="pc" hosts={computers} enabled={!!data?.configured} />
     <Management host={host} computers={computers} enabled={!!data?.configured} reload={reload}>{content}</Management>
   </div>;
 }

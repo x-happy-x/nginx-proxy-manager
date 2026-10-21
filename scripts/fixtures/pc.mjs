@@ -2,6 +2,13 @@
 const GB = 1024 ** 3;
 const startedAt = Date.now();
 const tasks = [];
+const events = [
+  { id: 'pc-preview-1', host: 'workstation', kind: 'task_unknown', severity: 'warning', title: 'Результат операции неизвестен', message: 'Связь прервалась во время перезапуска контейнера web. Проверьте состояние перед повтором.', created_at: new Date(Date.now() - 60000).toISOString() },
+  { id: 'pc-preview-2', host: 'laptop', kind: 'connection_lost', severity: 'warning', title: 'Компьютер недоступен', message: 'Нет ответа по SSH.', created_at: new Date(Date.now() - 180000).toISOString() },
+  { id: 'pc-preview-3', host: 'linux-mini', kind: 'connection_restored', severity: 'info', title: 'Связь восстановлена', message: 'Получен свежий снимок состояния.', created_at: new Date(Date.now() - 360000).toISOString() },
+  { id: 'pc-preview-4', host: 'workstation', kind: 'task_error', severity: 'error', title: 'Не удалось запустить контейнер', message: 'Docker сообщил об ошибке запуска redis.', created_at: new Date(Date.now() - 900000).toISOString(), read_at: new Date(Date.now() - 800000).toISOString() },
+];
+const eventData = () => ({ events, unread: events.filter(e => !e.read_at).length, ...(process.env.PREVIEW_EVENTS_STORAGE_ERROR ? { storage_error: 'Тестовый сбой записи: хранилище недоступно' } : {}) });
 const container = (id, name, state, image) => ({ id: id.repeat(64), name, state, image, status: state === 'running' ? 'Up 3 hours' : 'Exited (0)', ports: name === 'web' ? '127.0.0.1:8080->80/tcp' : '' });
 const docker = [
   { context: 'native', available: true, containers: [container('a', 'web', 'running', 'nginx:stable'), container('b', 'redis', 'exited', 'redis:7')] },
@@ -32,6 +39,11 @@ export function fakePc(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const send = (body, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   const read = callback => { let body = ''; req.on('data', c => body += c); req.on('end', () => { try { callback(JSON.parse(body || '{}')); } catch { send({ error: 'Некорректный запрос' }, 400); } }); };
+  if (url.pathname === '/api/pc/events' && req.method === 'GET') { send(eventData()); return true; }
+  if (url.pathname === '/api/pc/events/read' && req.method === 'POST') { read(body => {
+    if (process.env.PREVIEW_EVENTS_STORAGE_ERROR) { send({ error: 'Не удалось сохранить отметки о прочтении (пример)' }, 500); return; }
+    const now = new Date().toISOString(); events.forEach(e => { if (!e.read_at && (body.all || body.ids?.includes(e.id))) e.read_at = now; }); send(eventData());
+  }); return true; }
   if (url.pathname === '/api/pc/overview') { send(overview()); return true; }
   if (url.pathname === '/api/pc/config' && req.method === 'GET') { send({ hosts: configs.map(({ os, ...h }) => ({ ...h, pinned: true })), public_key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPreviewKey homenet-pc@router' }); return true; }
   if (url.pathname === '/api/pc/config' && req.method === 'PUT') { read(body => { configs = body.hosts.map(h => ({ ...h, os: configs.find(old => old.id === h.id)?.os || 'linux' })); send({ ok: true }); }); return true; }

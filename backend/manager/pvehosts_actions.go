@@ -57,7 +57,11 @@ func containsPVHAction(actions []string, action string) bool {
 
 func (a *app) handlePVEActions(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/api/pve/tasks" && r.Method == http.MethodGet {
-		a.writeJSON(w, 200, response{"tasks": pvh.taskList()})
+		tasks := pvh.taskList()
+		pvh.mu.Lock()
+		storage := pvh.journal.storageError()
+		pvh.mu.Unlock()
+		a.writeJSON(w, 200, response{"tasks": tasks, "storage_error": storage})
 		return
 	}
 	if r.URL.Path != "/api/pve/actions" || r.Method != http.MethodPost {
@@ -176,6 +180,12 @@ func (m *pvhMonitor) executeAction(ctx context.Context, a pvhAction) (pvhTask, i
 		return pvhTask{}, 429, fmt.Errorf("Слишком много активных задач; дождитесь их завершения")
 	}
 	m.tasks = append(m.tasks, task)
+	if err := m.saveStateLocked(); err != nil {
+		m.tasks = m.tasks[:len(m.tasks)-1]
+		message := m.journal.storageError()
+		m.mu.Unlock()
+		return pvhTask{}, 503, fmt.Errorf("Команда не отправлена: %s", message)
+	}
 	m.mu.Unlock()
 	command := "control node " + a.Action
 	if a.Target == "guest" {
@@ -212,6 +222,8 @@ func (m *pvhMonitor) executeAction(ctx context.Context, a pvhAction) (pvhTask, i
 	default:
 		task.Status, task.Message = "accepted", "Сервер принял команду. Выполнение ещё не подтверждено; связь может пропасть."
 	}
+	m.journal.result(task.Host, task.ID, task.Status, task.Message)
+	m.saveStateLocked()
 	return *task, 0, nil
 }
 
@@ -289,6 +301,10 @@ func (m *pvhMonitor) pollTasks() {
 				current.Status, current.Message = "unknown", "Proxmox не подтвердил результат задачи"
 			default:
 				current.Message = "Команда выполняется в Proxmox"
+			}
+			if current.Status != "running" {
+				m.journal.result(current.Host, current.ID, current.Status, current.Message)
+				m.saveStateLocked()
 			}
 			break
 		}

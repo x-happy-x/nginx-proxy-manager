@@ -133,6 +133,7 @@ func (m *pcMonitor) applyHosts(hosts []pcHostConfig) {
 	}
 	m.hosts = next
 	m.loadErr = ""
+	m.saveStateLocked()
 }
 
 func decodePCJSON(w http.ResponseWriter, r *http.Request, out any) error {

@@ -62,6 +62,7 @@ function TaskJournal({ tasks, hosts, error, reload }: { tasks: PveTask[]; hosts:
       <button type="button" className="pve-btn ghost" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? "Свернуть" : `Показать${tasks.length ? ` · ${tasks.length}` : ""}`}</button>
     </header>
     {error ? <div className="pve-task-error" role="alert">Не удалось обновить операции: {error} <button type="button" className="pve-btn ghost" onClick={reload}>Повторить</button></div> : null}
+    {expanded ? <p className="monitor-journal-hint">Последние 100 операций сохраняются между перезапусками. Незавершённые операции после перезапуска требуют проверки состояния.</p> : null}
     <div aria-live="polite" aria-relevant="additions text">
       {visible.map((t) => <div className="pve-task" key={t.id}>
         <Dot tone={t.status === "done" ? "ok" : t.status === "error" ? "bad" : t.status === "unknown" ? "warn" : "idle"} pulse={taskPending(t)} />

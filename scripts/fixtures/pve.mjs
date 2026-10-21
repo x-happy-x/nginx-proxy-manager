@@ -1,6 +1,13 @@
 // Synthetic Proxmox data and operations, used only by the loopback preview server.
 const GB = 1024 ** 3;
 const tasks = [];
+const events = [
+  { id: 'pve-preview-1', host: 'lab-3', kind: 'connection_lost', severity: 'warning', title: 'Сервер недоступен', message: 'Нет ответа по SSH.', created_at: new Date(Date.now() - 60000).toISOString() },
+  { id: 'pve-preview-2', host: 'lab-1', kind: 'task_error', severity: 'error', title: 'Ошибка запуска машины', message: 'VM 100: операция завершилась ошибкой Proxmox.', created_at: new Date(Date.now() - 180000).toISOString() },
+  { id: 'pve-preview-3', host: 'lab-4', kind: 'task_unknown', severity: 'warning', title: 'Результат операции неизвестен', message: 'Сервер перезапустился во время выполнения операции. Проверьте состояние машины.', created_at: new Date(Date.now() - 360000).toISOString() },
+  { id: 'pve-preview-4', host: 'lab-2', kind: 'connection_restored', severity: 'info', title: 'Связь восстановлена', message: 'Получен свежий снимок состояния.', created_at: new Date(Date.now() - 900000).toISOString(), read_at: new Date(Date.now() - 800000).toISOString() },
+];
+const eventData = () => ({ events, unread: events.filter(e => !e.read_at).length, ...(process.env.PREVIEW_EVENTS_STORAGE_ERROR ? { storage_error: 'Тестовый сбой записи: хранилище недоступно' } : {}) });
 const guests = [
   { vmid: 100, name: 'home-assistant', type: 'qemu', status: 'running', mem: 3 * GB, maxmem: 4 * GB, cpu: 12, cpus: 2, tags: 'home;automation' },
   { vmid: 101, name: 'media-server', type: 'lxc', status: 'stopped', mem: 0, maxmem: 8 * GB, cpu: 0, cpus: 4, tags: 'media' },
@@ -37,6 +44,14 @@ function host(index) {
 export function fakePve(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const send = (data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+  if (url.pathname === '/api/pve/events' && req.method === 'GET') { send(eventData()); return true; }
+  if (url.pathname === '/api/pve/events/read' && req.method === 'POST') {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      let request; try { request = JSON.parse(body || '{}'); } catch { send({ error: 'Некорректный JSON' }, 400); return; }
+      if (process.env.PREVIEW_EVENTS_STORAGE_ERROR) { send({ error: 'Не удалось сохранить отметки о прочтении (пример)' }, 500); return; }
+      const now = new Date().toISOString(); events.forEach(e => { if (!e.read_at && (request.all || request.ids?.includes(e.id))) e.read_at = now; }); send(eventData());
+    }); return true;
+  }
   if (url.pathname === '/api/pve/overview') { send({ configured: true, error: '', hosts: Array.from({ length: 4 }, (_, i) => host(i)) }); return true; }
   if (url.pathname === '/api/pve/history') {
     const now = Math.floor(Date.now() / 1000), points = Array.from({ length: 60 }, (_, i) => ({ t: now - (59 - i) * 60, cpu: 20 + Math.sin(i / 5) * 10, mem: 8 * GB, io: 1, load: 0.8, temp: 48 + Math.sin(i / 7) * 4, rx: 1200000, tx: 540000, r: 350000, w: 240000 }));

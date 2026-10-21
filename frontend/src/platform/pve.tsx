@@ -7,6 +7,7 @@ import { Empty } from "../features/pve/parts";
 import { Settings } from "../features/pve/Settings";
 import { Storage } from "../features/pve/Storage";
 import { Management } from "../features/pve/Actions";
+import { EventCenter } from "../features/monitoring/EventCenter";
 import { Icon } from "../components/ui/Icon";
 import { stale } from "../features/pve/model";
 import "../features/pve/pve.css";
@@ -84,6 +85,7 @@ function PveModule({ host }: { host: Host }) {
       <Tabs page={current} host={host} />
       {data?.configured && current !== "pvesettings" ? <HealthLine hosts={hosts} updated={updated} reload={reload} /> : null}
       {error && data ? <div className="pve-health bad" role="alert"><span className="pve-health-dot" aria-hidden="true" />Не удалось обновить: {error}. Показаны последние данные.</div> : null}
+      <EventCenter host={host} service="pve" hosts={hosts} enabled={!!data?.configured} />
       <Management host={host} hosts={hosts} enabled={!!data?.configured} onRefresh={reload}>{body}</Management>
     </div>
   );

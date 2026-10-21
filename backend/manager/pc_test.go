@@ -136,8 +136,14 @@ func TestPCPollingHistoryAndOfflineSnapshot(t *testing.T) {
 	if h.Online || h.Current != previous {
 		t.Fatal("stale snapshot accepted")
 	}
-	if len(m.attention()) != 1 {
-		t.Fatal("offline host should report one attention item")
+	found := false
+	for _, item := range m.attention() {
+		if item["id"] == "office-offline" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("offline host should report an attention item")
 	}
 }
 
