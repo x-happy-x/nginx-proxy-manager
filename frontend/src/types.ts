@@ -40,6 +40,7 @@ export type RouteHost = {
   kind: "private" | "public";
   app_id: string;
   verify_upstream_ssl?: boolean;
+  access_public?: boolean;
   ws_proxy?: {
     enabled: boolean;
     path: string;

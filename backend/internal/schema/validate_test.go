@@ -36,6 +36,10 @@ func TestRejectUnsafeRoutes(t *testing.T) {
 		"websocket injection": func(r *Routes) { r.Hosts[0].WSProxy.Path = "/; return 200;" },
 		"duplicate hostname":  func(r *Routes) { r.Hosts = append(r.Hosts, r.Hosts[0]) },
 		"schema version":      func(r *Routes) { r.SchemaVersion = "3.0" },
+		"public host with gateway app": func(r *Routes) {
+			r.Hosts[0].AccessPublic = true
+			r.Hosts[0].AccessApp = "homenet"
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {

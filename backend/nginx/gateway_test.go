@@ -92,6 +92,29 @@ func TestGatewayIPLinksKeepAuthorityAndProtection(t *testing.T) {
 	}
 }
 
+func TestPublicHostKeepsProxyWithoutGateway(t *testing.T) {
+	r := testRoutes()
+	r.Globals.AccessGateway = true
+	r.Hosts[0].AccessPublic = true
+	g := testGenerator(t)
+	g.command = func(string, ...string) error { return nil }
+	if err := g.apply(r); err != nil {
+		t.Fatal(err)
+	}
+	files, e := g.render(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for p, b := range files {
+		if strings.HasSuffix(p, r.Hosts[0].Host+".conf") && (strings.Contains(b, "auth_request") || !strings.Contains(b, "proxy_pass")) {
+			t.Fatal("public host must be proxied without auth_request")
+		}
+	}
+	if strings.Contains(fileBody(t, g.gatewayHosts), r.Hosts[0].Host) {
+		t.Fatal("public host must not be listed for the gateway")
+	}
+}
+
 func TestGatewayHostsFileFollowsProtectedRoutes(t *testing.T) {
 	r := testRoutes()
 	r.Globals.AccessGateway = true

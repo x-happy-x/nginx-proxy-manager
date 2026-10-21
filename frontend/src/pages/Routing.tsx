@@ -724,6 +724,12 @@ function HostEditor({
             label="Проверять сертификат приложения"
             hint="Для приложений, работающих по HTTPS."
           />
+          <Switch
+            checked={!!host.access_public}
+            onChange={(next) => update((c) => ({ ...c, access_public: next }))}
+            label="Без шлюза Account"
+            hint="Прокси остаётся, но вход проверяет само приложение (например, Home Assistant со своим входом через Account)."
+          />
         </div>
         {localDns ? (
           <Field label="IP для DNS-записи" hint="auto — первый адрес прослушивания прокси.">
