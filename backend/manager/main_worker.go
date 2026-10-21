@@ -28,7 +28,7 @@ func main() {
 	manifestFile := flags.String("manifest", "", "Installed integration manifest")
 	tokenFile := flags.String("token-file", "", "Server-only Core credential")
 	flags.Parse()
-	if workerID != "proxy" && workerID != "network" && workerID != "vpn" && workerID != "pve" && workerID != "ha" {
+	if workerID != "proxy" && workerID != "network" && workerID != "vpn" && workerID != "pve" && workerID != "ha" && workerID != "pc" {
 		log.Fatal("worker identity not set at build time")
 	}
 	var manifest integration.Manifest
@@ -84,6 +84,8 @@ func main() {
 		a.startPVE()
 	case "ha":
 		a.startHA()
+	case "pc":
+		a.startPC()
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
@@ -118,6 +120,10 @@ func main() {
 		}
 		if workerID == "ha" {
 			a.handleHA(w, r)
+			return
+		}
+		if workerID == "pc" {
+			a.handlePC(w, r)
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)

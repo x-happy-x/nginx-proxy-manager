@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 func (a *app) moduleConnection() string {
 	switch moduleKind {
@@ -28,6 +31,24 @@ func (a *app) moduleConnection() string {
 			return "unconfigured"
 		}
 		return "connected"
+	case "pc":
+		if pcm == nil {
+			return "unconfigured"
+		}
+		pcm.mu.Lock()
+		defer pcm.mu.Unlock()
+		if pcm.loadErr != "" {
+			return "unavailable"
+		}
+		if len(pcm.hosts) == 0 {
+			return "unconfigured"
+		}
+		for _, host := range pcm.hosts {
+			if host.Online && host.Current != nil && host.Current.TS >= time.Now().Unix()-120 && host.Current.TS <= time.Now().Unix()+30 {
+				return "connected"
+			}
+		}
+		return "unavailable"
 	}
 	return "unavailable"
 }
