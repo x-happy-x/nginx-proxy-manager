@@ -44,6 +44,7 @@ export type PveHardware = {
 export type PveHost = {
   id: string; name: string; address: string; online: boolean; error: string; latency_ms: number;
   checked_at?: string; last_ok?: string; current: PveCurrent | null; hardware: PveHardware | null;
+  capabilities?: { control: boolean; guest_actions: string[]; node_actions: string[] };
 };
 export type PveOverview = { hosts: PveHost[]; configured: boolean; error: string };
 export type PvePoint = { t: number; cpu: number | null; io: number | null; load: number | null; mem: number | null; temp: number | null; rx: number | null; tx: number | null; r: number | null; w: number | null };
@@ -60,34 +61,37 @@ function useVisible() {
 }
 
 /** Polls a module endpoint while the tab is visible; keeps the last good answer on errors. */
-function usePoll<T>(host: Host, path: string | null, every: number): { data: T | null; error: string; loading: boolean; reload: () => void } {
+export function usePoll<T>(host: Host, path: string | null, every: number): { data: T | null; error: string; loading: boolean; reload: () => Promise<void> } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const visible = useVisible();
   const seq = useRef(0);
+  const activePath = useRef(path);
+  activePath.current = path;
   const load = useCallback(async () => {
     if (!path) return;
     const id = ++seq.current;
     try {
       const res = await host.api(path);
       const json = (await res.json()) as T;
-      if (id === seq.current) { setData(json); setError(""); }
+      if (id === seq.current && activePath.current === path) { setData(json); setError(""); }
     } catch (e) {
-      if (id === seq.current) setError(e instanceof Error ? e.message : String(e));
+      if (id === seq.current && activePath.current === path) setError(e instanceof Error ? e.message : String(e));
     } finally {
       if (id === seq.current) setLoading(false);
     }
   }, [host, path]);
   useEffect(() => {
     setData(null);
-    setLoading(true);
+    setError("");
+    setLoading(!!path);
   }, [path]);
   useEffect(() => {
     if (!visible || !path) return;
     void load();
     const timer = window.setInterval(() => void load(), every * 1000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); ++seq.current; };
   }, [load, visible, every, path]);
   return { data, error, loading, reload: load };
 }
@@ -99,6 +103,26 @@ export type PveTest = { ok: boolean; error?: string; agent?: string; host?: stri
 
 export const useHistory = (host: Host, id: string | null) =>
   usePoll<PveHistory>(host, id ? `/api/pve/history?host=${encodeURIComponent(id)}` : null, 60);
+
+export type PveAction = "start" | "shutdown" | "reboot" | "stop" | "resume";
+export type PveTask = {
+  id: string; host: string; target: "guest" | "node"; type?: "qemu" | "lxc"; vmid?: number;
+  action: PveAction; status: "running" | "accepted" | "done" | "error" | "unknown";
+  upid?: string; message?: string; created_at: string; updated_at: string;
+};
+export const useTasks = (host: Host, enabled: boolean) => usePoll<{ tasks: PveTask[] }>(host, enabled ? "/api/pve/tasks" : null, 5);
+export const taskPending = (t: PveTask) => t.status === "running";
+export function stale(h: PveHost): boolean {
+  if (!h.online || !h.current) return true;
+  return !h.current.ts || Date.now() / 1000 - h.current.ts > Math.max(60, h.current.interval * 4);
+}
+export const guestStatus = (g: PveGuest) => g.template ? "Шаблон" : ({ running: "Работает", stopped: "Остановлена", paused: "Приостановлена", suspended: "Приостановлена" }[g.status] || g.status || "Неизвестно");
+export const guestTone = (g: PveGuest): Tone => g.template ? "idle" : g.status === "running" ? "ok" : g.status === "paused" || g.status === "suspended" ? "warn" : "idle";
+export const guestTags = (g: PveGuest) => (g.tags || "").split(/[;,]/).map((v) => v.trim()).filter(Boolean);
+export function proxmoxURL(h: PveHost, g?: PveGuest) {
+  const address = h.address.includes(":") && !h.address.startsWith("[") ? `[${h.address}]` : h.address;
+  return `https://${address}:8006/${g ? `#v1:0:=${g.type === "qemu" ? "qemu" : "lxc"}%2F${g.vmid}` : ""}`;
+}
 
 // ---------- formatting ----------
 
