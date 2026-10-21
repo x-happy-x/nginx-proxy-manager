@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$PublicKey,
     [string]$Binary = (Join-Path $PSScriptRoot 'homenet-pc-agent.exe'),
+    [string]$InstallDirectory,
     [switch]$AllowDockerActions,
     [switch]$AllowWSLActions,
     [switch]$AdministratorKeyFile
@@ -14,15 +15,24 @@ if ($keyBytes.Length -lt 12) { throw 'Invalid public key data' }
 $typeLength = ([int]$keyBytes[0] -shl 24) -bor ([int]$keyBytes[1] -shl 16) -bor ([int]$keyBytes[2] -shl 8) -bor [int]$keyBytes[3]
 if ($typeLength -lt 1 -or $typeLength -gt ($keyBytes.Length - 4) -or [Text.Encoding]::ASCII.GetString($keyBytes, 4, $typeLength) -ne $keyParts[0]) { throw 'Invalid public key type' }
 if (-not (Test-Path -LiteralPath $Binary -PathType Leaf)) { throw "Binary missing: $Binary" }
-$installDirectory = Join-Path $env:LOCALAPPDATA 'HomeNet'
-$target = Join-Path $installDirectory 'pc-agent.exe'
+if ($AdministratorKeyFile) {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'AdministratorKeyFile requires an elevated PowerShell session as the WSL owner' }
+}
+if (-not $InstallDirectory) {
+    # ProgramData is visible to OpenSSH even when the installer is launched
+    # by an MSIX app that redirects the current user's AppData writes.
+    $InstallDirectory = if ($AdministratorKeyFile) { Join-Path $env:ProgramData 'HomeNet' } else { Join-Path $env:USERPROFILE '.local/share/HomeNet' }
+}
+$InstallDirectory = [IO.Path]::GetFullPath($InstallDirectory)
+$target = Join-Path $InstallDirectory 'pc-agent.exe'
 # cmd.exe expands percent variables even in quotes. Never construct a forced
 # command from a path containing quoting/expansion characters.
 if ($target -match '["%\r\n]') { throw 'Unsupported profile path for the forced command' }
 $flags = ''
 if ($AllowDockerActions) { $flags += ' --allow-docker-actions' }
 if ($AllowWSLActions) { $flags += ' --allow-wsl-actions' }
-New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 Copy-Item -LiteralPath $Binary -Destination $target -Force
 $sshDirectory = Join-Path $env:USERPROFILE '.ssh'
 if ($AdministratorKeyFile) {
