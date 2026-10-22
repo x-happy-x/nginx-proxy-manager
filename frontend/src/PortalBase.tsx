@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { buildItems, defaultLauncher, type LauncherItem } from "./features/launcher/model";
 import { usePlacement } from "./features/launcher/placement";
-import { AppTile, deviceList, PortalApps, usePlacedItems } from "./features/launcher/PortalApps";
+import { AppTile, deviceList, loadLevel, loadParts, PortalApps, useDeviceLoads, usePlacedItems, useRouterNow } from "./features/launcher/PortalApps";
 import "./styles/portal-home.css";
 import type { LauncherConfig } from "./api";
 import type { RoutesDocument } from "./types";
@@ -12,7 +12,7 @@ type Mode = "admin" | "users" | "public";
 type Rule = { mode: Mode; users: string[]; ip_url?: string; domain_url?: string };
 type Policy = { apps: Record<string, Rule> };
 type Data = { login: string; admin: boolean; doc: RoutesDocument; launcher: LauncherConfig | null; links: Record<string, Rule> };
-type Probe = { ok: boolean; ms: number };
+type Probe = { ok: boolean; ms: number; since?: number; exact?: boolean };
 
 const OPENS_KEY = "homenet.portal.opens";
 const MODE_LABEL: Record<Mode, string> = { admin: "Админы", users: "Выбранные", public: "Все" };
@@ -123,6 +123,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [status, setStatus] = useState<Record<string, Probe>>({});
   const placement = usePlacement(!!data?.admin);
+  const router = useRouterNow(!!data?.admin);
 
   const load = useCallback(() => {
     setError("");
@@ -210,7 +211,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
             </>
           ) : null}
         </nav>
-        {admin && data ? <SideDevices items={items} cfg={cfg} placement={placement} status={status} device={view === "apps" ? device : ""} onPick={goApps} /> : null}
+        {admin && data ? <SideDevices items={items} cfg={cfg} placement={placement} router={router} status={status} device={view === "apps" ? device : ""} onPick={goApps} /> : null}
         <span className="pt-grow" />
         {data ? <AccountMenu login={data.login} name={name} admin={admin} /> : null}
       </aside>
@@ -247,7 +248,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
         ) : view === "access" && data.admin ? (
           <Access items={items} cfg={cfg} policy={policy} onSaved={(p) => { setPolicy(p); void load(); }} onBack={() => setView("apps")} />
         ) : (
-          <PortalApps items={items} cfg={cfg} admin={admin} name={name} status={status} policy={admin ? policy : null} placement={admin ? placement : null} device={device} setDevice={setDevice} onChanged={() => void load()} />
+          <PortalApps items={items} cfg={cfg} admin={admin} name={name} status={status} policy={admin ? policy : null} placement={admin ? placement : null} router={admin ? router : null} device={device} setDevice={setDevice} onChanged={() => void load()} />
         )}
       </div>
     </div>
@@ -255,8 +256,9 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
 }
 
 // Devices in the side menu: app count and a red mark when something there does not answer.
-function SideDevices({ items: listed, cfg, placement, status, device, onPick }: { items: LauncherItem[]; cfg: LauncherConfig; placement: ReturnType<typeof usePlacement>; status: Record<string, Probe>; device: string; onPick: (d: string) => void }) {
+function SideDevices({ items: listed, cfg, placement, router, status, device, onPick }: { items: LauncherItem[]; cfg: LauncherConfig; placement: ReturnType<typeof usePlacement>; router: ReturnType<typeof useRouterNow>; status: Record<string, Probe>; device: string; onPick: (d: string) => void }) {
   const { items } = usePlacedItems(listed, cfg, placement);
+  const loads = useDeviceLoads(cfg, placement, router);
   const rows = deviceList(cfg)
     .map((d) => ({ d, apps: items.filter((i) => i.device === d.id) }))
     .filter((r) => r.apps.length);
@@ -266,10 +268,17 @@ function SideDevices({ items: listed, cfg, placement, status, device, onPick }: 
       <h2>Устройства</h2>
       {rows.map(({ d, apps }) => {
         const down = apps.filter((i) => i.probe && status[i.probe] && !status[i.probe].ok).length;
+        const level = loadLevel(loads[d.id]);
+        const parts = loadParts(loads[d.id]).map((p) => p.text).join(" · ");
         return (
-          <button key={d.id} type="button" className={device === d.id ? "is-on" : ""} onClick={() => onPick(device === d.id ? "" : d.id)} title={d.note || d.name}>
+          <button key={d.id} type="button" className={device === d.id ? "is-on" : ""} onClick={() => onPick(device === d.id ? "" : d.id)} title={[d.note || d.name, parts].filter(Boolean).join("\n")}>
             <i className={down ? "is-bad" : ""} />
-            {d.name}
+            <span className="hp-devices-name">{d.name}</span>
+            {level !== undefined ? (
+              <span className="hp-bar" aria-label={parts}>
+                <b className={level >= 85 ? "is-warn" : ""} style={{ width: `${Math.max(4, Math.min(100, level))}%` }} />
+              </span>
+            ) : null}
             <em>{apps.length}</em>
           </button>
         );

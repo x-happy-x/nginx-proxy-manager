@@ -235,3 +235,36 @@ func TestActionRoundTrip(t *testing.T) {
 		t.Fatal(got, err)
 	}
 }
+
+// NPM-86: logs need their own flag, a known container and a bounded tail.
+func TestLogsRequest(t *testing.T) {
+	id := strings.Repeat("c", 64)
+	list := func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(fmt.Sprintf(`{"ID":%q,"Names":"web","Image":"nginx","State":"running","Status":"Up","Ports":""}`, id)), nil
+	}
+	var asked []string
+	all := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		asked = append([]string{name}, args...)
+		return []byte("2026-10-22T10:00:00Z started\n"), nil
+	}
+	a := agent{platform: "linux", run: list, runAll: all}
+	if r := a.logs(context.Background(), LogsRequest{Context: "native", ID: id, Tail: 100}); r.OK {
+		t.Fatal("logs allowed without --allow-docker-logs")
+	}
+	a.dockerLogs = true
+	for _, bad := range []LogsRequest{{Context: "native", ID: "web", Tail: 10}, {Context: "native", ID: id, Tail: 0}, {Context: "native", ID: id, Tail: 5000}, {Context: "native", ID: strings.Repeat("d", 64), Tail: 10}} {
+		if r := a.logs(context.Background(), bad); r.OK {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+	r := a.logs(context.Background(), LogsRequest{Context: "native", ID: id, Tail: 100})
+	if !r.OK || !strings.Contains(r.Text, "started") {
+		t.Fatalf("reply %+v", r)
+	}
+	if strings.Join(asked, " ") != "docker --host unix:///var/run/docker.sock container logs --tail 100 --timestamps "+id {
+		t.Fatalf("command %v", asked)
+	}
+	if !a.capabilities().DockerLogs {
+		t.Fatal("capability not advertised")
+	}
+}

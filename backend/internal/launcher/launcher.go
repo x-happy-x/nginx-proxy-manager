@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/integration"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -154,6 +156,112 @@ func (a Store) Post(w http.ResponseWriter, r *http.Request) {
 type Probe struct {
 	OK bool  `json:"ok"`
 	Ms int64 `json:"ms"`
+	// Since is when the current state began (unix seconds); Exact is false when
+	// the state was already there at the first check after Core started (NPM-86).
+	Since int64 `json:"since,omitempty"`
+	Exact bool  `json:"exact,omitempty"`
+}
+
+type watch struct {
+	ok          bool
+	since, seen time.Time
+	exact       bool
+}
+
+var (
+	watchMu sync.Mutex
+	watched = map[string]*watch{}
+)
+
+// remember keeps when each target's current state began, for «не отвечает 12 мин».
+func remember(target string, p Probe, now time.Time) Probe {
+	watchMu.Lock()
+	defer watchMu.Unlock()
+	w := watched[target]
+	switch {
+	case w == nil:
+		w = &watch{ok: p.OK, since: now}
+		watched[target] = w
+	case w.ok != p.OK:
+		w.ok, w.since, w.exact = p.OK, now, true
+	}
+	w.seen = now
+	for key, other := range watched {
+		if now.Sub(other.seen) > time.Hour {
+			delete(watched, key)
+		}
+	}
+	p.Since, p.Exact = w.since.Unix(), w.exact
+	return p
+}
+
+func probe(target string) Probe {
+	started := time.Now()
+	conn, err := net.DialTimeout("tcp", target, 1500*time.Millisecond)
+	p := Probe{OK: err == nil, Ms: time.Since(started).Milliseconds()}
+	if conn != nil {
+		_ = conn.Close()
+	}
+	return remember(target, p, time.Now())
+}
+
+// ProbeAll checks targets in parallel; Core calls it every minute so downtime
+// is known even when nobody has the page open.
+func ProbeAll(raw []string) map[string]Probe {
+	if len(raw) > 96 {
+		raw = raw[:96]
+	}
+	out := map[string]Probe{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 16)
+	for _, r := range raw {
+		target, ok := Target(r)
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		go func(key, target string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			p := probe(target)
+			mu.Lock()
+			out[key] = p
+			mu.Unlock()
+		}(r, target)
+	}
+	wg.Wait()
+	return out
+}
+
+// Targets lists host:port of routed apps and links, as the portal probes them.
+func Targets(apps []schema.App, cfg *Config) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(t string) {
+		if t != "" && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	for _, a := range apps {
+		add(net.JoinHostPort(a.Upstream.Address, strconv.Itoa(a.Upstream.Port)))
+	}
+	if cfg != nil {
+		for _, l := range cfg.Links {
+			if l.Upstream != "" {
+				add(l.Upstream)
+			} else if u, err := url.Parse(l.URL); err == nil && u.Hostname() != "" {
+				port := u.Port()
+				if port == "" {
+					port = map[bool]string{true: "443", false: "80"}[u.Scheme == "https"]
+				}
+				add(net.JoinHostPort(u.Hostname(), port))
+			}
+		}
+	}
+	return out
 }
 
 // Target accepts host:port on the local network only, so the status
@@ -175,35 +283,5 @@ func Target(raw string) (string, bool) {
 }
 
 func (a Store) Status(w http.ResponseWriter, r *http.Request) {
-	targets := r.URL.Query()["t"]
-	if len(targets) > 96 {
-		targets = targets[:96]
-	}
-	out := map[string]Probe{}
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 16)
-	for _, raw := range targets {
-		target, ok := Target(raw)
-		if !ok {
-			continue
-		}
-		wg.Add(1)
-		go func(key, target string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			started := time.Now()
-			conn, err := net.DialTimeout("tcp", target, 1500*time.Millisecond)
-			probe := Probe{OK: err == nil, Ms: time.Since(started).Milliseconds()}
-			if conn != nil {
-				_ = conn.Close()
-			}
-			mu.Lock()
-			out[key] = probe
-			mu.Unlock()
-		}(raw, target)
-	}
-	wg.Wait()
-	a.writeJSON(w, http.StatusOK, response{"ok": true, "status": out})
+	a.writeJSON(w, http.StatusOK, response{"ok": true, "status": ProbeAll(r.URL.Query()["t"])})
 }

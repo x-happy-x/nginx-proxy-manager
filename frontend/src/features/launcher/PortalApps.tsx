@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchLauncher, fetchResources, saveLauncher, type AppGroupUsage, type LauncherConfig } from "../../api";
+import { fetchLauncher, fetchResources, saveLauncher, type AppGroupUsage, type LauncherConfig, type SystemSnapshot } from "../../api";
 import { artFor } from "./art";
 import { defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "./model";
-import { guestLabel, containerLabel, placedDevice, placeOf, placeSteps, unlistedContainers, type Found, type Placement, type PlacementData } from "./placement";
+import { containerLabel, deviceLoad, guestLabel, placedDevice, placeOf, placeSteps, unlistedContainers, type Found, type Load, type PlaceContainer, type Placement, type PlacementData } from "./placement";
+import { LogsDialog } from "./LogsDialog";
 
 // NPM-85: the app list of the portal, after mock-up A2 — summary, frequent apps,
 // device tabs and cards in the style of Account. Administrators also see where
@@ -11,7 +12,7 @@ import { guestLabel, containerLabel, placedDevice, placeOf, placeSteps, unlisted
 export type Mode = "admin" | "users" | "public";
 export type Rule = { mode: Mode; users: string[]; ip_url?: string; domain_url?: string };
 export type Policy = { apps: Record<string, Rule> };
-export type Probe = { ok: boolean; ms: number };
+export type Probe = { ok: boolean; ms: number; since?: number; exact?: boolean };
 
 const OPENS_KEY = "homenet.portal.opens";
 const VIEW_KEY = "homenet.portal.view";
@@ -73,7 +74,59 @@ export const P = {
   home: "M4 11 12 4l8 7v9H4zM10 20v-5h4v5",
   ext: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   cpu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
+  dots: "M5 12h.01M12 12h.01M19 12h.01",
+  logs: "M5 4h14v16H5zM8 8h8M8 12h8M8 16h5",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
+  pc: "M3 4h18v12H3zM8.5 20h7M12 16v4",
 };
+
+/** «12 мин», «3 ч 5 мин», «2 дн» */
+export function duration(sec: number) {
+  const m = Math.max(1, Math.round(sec / 60));
+  if (m < 60) return `${m} мин`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h} ч ${m % 60} мин` : `${h} ч`;
+  return `${Math.floor(h / 24)} дн`;
+}
+
+/** How long an app has not answered, from Core's own checks (NPM-86). */
+export function downFor(p: Probe | undefined, now = Date.now() / 1000) {
+  if (!p || p.ok || !p.since) return "";
+  if (p.exact) return `${duration(now - p.since)}`;
+  const at = new Date(p.since * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return `замечено в ${at}`;
+}
+
+const pct = (used?: number, total?: number) => (used && total ? Math.round((used / total) * 100) : undefined);
+
+/** CPU, memory and temperature as short pills; warn from 85 %. */
+export function loadParts(load?: Load) {
+  if (!load) return [];
+  const parts: { text: string; warn: boolean }[] = [];
+  if (typeof load.cpu === "number") parts.push({ text: `CPU ${Math.round(load.cpu)}%`, warn: load.cpu >= 85 });
+  const mem = pct(load.mem_used, load.mem_total);
+  if (mem !== undefined) parts.push({ text: `RAM ${mem}%`, warn: mem >= 85 });
+  if (typeof load.temp === "number" && load.temp > 0) parts.push({ text: `${Math.round(load.temp)} °C`, warn: load.temp >= 80 });
+  return parts;
+}
+
+/** The busiest of CPU and memory, for the bars in the side menu. */
+export function loadLevel(load?: Load) {
+  if (!load) return undefined;
+  const values = [typeof load.cpu === "number" ? load.cpu : undefined, pct(load.mem_used, load.mem_total)].filter((v): v is number => v !== undefined);
+  return values.length ? Math.max(...values) : undefined;
+}
+
+/** Load of each launcher device: the router from its own resources, others from the modules. */
+export function useDeviceLoads(cfg: LauncherConfig, placement: PlacementData | null, router: SystemSnapshot | null) {
+  return useMemo(() => {
+    const out: Record<string, Load | undefined> = {};
+    for (const d of cfg.devices) {
+      out[d.id] = d.kind === "router" && router ? { cpu: router.cpu, mem_used: router.mem_used, mem_total: router.mem_total, temp: router.temp_max } : deviceLoad(d.addresses, placement);
+    }
+    return out;
+  }, [cfg.devices, placement, router]);
+}
 
 /** The app's line icon on a colored tile; the hue comes from its artwork, like the icons in Account. */
 export function AppTile({ item, size = 48 }: { item: LauncherItem; size?: number }) {
@@ -110,6 +163,8 @@ type Ctx = {
   places: Map<string, Placement | undefined>;
   usage: (item: LauncherItem) => AppGroupUsage | undefined;
   remember: (key: string) => void;
+  placement: PlacementData | null;
+  showLogs: (c: PlaceContainer) => void;
 };
 
 function Where({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
@@ -130,6 +185,67 @@ function Where({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
         </span>
       ))}
     </div>
+  );
+}
+
+// The card's «⋯»: logs of its container, its VM and container in the modules, its address.
+function CardMenu({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const place = ctx.places.get(item.key);
+  const c = place?.container;
+  const host = c ? ctx.placement?.hosts.find((h) => h.id === c.host) : undefined;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  const copy = () => {
+    void navigator.clipboard?.writeText(item.primary).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <span className="hp-menu-wrap" ref={ref}>
+      <button type="button" className="hp-icon" aria-label={`Ещё: ${item.title}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Svg d={P.dots} size={18} />
+      </button>
+      {open ? (
+        <span className="hp-menu" role="menu">
+          {c ? (
+            <button type="button" role="menuitem" disabled={host?.logs === false} title={host?.logs === false ? "Агент на этом компьютере не отдаёт логи" : undefined} onClick={() => { setOpen(false); ctx.showLogs(c); }}>
+              <Svg d={P.logs} size={16} />
+              Логи контейнера
+            </button>
+          ) : null}
+          {place?.vm ? (
+            <a role="menuitem" href="#/pveguests">
+              <Svg d={P.vm} size={16} />
+              {guestLabel(place.vm)} в «Серверах»
+            </a>
+          ) : null}
+          {c ? (
+            <a role="menuitem" href="#/pcdocker">
+              <Svg d={P.box} size={16} />
+              Docker на {c.host_name}
+            </a>
+          ) : null}
+          <button type="button" role="menuitem" onClick={copy}>
+            <Svg d={P.copy} size={16} />
+            {copied ? "Скопировано" : "Скопировать адрес"}
+          </button>
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -164,13 +280,14 @@ function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
               <Svg d={P.home} size={16} />
             </a>
           ) : null}
+          {ctx.admin ? <CardMenu item={item} ctx={ctx} /> : null}
         </span>
       </div>
       {item.about ? <p className="hp-about">{item.about}</p> : null}
       {down || stopped ? (
         <div className="hp-alert" role="status">
           <Svg d={P.warn} size={15} />
-          {down ? "Не отвечает" : "Работает"}
+          {down ? `Не отвечает${downFor(probe) ? ` · ${downFor(probe)}` : ""}` : "Работает"}
           {stopped ? ` · контейнер ${place!.container!.state === "exited" ? "остановлен" : place!.container!.state}` : ""}
         </div>
       ) : null}
@@ -246,15 +363,15 @@ function FoundBlock({ found, devices, onChanged }: { found: Found[]; devices: La
   );
 }
 
-/** Live CPU/RAM of router processes by listening port, for apps served by the router itself. */
-function useRouterUsage(enabled: boolean, routerAddrs: string[]) {
-  const [groups, setGroups] = useState<AppGroupUsage[]>([]);
+/** The router's own resources (CPU, memory, processes by port), refreshed every minute. */
+export function useRouterNow(enabled: boolean) {
+  const [now, setNow] = useState<SystemSnapshot | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     const pull = () =>
       fetchResources(4e9)
-        .then((r) => alive && setGroups(r.now.apps || []))
+        .then((r) => alive && setNow(r.now))
         .catch(() => undefined);
     void pull();
     const t = setInterval(() => document.visibilityState === "visible" && void pull(), 60000);
@@ -263,16 +380,21 @@ function useRouterUsage(enabled: boolean, routerAddrs: string[]) {
       clearInterval(t);
     };
   }, [enabled]);
+  return now;
+}
+
+/** Live CPU/RAM of router processes by listening port, for apps served by the router itself. */
+function useRouterUsage(router: SystemSnapshot | null, routerAddrs: string[]) {
   return useMemo(() => {
     const byPort = new Map<number, AppGroupUsage>();
-    for (const g of groups) for (const port of g.ports) byPort.set(port, g);
-    const router = new Set(routerAddrs);
+    for (const g of router?.apps || []) for (const port of g.ports) byPort.set(port, g);
+    const addrs = new Set(routerAddrs);
     return (item: LauncherItem) => {
       if (!item.probe) return undefined;
       const i = item.probe.lastIndexOf(":");
-      return router.has(item.probe.slice(0, i)) ? byPort.get(Number(item.probe.slice(i + 1))) : undefined;
+      return addrs.has(item.probe.slice(0, i)) ? byPort.get(Number(item.probe.slice(i + 1))) : undefined;
     };
-  }, [groups, routerAddrs]);
+  }, [router, routerAddrs]);
 }
 
 export type AppsProps = {
@@ -283,6 +405,7 @@ export type AppsProps = {
   status: Record<string, Probe>;
   policy: Policy | null;
   placement: PlacementData | null;
+  router: SystemSnapshot | null;
   device: string;
   setDevice: (d: string) => void;
   onChanged: () => void;
@@ -302,7 +425,7 @@ export function usePlacedItems(listed: LauncherItem[], cfg: LauncherConfig, plac
   return { items, places };
 }
 
-export function PortalApps({ items: listed, cfg, admin, name, status, policy, placement, device, setDevice, onChanged }: AppsProps) {
+export function PortalApps({ items: listed, cfg, admin, name, status, policy, placement, router, device, setDevice, onChanged }: AppsProps) {
   const [query, setQuery] = useState("");
   const [onlyDown, setOnlyDown] = useState(false);
   const [view, setViewState] = useState<"cards" | "list">(() => (readJSON<string>(VIEW_KEY, "cards") === "list" ? "list" : "cards"));
@@ -327,13 +450,15 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
 
   const { items, places } = usePlacedItems(listed, cfg, placement);
   const routerAddrs = useMemo(() => cfg.devices.find((d) => d.kind === "router")?.addresses || [], [cfg.devices]);
-  const usage = useRouterUsage(admin, routerAddrs);
+  const usage = useRouterUsage(router, routerAddrs);
+  const loads = useDeviceLoads(cfg, placement, router);
+  const [logsOf, setLogsOf] = useState<PlaceContainer | null>(null);
   const remember = (key: string) => {
     const next = { ...opens, [key]: (opens[key] || 0) + 1 };
     setOpens(next);
     writeJSON(OPENS_KEY, next);
   };
-  const ctx: Ctx = { admin, status, policy, places, usage, remember };
+  const ctx: Ctx = { admin, status, policy, places, usage, remember, placement, showLogs: setLogsOf };
 
   const devices = deviceList(cfg);
   const isDown = (i: LauncherItem) => !!(i.probe && status[i.probe] && !status[i.probe].ok);
@@ -461,6 +586,7 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
                 {d.note ? <small>{d.note}</small> : null}
               </div>
               <span className="hp-grow" />
+              {admin ? loadParts(loads[d.id]).map((p) => <span key={p.text} className={`hp-pill${p.warn ? " is-warn" : ""}`}>{p.text}</span>) : null}
               <span className="hp-pill">{apps.length} {plural(apps.length, APPS)}</span>
               {admin && dDown ? <span className="hp-pill is-bad">{dDown} не {dDown === 1 ? "отвечает" : "отвечают"}</span> : null}
             </header>
@@ -481,6 +607,7 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
       ) : null}
 
       {admin && found.length && browsing ? <FoundBlock found={found} devices={cfg.devices} onChanged={onChanged} /> : null}
+      {logsOf ? <LogsDialog container={logsOf} onClose={() => setLogsOf(null)} /> : null}
       {admin && probed.length ? <p className="hp-foot">Состояние — проверка порта приложения с роутера раз в минуту. Домен работает отовсюду, значок дома — адрес в домашней сети.</p> : null}
     </main>
   );

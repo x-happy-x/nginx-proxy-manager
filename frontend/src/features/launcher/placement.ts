@@ -6,10 +6,12 @@ import { deviceFor, OTHER_DEVICE } from "./model";
 // guest own an address, the computer module which container publishes a port;
 // both answer only administrators, through Core's integration gateway.
 
-export type PlaceNode = { server: string; server_name: string; ip: string; online: boolean };
+// cpu is percent, memory in bytes; absent while the module has no fresh snapshot (NPM-86)
+export type Load = { cpu?: number | null; mem_used?: number; mem_total?: number; temp?: number | null };
+export type PlaceNode = Load & { server: string; server_name: string; ip: string; online: boolean };
 export type PlaceMachine = { server: string; server_name: string; vmid: number; name: string; type: string; status: string; ips: string[]; stale?: boolean };
 export type PlacePort = { ip: string; port: number; target: string };
-export type PlaceHost = { id: string; name: string; ip: string; online: boolean };
+export type PlaceHost = Load & { id: string; name: string; ip: string; online: boolean; logs?: boolean };
 export type PlaceContainer = { host: string; host_name: string; ip: string; context: string; id: string; name: string; image: string; state: string; status: string; ports: PlacePort[]; stale?: boolean };
 export type PlacementData = { nodes: PlaceNode[]; machines: PlaceMachine[]; hosts: PlaceHost[]; containers: PlaceContainer[] };
 export type Placement = { server: string; node?: PlaceNode; vm?: PlaceMachine; host?: PlaceHost; container?: PlaceContainer };
@@ -74,6 +76,15 @@ export function placeOf(target: string | undefined, data: PlacementData | null):
 
 export function guestLabel(vm: PlaceMachine) {
   return `${vm.type === "lxc" ? "CT" : "VM"} ${vm.vmid} ${vm.name}`;
+}
+
+/** Load of a launcher device: its Proxmox node or a computer at one of its addresses. */
+export function deviceLoad(addresses: string[], data: PlacementData | null): Load | undefined {
+  if (!data) return undefined;
+  const has = (ip: string) => addresses.includes(ip);
+  const node = data.nodes.find((n) => has(n.ip) && n.mem_total);
+  if (node) return node;
+  return data.hosts.find((h) => has(h.ip) && h.mem_total);
 }
 
 export function containerLabel(c: PlaceContainer) {

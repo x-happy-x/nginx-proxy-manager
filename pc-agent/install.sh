@@ -9,12 +9,13 @@ FLAGS=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --allow-docker-actions) FLAGS="$FLAGS --allow-docker-actions" ;;
+    --allow-docker-logs) FLAGS="$FLAGS --allow-docker-logs" ;;
     --binary) shift; BINARY="${1:?missing binary path}" ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
   shift
 done
-[ -n "$KEY" ] || { echo 'usage: sh install.sh PUBLIC_KEY [--allow-docker-actions] [--binary FILE]' >&2; exit 1; }
+[ -n "$KEY" ] || { echo 'usage: sh install.sh PUBLIC_KEY [--allow-docker-actions] [--allow-docker-logs] [--binary FILE]' >&2; exit 1; }
 [ -f "$BINARY" ] || { echo "binary missing: $BINARY" >&2; exit 1; }
 # The restricted command quotes this path literally. Reject characters that
 # would break either the authorized_keys option or the shell quoting.

@@ -7,7 +7,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/json"
 	"net"
+	"net/http"
 	"os"
 	"regexp"
 	"sort"
@@ -41,7 +44,12 @@ func (m *pvhMonitor) placement(arp map[string]string) response {
 	defer m.mu.Unlock()
 	nodes, machines := []response{}, []response{}
 	for _, h := range m.hosts {
-		nodes = append(nodes, response{"server": h.Config.ID, "server_name": h.Config.Name, "ip": h.Config.Address, "online": h.Online})
+		node := response{"server": h.Config.ID, "server_name": h.Config.Name, "ip": h.Config.Address, "online": h.Online}
+		if h.Parsed != nil && h.Online {
+			n := h.Parsed.Node
+			node["cpu"], node["mem_used"], node["mem_total"], node["temp"] = n.CPU, n.Mem.Used, n.Mem.Total, n.CPUTemp
+		}
+		nodes = append(nodes, node)
 		if h.Parsed == nil {
 			continue
 		}
@@ -109,14 +117,19 @@ func (m *pcMonitor) placement() response {
 	defer m.mu.Unlock()
 	hosts, containers := []response{}, []response{}
 	for _, h := range m.hosts {
-		hosts = append(hosts, response{"id": h.Config.ID, "name": h.Config.Name, "ip": h.Config.Address, "online": h.Online})
+		host := response{"id": h.Config.ID, "name": h.Config.Name, "ip": h.Config.Address, "online": h.Online}
+		if h.Current != nil && h.Online {
+			c := h.Current
+			host["cpu"], host["mem_used"], host["mem_total"], host["logs"] = c.CPU.Percent, c.Memory.Used, c.Memory.Total, c.Capabilities.DockerLogs
+		}
+		hosts = append(hosts, host)
 		if h.Current == nil {
 			continue
 		}
 		for _, d := range h.Current.Docker {
 			for _, c := range d.Containers {
 				containers = append(containers, response{"host": h.Config.ID, "host_name": h.Config.Name, "ip": h.Config.Address,
-					"context": d.Context, "id": shortID(c.ID), "name": c.Name, "image": c.Image, "state": c.State, "status": c.Status,
+					"context": d.Context, "id": c.ID, "name": c.Name, "image": c.Image, "state": c.State, "status": c.Status,
 					"ports": parseDockerPorts(c.Ports), "stale": !h.Online})
 			}
 		}
@@ -125,9 +138,53 @@ func (m *pcMonitor) placement() response {
 	return response{"hosts": hosts, "containers": containers}
 }
 
-func shortID(id string) string {
-	if len(id) > 12 {
-		return id[:12]
+var logsContext = regexp.MustCompile(`^(native|wsl:[A-Za-z0-9._-]{1,64})$`)
+
+// serveLogs asks a computer's agent for the tail of one container's log. It is
+// read-only but may show secrets an app prints, so it stays behind the admin gateway.
+func (m *pcMonitor) serveLogs(a *app, w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tail, _ := strconv.Atoi(q.Get("tail"))
+	if tail == 0 {
+		tail = 300
 	}
-	return id
+	m.mu.Lock()
+	h := m.find(q.Get("host"))
+	var cfg pcHostConfig
+	if h != nil {
+		cfg = h.Config
+	}
+	m.mu.Unlock()
+	if h == nil {
+		a.writeJSON(w, 404, response{"ok": false, "error": "Компьютер не найден"})
+		return
+	}
+	if !pcContainerID.MatchString(q.Get("id")) || !logsContext.MatchString(q.Get("context")) || tail < 1 || tail > 2000 {
+		a.writeJSON(w, 400, response{"ok": false, "error": "Некорректный запрос логов"})
+		return
+	}
+	b, _ := json.Marshal(map[string]any{"context": q.Get("context"), "id": q.Get("id"), "tail": tail})
+	out, _, err := m.fetch(r.Context(), cfg, "logs "+base64.RawURLEncoding.EncodeToString(b), false)
+	var reply struct {
+		OK        bool   `json:"ok"`
+		Error     string `json:"error"`
+		Text      string `json:"text"`
+		Truncated bool   `json:"truncated"`
+	}
+	if json.Unmarshal(out, &reply) != nil {
+		msg := "Агент не ответил"
+		if err != nil {
+			msg = err.Error()
+		}
+		a.writeJSON(w, 502, response{"ok": false, "error": msg})
+		return
+	}
+	if !reply.OK {
+		if strings.Contains(reply.Error, "unsupported request") || strings.Contains(reply.Error, "disabled") {
+			reply.Error = "Агент на этом компьютере не отдаёт логи: обновите его и установите с --allow-docker-logs"
+		}
+		a.writeJSON(w, 200, response{"ok": false, "error": reply.Error})
+		return
+	}
+	a.writeJSON(w, 200, response{"ok": true, "text": reply.Text, "truncated": reply.Truncated})
 }

@@ -73,6 +73,7 @@ type pcSnapshot struct {
 	} `json:"docker"`
 	Capabilities struct {
 		DockerActions []string `json:"docker_actions"`
+		DockerLogs    bool     `json:"docker_logs"` // agent 1.1.0+
 		WSLActions    []string `json:"wsl_actions"`
 	} `json:"capabilities"`
 	Errors []string `json:"errors"`
@@ -327,6 +328,8 @@ func (a *app) handlePC(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, 200, response{"items": pcm.attention()})
 	case "/api/pc/placement":
 		a.writeJSON(w, 200, pcm.placement())
+	case "/api/pc/logs":
+		pcm.serveLogs(a, w, r)
 	default:
 		http.NotFound(w, r)
 	}

@@ -1148,3 +1148,204 @@
     flex-basis: calc(100% - 44px);
   }
 }
+
+/* ---------- NPM-86: load bars, «⋯» menu, logs ---------- */
+
+.hp-devices-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hp-bar {
+  margin-left: auto;
+  width: 44px;
+  height: 4px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--hp-line-2);
+  overflow: hidden;
+}
+
+.hp-bar b {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--hp-acc);
+}
+
+.hp-bar b.is-warn {
+  background: var(--hp-warn);
+}
+
+.hp-devices .hp-bar + em {
+  margin-left: 8px;
+  min-width: 14px;
+  text-align: right;
+}
+
+.hp-pill.is-warn {
+  color: var(--hp-warn);
+  border-color: color-mix(in srgb, var(--hp-warn) 40%, var(--hp-line));
+}
+
+.hp-menu-wrap {
+  position: relative;
+  z-index: 2;
+}
+
+.hp-card-tools button.hp-icon {
+  background: none;
+  cursor: pointer;
+}
+
+.hp-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--hp-line-2);
+  border-radius: 12px;
+  background: var(--hp-card);
+  box-shadow: var(--hp-shadow);
+}
+
+.hp-menu > :is(a, button) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hp-menu > :is(a, button):hover {
+  background: var(--hp-hover);
+}
+
+.hp-menu > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hp-menu svg {
+  color: var(--text-3);
+}
+
+.hp-card:has(.hp-menu) {
+  z-index: 3;
+}
+
+.hp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--overlay);
+}
+
+.hp-dialog {
+  width: min(1000px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hp-line-2);
+  border-radius: 16px;
+  background: var(--hp-card);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.hp-dialog header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hp-line);
+}
+
+.hp-dialog header > div {
+  min-width: 0;
+}
+
+.hp-dialog header small {
+  display: block;
+  color: var(--text-3);
+  font: 12px var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hp-dialog .hp-view {
+  margin: 0;
+}
+
+.hp-logs {
+  flex: 1;
+  min-height: 240px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  background: var(--code-bg, var(--hp-card-2));
+  color: var(--text);
+  font: 12px/1.55 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hp-dialog .hp-error {
+  padding: 16px;
+}
+
+.hp-dialog footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--hp-line);
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .hp-modal {
+    padding: 0;
+  }
+
+  .hp-dialog {
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+}
+
+.hp-card-tools {
+  gap: 2px;
+  margin-right: -6px;
+  margin-top: -4px;
+}
+
+.hp-card-tools .hp-icon {
+  width: 30px;
+  height: 30px;
+  border-color: transparent;
+  color: var(--text-3);
+}
+
+.hp-card-tools .hp-icon:hover,
+.hp-card-tools .hp-icon[aria-expanded="true"] {
+  border-color: var(--hp-line-2);
+  background: var(--hp-card-2);
+  color: var(--text);
+}

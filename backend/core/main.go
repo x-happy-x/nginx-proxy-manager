@@ -66,6 +66,7 @@ func main() {
 			}
 		}()
 	}
+	go handler.WatchApps(ctx)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)

@@ -55,7 +55,9 @@ sh ~/homenet-agent-install/install.sh 'ssh-ed25519 AAAA... homenet-pc@router'
 ```
 
 Add `--allow-docker-actions` to the installer command to enable container power
-controls. The installer runs as the SSH account, puts the binary at
+controls. `--allow-docker-logs` (agent 1.1.0+) lets HomeNet read the last lines
+of a container's log (`logs` request, up to 2000 lines and 512 KiB, stdout and
+stderr together); it is off by default because logs may contain secrets. The installer runs as the SSH account, puts the binary at
 `~/.local/bin/homenet-pc-agent`, and adds a restricted key to
 `~/.ssh/authorized_keys`. That account must already have access to Docker's
 local socket; the agent never runs `sudo` or changes group membership.

@@ -2,7 +2,11 @@ package launcher
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
 // NPM-83: the repository link survives a save and must be an http(s) address.
@@ -43,5 +47,35 @@ func TestSaveChecksUpstream(t *testing.T) {
 	cfg.Links[0].Upstream = "8.8.8.8:53"
 	if err := store.Save(cfg); err == nil {
 		t.Fatal("public upstream accepted")
+	}
+}
+
+// NPM-86: the start of the current state is kept; a change seen between two checks is exact.
+func TestRememberKeepsStateStart(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	key := "192.0.2.10:80"
+	if p := remember(key, Probe{OK: true}, t0); p.Since != t0.Unix() || p.Exact {
+		t.Fatalf("first check: %+v", p)
+	}
+	if p := remember(key, Probe{OK: true}, t0.Add(time.Minute)); p.Since != t0.Unix() {
+		t.Fatalf("unchanged state moved: %+v", p)
+	}
+	down := t0.Add(2 * time.Minute)
+	if p := remember(key, Probe{OK: false}, down); p.Since != down.Unix() || !p.Exact {
+		t.Fatalf("change: %+v", p)
+	}
+	if p := remember(key, Probe{OK: false}, down.Add(10*time.Minute)); p.Since != down.Unix() || !p.Exact {
+		t.Fatalf("still down: %+v", p)
+	}
+}
+
+func TestTargetsFollowThePortal(t *testing.T) {
+	var app schema.App
+	app.Upstream.Address, app.Upstream.Port = "192.168.99.33", 4161
+	cfg := &Config{Links: []Link{{URL: "https://p3d.example/", Upstream: "192.168.99.33:4191"}, {URL: "http://192.168.99.11/"}, {URL: "https://task.example/"}}}
+	got := Targets([]schema.App{app}, cfg)
+	want := []string{"192.168.99.33:4161", "192.168.99.33:4191", "192.168.99.11:80", "task.example:443"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v", got)
 	}
 }
