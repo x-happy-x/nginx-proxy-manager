@@ -1651,3 +1651,40 @@
   margin: 0;
   place-items: center;
 }
+
+/* NPM-89: a VM panel is as wide as its cards; several VMs share a row */
+.hp-vm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.hp-vm-row .hp-vm {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 0;
+}
+
+.hp-vm-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.hp-vm-cards > .hp-card {
+  flex: 1 1 300px;
+  width: 300px;
+  max-width: 380px;
+}
+
+@media (max-width: 560px) {
+  .hp-vm-row .hp-vm,
+  .hp-vm-cards > .hp-card {
+    flex-basis: 100%;
+    width: auto;
+    max-width: none;
+  }
+}
