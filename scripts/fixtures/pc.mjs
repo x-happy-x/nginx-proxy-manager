@@ -9,6 +9,14 @@ const inventories = [
   [{ context: 'native', available: true, containers: [container('1', 'forgejo', 'running', 'codeberg.org/forgejo/forgejo:11', '0.0.0.0:3000->3000/tcp'), container('2', 'runner', 'running', 'forgejo/runner:latest')] }],
   [{ context: 'native', available: true, containers: [container('3', 'grafana', 'running', 'grafana/grafana:latest', '0.0.0.0:3001->3000/tcp'), container('4', 'prometheus', 'running', 'prom/prometheus:latest', '127.0.0.1:9090->9090/tcp')] }],
 ];
+// Opt-in visual stress case: long names and many containers.
+if (process.env.PREVIEW_PC_DENSE) {
+  const context = inventories[0].find(d => d.context === 'wsl:Ubuntu');
+  context.containers.push(...Array.from({ length: 68 }, (_, i) => ({
+    ...container('9', `moysklad-all-${i === 0 ? 'very-long-service-name-with-many-components' : `service-${i + 1}`}-1`, i % 3 ? 'running' : 'exited', 'registry.example.net/team/application:1234567890abcdef1234567890abcdef', i % 2 ? `0.0.0.0:${8000 + i}->8080/tcp, [::]:${8000 + i}->8080/tcp` : ''),
+    id: (100 + i).toString(16).padStart(64, '0'),
+  })));
+}
 let configs = [
   { id: 'workstation', name: 'PC-X', address: '192.0.2.21', port: 22, user: 'alex', os: 'windows' },
   { id: 'family-apps', name: 'family-apps', address: '192.0.2.22', port: 22, user: 'homenet', os: 'linux' },
