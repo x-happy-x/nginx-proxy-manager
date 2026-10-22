@@ -306,9 +306,9 @@
 
 /* ---------- top: greeting, search, summary ---------- */
 
+/* NPM-89: no width cap — on a wide screen the grid simply gets more columns */
 .hp-main {
   width: 100%;
-  max-width: 1360px;
   box-sizing: border-box;
   padding: 30px clamp(16px, 3vw, 40px) 48px;
 }
