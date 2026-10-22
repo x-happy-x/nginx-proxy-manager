@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 const FOCUSABLE =
   'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]';
 
+// Only the top dialog handles Escape/Tab (e.g. an action over a PC drawer).
 const dialogStack: HTMLElement[] = [];
 let bodyOverflow = "";
 

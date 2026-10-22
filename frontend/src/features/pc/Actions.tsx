@@ -25,14 +25,15 @@ function allowed(target: Target): Action[] {
     : target.w.state === "running" ? ["terminate"] : ["start"];
   return actions.filter((a) => permissions.includes(a));
 }
-export function Controls({ target }: { target: Target }) {
+export function Controls({ target, compact = false }: { target: Target; compact?: boolean }) {
   const { select, pending } = useContext(Context);
   const note = blocked(target);
   const busy = pending(target);
-  const actions = allowed(target);
-  return <div className="pc-controls"><div className="pc-button-row">{actions.map((action) => <button type="button" key={action} className={`pve-btn${action === "start" ? " primary" : action === "terminate" ? " danger" : ""}`} disabled={!!note || busy}
-    title={note || (busy ? "Операция выполняется" : undefined)} onClick={() => select({ ...target, action })}><Icon name={busy ? "clock" : action === "start" ? "play" : action === "restart" ? "refresh" : "bolt"} size={13} />{busy ? "Выполняется…" : labels[action]}</button>)}</div>
-    {note ? <span className="pc-control-note"><Icon name="lock" size={12} />{note}</span> : !actions.length ? <span className="pc-control-note">Нет доступных действий для этого состояния.</span> : null}</div>;
+  const permitted = allowed(target);
+  const actions: Action[] = target.c ? target.c.state === "running" ? ["restart", "stop"] : ["start"] : target.w.state === "running" ? ["terminate"] : ["start"];
+  return <div className="pc-controls"><div className="pc-button-row">{actions.map((action) => <button type="button" key={action} className={`pve-btn${compact ? " pc-icon-btn" : ""}`} disabled={!!note || busy || !permitted.includes(action)}
+    aria-label={`${labels[action]} ${target.c?.name || target.w?.name}`} title={note || (busy ? "Операция выполняется" : !permitted.includes(action) ? "Действие не разрешено агентом или состоянием ресурса" : labels[action])} onClick={() => select({ ...target, action })}>{compact ? action === "start" ? "▶" : action === "restart" ? "↻" : "■" : <><Icon name={busy ? "clock" : action === "start" ? "play" : "refresh"} size={13} />{busy ? "Выполняется…" : labels[action]}</>}</button>)}</div>
+    {note && !compact ? <span className="pc-control-note"><Icon name="lock" size={12} />{note}</span> : null}</div>;
 }
 
 const statuses: Record<Task["status"], string> = { running: "Выполняется", done: "Выполнено", error: "Ошибка", unknown: "Результат неизвестен" };

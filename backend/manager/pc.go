@@ -86,6 +86,15 @@ type pcSample struct {
 	MemTotal uint64   `json:"mem_total"`
 	RX       float64  `json:"net_rx_bps"`
 	TX       float64  `json:"net_tx_bps"`
+	// Optional additions keep saved samples and older clients compatible.
+	NetworkValid *bool          `json:"network_valid,omitempty"`
+	Disks        []pcDiskSample `json:"disks,omitempty"`
+}
+
+type pcDiskSample struct {
+	Path  string `json:"path"`
+	Used  uint64 `json:"used"`
+	Total uint64 `json:"total"`
 }
 
 type pcHost struct {
@@ -247,7 +256,11 @@ func (m *pcMonitor) poll(h *pcHost) {
 	}
 	h.Error = ""
 	h.LastOK = h.Checked
-	point := pcSample{T: snap.TS / 60 * 60, CPU: snap.CPU.Percent, MemUsed: snap.Memory.Used, MemTotal: snap.Memory.Total}
+	networkValid := false
+	point := pcSample{T: snap.TS / 60 * 60, CPU: snap.CPU.Percent, MemUsed: snap.Memory.Used, MemTotal: snap.Memory.Total, NetworkValid: &networkValid}
+	for _, d := range snap.Disks {
+		point.Disks = append(point.Disks, pcDiskSample{Path: d.Path, Used: d.Used, Total: d.Total})
+	}
 	if prev := h.Current; prev != nil && snap.TS > prev.TS && snap.TS-prev.TS < 300 {
 		old := map[string][2]uint64{}
 		for _, n := range prev.Network {
@@ -260,6 +273,9 @@ func (m *pcMonitor) poll(h *pcHost) {
 				continue
 			}
 			if p, ok := old[n.Name]; ok {
+				if n.RX >= p[0] && n.TX >= p[1] {
+					*point.NetworkValid = true
+				}
 				if n.RX >= p[0] {
 					point.RX += float64(n.RX-p[0]) * 8 / float64(snap.TS-prev.TS)
 				}
