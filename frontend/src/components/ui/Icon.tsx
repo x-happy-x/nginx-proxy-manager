@@ -264,6 +264,7 @@ const paths = {
     </>
   ),
   list: <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />,
+  code: <path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />,
   grip: (
     <>
       <circle cx="9" cy="6" r="1" />

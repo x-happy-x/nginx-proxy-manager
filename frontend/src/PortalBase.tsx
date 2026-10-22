@@ -67,6 +67,7 @@ const I = {
   back: "M19 12H5M11 18l-6-6 6-6",
   down: "m6 9 6 6 6-6",
   chevron: "m9 6 6 6-6 6",
+  git: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9",
 };
 
 function AppIcon({ item, tint, size = 40 }: { item: LauncherItem; tint: number; size?: number }) {
@@ -416,6 +417,12 @@ function Apps({ items, cfg, status, policy }: { items: LauncherItem[]; cfg: Laun
                       ) : null}
                       {policy ? <span className={`pt-access is-${mode}`}>{ACCESS_BADGE[mode]}</span> : null}
                       <span className="pt-grow" />
+                      {policy && i.repo ? (
+                        <a className="pt-link is-git" href={i.repo} target="_blank" rel="noopener noreferrer" title={`Исходный код: ${i.repo}`}>
+                          <Icon d={I.git} size={13} />
+                          Git
+                        </a>
+                      ) : null}
                       <a className="pt-link" href={i.primary} onClick={() => remember(i.key)} title={i.primary}>
                         {hostLabel(i.public || i.primary)} ↗
                       </a>

@@ -146,6 +146,27 @@ const ART: ArtSpec[] = [
     </>),
   },
   {
+    key: "p3d", label: "P3D", hue: 352, motif: "blocks",
+    icon: (<>
+      <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z" />
+      <path d="m4 7.5 8 4.5 8-4.5M12 12v9" />
+    </>),
+  },
+  {
+    key: "git", label: "Forgejo", hue: 24, motif: "nodes",
+    icon: (<>
+      <path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />
+    </>),
+  },
+  {
+    key: "docs", label: "Документы", hue: 200, motif: "stack",
+    icon: (<>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="11" r="2" />
+      <path d="M5.5 16c.6-1.6 1.7-2.4 3-2.4s2.4.8 3 2.4M14 10h4M14 14h4" />
+    </>),
+  },
+  {
     key: "server", label: "Сервер", hue: 230, motif: "grid",
     icon: (<>
       <rect x="3" y="4" width="18" height="7" rx="2" />
@@ -196,6 +217,9 @@ const MATCHERS: Array<[RegExp, string]> = [
   [/account|sso|auth/i, "account"],
   [/cloud|files|nextcloud/i, "cloud"],
   [/sms/i, "sms"],
+  [/p3d|planner|floor/i, "p3d"],
+  [/forgejo|gitea|\bgit\b/i, "git"],
+  [/docs|документ/i, "docs"],
   [/keenetic|netcraze|router|роутер/i, "router"],
   [/kvm/i, "kvm"],
   [/task|tracker|задач/i, "tracker"],

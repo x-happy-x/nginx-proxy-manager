@@ -544,6 +544,20 @@
   color: var(--text-3);
 }
 
+/* NPM-83: source repository in Forgejo, admins only */
+.pt-link.is-git {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--pt-line);
+  color: var(--text-3);
+}
+
+.pt-link.is-git:hover {
+  color: var(--text);
+}
+
 /* App icons: the service's line icon on a muted device tint. */
 .pt-icon {
   flex-shrink: 0;
