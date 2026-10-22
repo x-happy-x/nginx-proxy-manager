@@ -44,6 +44,15 @@ function usePcState(host: Host, computers: Computer[]) {
   const [container, setContainer] = useState<ContainerTarget | null>(null);
   const [application, setApplication] = useState<LauncherItem | null>(null);
   const [environment, setEnvironment] = useState<Environment | null>(null);
+  useEffect(() => {
+    const openFromRoute = () => {
+      const match = location.hash.match(/^#\/pc\/host\/([^/]+)$/);
+      if (match) { try { const id = decodeURIComponent(match[1]); setApplication(null); setContainer(null); setComputer(id); } catch { setComputer(null); } }
+      else setComputer(null);
+    };
+    openFromRoute(); window.addEventListener("hashchange", openFromRoute);
+    return () => window.removeEventListener("hashchange", openFromRoute);
+  }, []);
   const history = useHistories(host, computers);
   const placement = usePlacement(true);
   const items = usePortalItems();
@@ -54,7 +63,7 @@ function usePcState(host: Host, computers: Computer[]) {
   });
   return { host, computers, hideAddresses, setHideAddresses, computer, container, application, environment, history, vmOf, appsOf,
     appsKnown: items !== null && placement !== null && computers.every(h => placement.hosts.some(p => p.id === h.id)),
-    openComputer: (id: string | null) => { setApplication(null); setContainer(null); setComputer(id); },
+    openComputer: (id: string | null) => { setApplication(null); setContainer(null); setComputer(id); if (!id && location.hash.startsWith("#/pc/host/")) host.navigate("pc"); },
     openContainer: (target: ContainerTarget | null) => { setApplication(null); setComputer(null); setContainer(target); },
     openApplication: (item: LauncherItem | null) => { setComputer(null); setContainer(null); setApplication(item); },
     openEnvironment: (where: Environment) => { setComputer(null); setContainer(null); setEnvironment(where); host.navigate("pcdocker"); },

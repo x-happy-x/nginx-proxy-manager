@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { PveOverview } from "../features/pve/model";
+import { Icon, type IconName } from "../components/ui/Icon";
+import type { Computer } from "../features/pc/model";
 import { NAV } from "../navigation";
 import type { HomeMode, Installed } from "./sdk";
 
@@ -31,8 +33,8 @@ const PLANS: Record<string, Plan> = {
     pro: [{ pages: ["pve", "pveguests", "pve/resources", "pvehw", "pvestorage", "pve/events", "pvesettings"] }],
   },
   pc: {
-    simple: ["pc", "pcdocker", "pcwsl"],
-    pro: [{ pages: ["pc", "pcdocker", "pcwsl"] }, { title: "Настройка", pages: ["pcsettings"] }],
+    simple: ["pc", "pcdocker", "pcwsl", "pc/events", "pcsettings"],
+    pro: [{ pages: ["pc", "pcdocker", "pcwsl", "pc/events", "pcsettings"] }],
   },
   // NPM-76
   ha: {
@@ -49,7 +51,8 @@ const PLANS: Record<string, Plan> = {
 };
 // a page inside a section lights up the section's menu entry
 const SECTION_OF: Record<string, string> = { subs: "vservers", checks: "vservers", proxies: "vroute", rules: "vroute", why: "vpnsvc", traffic: "vstats", vnow: "vstats", connections: "corelog", core: "coreconfig", torrents: "coreconfig" };
-const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx", "pve/resources": "Ресурсы", "pve/events": "События", pve: "Серверы", pveguests: "Машины", pvehw: "Железо и температуры", pvestorage: "Хранилища", pvesettings: "Настройка", pc: "Обзор", pcdocker: "Контейнеры", pcwsl: "WSL", pcsettings: "Настройка", ha: "Обзор", hasettings: "Настройка" };
+const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx", "pve/resources": "Ресурсы", "pve/events": "События", pve: "Серверы", pveguests: "Машины", pvehw: "Железо и температуры", pvestorage: "Хранилища", pvesettings: "Настройка", pc: "Компьютеры", "pc/events": "События", pcdocker: "Контейнеры", pcwsl: "WSL", pcsettings: "Настройка", ha: "Обзор", hasettings: "Настройка" };
+const PC_ICONS: Record<string, IconName> = { pc: "overview", pcdocker: "dms", pcwsl: "terminal", "pc/events": "clock", pcsettings: "advanced" };
 const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь", pve: "Сервера", pc: "Компьютеры", ha: "Умный дом" };
 
 export const pageTitle = (id: string, item?: Installed) =>
@@ -73,13 +76,15 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
   page: string; module?: Installed; active: Installed[]; installedCount: number; mode: HomeMode; setMode: (m: HomeMode) => void;
   theme: string; setTheme: (t: string) => void; login: string; attention: Record<string, number>; onPortal: () => void;
 }) {
+  const pcHosts = useSidebarComputers(module?.manifest.id === "pc");
+  const pcCounts: Record<string, number> = { pc: pcHosts.length, pcdocker: pcHosts.reduce((n, h) => n + (h.current?.docker.reduce((n, d) => n + d.containers.length, 0) || 0), 0), pcwsl: pcHosts.reduce((n, h) => n + (h.current?.wsl.length || 0), 0) };
   const [subroute, setSubroute] = useState(location.hash.replace(/^#\/?/, ""));
   useEffect(() => { const update = () => setSubroute(location.hash.replace(/^#\/?/, "")); window.addEventListener("hashchange", update); return () => window.removeEventListener("hashchange", update); }, []);
   // aliases (olcrtc, tailscale) light up the page they belong to
   const own = module?.manifest.ui.pages.find(p => p.id === page || p.aliases?.includes(page))?.id || page;
   const current = module && PLANS[module.manifest.id] ? SECTION_OF[own] || own : own;
   const link = (id: string, title: string, extra?: React.ReactNode) =>
-    <a key={id} href={`#/${id}`} className={(module?.manifest.id === "pve" && ["pve/resources", "pve/events"].includes(subroute) ? subroute === id : current === id) ? "active" : ""} aria-current={(module?.manifest.id === "pve" && ["pve/resources", "pve/events"].includes(subroute) ? subroute === id : current === id) ? "page" : undefined}><span className="hn-nav-title">{title}</span>{extra}</a>;
+    <a key={id} href={`#/${id}`} className={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/events", "pc/events"].includes(subroute) ? subroute === id : current === id) ? "active" : ""} aria-current={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/events", "pc/events"].includes(subroute) ? subroute === id : current === id) ? "page" : undefined}><span className="hn-nav-title">{module?.manifest.id === "pc" && PC_ICONS[id] ? <Icon name={PC_ICONS[id]} size={16} /> : null}{title}</span>{module?.manifest.id === "pc" && pcCounts[id] !== undefined ? <span className="hn-count hn-count-muted">{pcCounts[id]}</span> : extra}</a>;
   return <aside className="hn-sidebar" aria-label="Меню HomeNet">
     <a className="hn-brand" href="#/overview"><span className="hn-logo" aria-hidden="true">H</span><span>HomeNet</span></a>
     {module ? <nav aria-label={`Разделы: ${module.manifest.name}`}>
@@ -90,7 +95,8 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
         {g.pages.map(id => link(id, pageTitle(id, module)))}
       </div>)}
       {module.manifest.id === "pve" && <PveSidebarStatus />}
-      {mode === "simple" && module.manifest.id !== "pve" && <button type="button" className="hn-more" onClick={() => setMode("pro")}>Все разделы — режим «Подробно»</button>}
+      {module.manifest.id === "pc" && <div className="hn-pve-cluster"><b>Компьютеры</b>{pcHosts.map(h => <a key={h.id} href={`#/pc/host/${encodeURIComponent(h.id)}`}><span className={h.online ? "online" : "offline"} />{h.name}<i title={`CPU ${h.current?.cpu.percent ?? "—"}%`}><em style={{ width: `${Math.min(100, h.current?.cpu.percent || 0)}%` }} /></i></a>)}</div>}
+      {mode === "simple" && !["pve", "pc"].includes(module.manifest.id) && <button type="button" className="hn-more" onClick={() => setMode("pro")}>Все разделы — режим «Подробно»</button>}
     </nav> : <nav aria-label="Разделы HomeNet">
       {link("overview", "Главная")}
       {active.length > 0 && <div className="hn-nav-label">Интеграции</div>}
@@ -123,4 +129,16 @@ function PveSidebarStatus() {
   }, []);
   const cluster = data?.hosts.map(h => h.current?.cluster).find(c => c?.name);
   return <div className="hn-pve-cluster">{cluster && <><b>Кластер {cluster.name}</b><small>{cluster.quorate ? "Кворум есть" : "Нет кворума"} · {cluster.nodes?.filter(n=>n.online).length} / {cluster.nodes?.length} узлов</small></>}{data?.hosts.map(h => <a key={h.id} href={`#/pve/${encodeURIComponent(h.id)}/node/0`}><span className={h.online ? "online" : "offline"} />{h.name}<i title={`CPU ${h.current?.node.cpu ?? "—"}%`}><em style={{width:`${Math.min(100,h.current?.node.cpu || 0)}%`}} /></i></a>)}</div>;
+}
+
+function useSidebarComputers(enabled: boolean) {
+  const [hosts, setHosts] = useState<Computer[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const pull = async () => { try { const r = await fetch("/api/integrations/pc/api/pc/overview"); if (r.ok) { const d = await r.json(); if (alive) setHosts(d.hosts || []); } } catch { /* The module reports connection errors. */ } };
+    void pull(); const timer = setInterval(() => { if (document.visibilityState !== "hidden") void pull(); }, 15000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [enabled]);
+  return hosts;
 }

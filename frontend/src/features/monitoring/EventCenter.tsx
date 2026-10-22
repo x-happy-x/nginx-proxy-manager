@@ -14,11 +14,11 @@ const eventIcons: Record<MonitoringEvent["kind"], IconName> = { connection_lost:
 const formatTime = (value: string) => new Date(value).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 /** A saved inbox shared by the PC and Proxmox modules; polling never sends toasts. */
-export function EventCenter({ host, service, hosts, enabled }: { host: Host; service: Service; hosts: { id: string; name: string }[]; enabled: boolean }) {
+export function EventCenter({ host, service, hosts, enabled, defaultExpanded = false }: { host: Host; service: Service; hosts: { id: string; name: string }[]; enabled: boolean; defaultExpanded?: boolean }) {
   const [data, setData] = useState<Events | null>(null);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [filter, setFilter] = useState("all");
   const [writing, setWriting] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);

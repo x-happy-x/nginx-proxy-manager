@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Management } from "../features/pc/Actions";
 import { EventCenter } from "../features/monitoring/EventCenter";
 import { Overview } from "../features/pc/Overview";
@@ -18,8 +18,11 @@ import type { Host } from "./sdk";
 const pages = [{ id: "pc", title: "Компьютеры" }, { id: "pcdocker", title: "Контейнеры" }, { id: "pcwsl", title: "WSL" }, { id: "pcsettings", title: "Настройка" }];
 function Computers({ host }: { host: Host }) {
   const route = usePage(), page = pages.some(p => p.id === route) ? route : "pc";
+  const [eventsPage, setEventsPage] = useState(location.hash === "#/pc/events");
+  useEffect(() => { const update = () => setEventsPage(location.hash === "#/pc/events"); window.addEventListener("hashchange", update); return () => window.removeEventListener("hashchange", update); }, []);
   const { data, loading, error, reload } = useComputers(host);
   const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [page, eventsPage]);
   const computers = data?.hosts || [];
   const refresh = () => { setRefreshing(true); void reload().finally(() => setRefreshing(false)); };
   let content;
@@ -29,12 +32,13 @@ function Computers({ host }: { host: Host }) {
   else if (!data.configured) content = <div className="pc-welcome card"><h2>Подключите домашние компьютеры</h2><p>Windows и Linux, ресурсы, Docker и окружения WSL.</p><button type="button" className="hp-btn is-primary" onClick={() => host.navigate("pcsettings")}>Подключить компьютер</button></div>;
   else if (page === "pcdocker") content = <Docker />;
   else if (page === "pcwsl") content = <Wsl />;
+  else if (eventsPage) content = <PcHeading title="События" subtitle="История связи, состояние окружений и результаты операций" />;
   else content = <Overview reload={refresh} refreshing={refreshing} />;
   return <PcProvider host={host} computers={computers}><div className="hp pve-module pc-module">
     {!host.shellNav ? <nav className="section-tabs module-tabs" aria-label="Компьютеры">{pages.map(p => <a className="section-tab" key={p.id} href={`#/${p.id}`} aria-current={p.id === page ? "page" : undefined}>{p.title}</a>)}</nav> : null}
     {error && data ? <div className="pc-error" role="alert">Не удалось обновить данные: {error}. Показан последний снимок.</div> : null}
     <Management host={host} computers={computers} enabled={!!data?.configured} reload={reload}>{content}<Details /></Management>
-    <EventCenter host={host} service="pc" hosts={computers} enabled={!!data?.configured} />
+    <EventCenter key={eventsPage ? "events" : "summary"} defaultExpanded={eventsPage} host={host} service="pc" hosts={computers} enabled={!!data?.configured} />
   </div></PcProvider>;
 }
 export function mount(element: HTMLElement, host: Host) {

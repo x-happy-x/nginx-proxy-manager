@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { plural } from "../../lib/format";
 import { TimeChart } from "../../components/charts/TimeChart";
 import { Icon } from "../../components/ui/Icon";
 import { bytes, percent, ratio } from "../pve/model";
@@ -12,7 +13,7 @@ export { ViewSwitch } from "../monitoring/portal";
 
 export function PcHeading({ title, subtitle, query, setQuery, children, privacy = true }: { title: string; subtitle: string; query?: string; setQuery?: (q: string) => void; children?: ReactNode; privacy?: boolean }) {
   const { hideAddresses, setHideAddresses } = usePc();
-  return <header className="pc-heading"><div><h1>{title}</h1><p>{subtitle}</p></div><div className="pc-heading-tools">{setQuery ? <label className="pc-search"><Icon name="search" size={16} /><input aria-label="Поиск" placeholder="Компьютер, контейнер, образ, порт" value={query} onChange={e => setQuery(e.target.value)} /></label> : null}{children}{privacy ? <button type="button" className="hp-btn is-quiet" aria-pressed={hideAddresses} onClick={() => setHideAddresses(!hideAddresses)}>{hideAddresses ? "Адреса скрыты" : "Скрыть адреса"}</button> : null}</div></header>;
+  return <header className="pc-heading"><div><h1>{title}</h1><p>{subtitle}</p></div><div className="pc-heading-tools">{setQuery ? <label className="pc-search"><Icon name="search" size={16} /><input aria-label="Поиск" placeholder="Компьютер, контейнер, образ, порт" value={query} onChange={e => setQuery(e.target.value)} /></label> : null}{children}{privacy ? <button type="button" className="hp-btn is-quiet pc-privacy" title={hideAddresses ? "Показать адреса" : "Скрыть адреса"} aria-label={hideAddresses ? "Показать адреса" : "Скрыть адреса"} aria-pressed={hideAddresses} onClick={() => setHideAddresses(!hideAddresses)}><Icon name={hideAddresses ? "eyeOff" : "eye"} size={17} /></button> : null}</div></header>;
 }
 export function OsIcon({ h }: { h: Computer }) {
   const os = h.current?.os;
@@ -32,10 +33,11 @@ export function OsIcon({ h }: { h: Computer }) {
   </span>;
 }
 export function StatusDot({ state, label }: { state: "ok" | "warn" | "off"; label: string }) { return <span className={`pc-dot ${state}`} role="img" aria-label={label} title={label} />; }
-export function MachineHead({ h, badge = true }: { h: Computer; badge?: boolean }) {
+export function MachineHead({ h, badge = true, compact = false }: { h: Computer; badge?: boolean; compact?: boolean }) {
   const { hideAddresses, vmOf, openComputer } = usePc();
   const vm = vmOf(h);
-  return <header className="pc-machine-head"><OsIcon h={h} /><div className="pc-machine-name"><button type="button" onClick={() => openComputer(h.id)}>{h.name}</button> <StatusDot state={!h.online ? "off" : outdated(h) ? "warn" : "ok"} label={!h.online ? "Нет связи" : outdated(h) ? "Старые данные" : "На связи"} /><small>{hideAddresses ? "Адрес скрыт" : h.address} · {systemName(h)}{h.current ? ` · ${h.current.cpu.cores} ядер` : ""}</small></div>{badge ? vm ? <a className="pc-badge violet" href="#/pveguests">{vm.type === "lxc" ? "CT" : "VM"} {vm.vmid} · {vm.server_name}</a> : <span className="pc-badge blue">{h.current?.os === "windows" ? "рабочая станция" : "компьютер"}</span> : null}</header>;
+  const mark = vm ? <a className="pc-badge violet" href="#/pveguests">{vm.type === "lxc" ? "CT" : "VM"} {vm.vmid}{compact ? "" : ` · ${vm.server_name}`}</a> : <span className="pc-badge blue">{h.current?.os === "windows" ? "рабочая станция" : "компьютер"}</span>;
+  return <header className="pc-machine-head"><OsIcon h={h} /><div className="pc-machine-name"><div className="pc-name-line"><button type="button" onClick={() => openComputer(h.id)}>{h.name}</button> <StatusDot state={!h.online ? "off" : outdated(h) ? "warn" : "ok"} label={!h.online ? "Нет связи" : outdated(h) ? "Старые данные" : "На связи"} />{compact && badge && vm ? mark : null}</div><small>{hideAddresses ? "Адрес скрыт" : h.address} · {systemName(h)}{h.current ? ` · ${h.current.cpu.cores} ${plural(h.current.cpu.cores, ["ядро", "ядра", "ядер"])}` : ""}</small></div>{badge && !compact ? mark : null}</header>;
 }
 export function Ring({ value, label, detail }: { value: number | null; label: string; detail?: string }) {
   return <div className={`pc-gauge${value !== null && value >= 85 ? " warning" : ""}`} title={detail || label}><svg viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="19" className="pc-ring-track" /><circle cx="23" cy="23" r="19" className="pc-ring-value" strokeDasharray={`${Math.max(0, Math.min(100, value || 0)) * 1.194} 119.4`} transform="rotate(-90 23 23)" /></svg><div><b>{percent(value)}</b><small>{label}</small></div></div>;

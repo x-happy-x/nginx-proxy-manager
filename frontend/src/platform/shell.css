@@ -9,7 +9,7 @@
 .hn-sidebar nav a:hover{background:var(--surface-3);color:var(--text)}
 .hn-sidebar nav a.active{background:var(--surface-3);color:var(--text);font-weight:600}
 .hn-sidebar nav a>span{position:static}
-.hn-nav-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hn-nav-title{display:inline-flex;align-items:center;gap:9px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hn-nav-label{margin:14px 0 4px;padding:0 12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);font-weight:600}
 .hn-nav-group{display:flex;flex-direction:column;gap:2px}
 .hn-back{color:var(--accent-text)!important;font-size:13px!important;padding:6px 12px!important}
@@ -56,3 +56,5 @@ h1{font-weight:800;letter-spacing:-.02em}
 .hn-pve-cluster>a>span{width:6px;height:6px;border-radius:50%;background:var(--success)}.hn-pve-cluster>a>span.offline{background:var(--text-3)}
 .hn-pve-cluster i{width:44px;height:4px;background:var(--border-strong);border-radius:3px;overflow:hidden;margin-left:auto}.hn-pve-cluster em{display:block;height:100%;background:var(--success)}
 @media(max-width:760px){.hn-pve-cluster{display:none}}
+
+@media(max-width:760px){.hn-seg button{font-size:11px}}
