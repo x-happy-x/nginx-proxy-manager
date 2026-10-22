@@ -143,7 +143,7 @@
 .pc-search { width: 280px; max-width: 100%; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--hp-card); border: 1px solid var(--hp-line-2); border-radius: 11px; color: var(--text-3); }
 .pc-search input { width: 100%; min-width: 0; padding: 0; background: none; border: 0; color: var(--text); font: inherit; font-size: 12px; outline: none; }
 .pc-search:focus-within { outline: 2px solid var(--hp-acc); outline-offset: 2px; }
-.pc-module .hp-btn, .pc-dialog-body .hp-btn { min-height: 34px; font-size: 12px; white-space: normal; }
+.pc-module .hp-btn, .pc-dialog-body .hp-btn { min-height: 34px; font-size: 12px; white-space: normal; gap: 6px; }
 .pc-module button:disabled, .pc-dialog-body button:disabled { opacity: .4; cursor: not-allowed; }
 .pc-module :is(button, a, input, select):focus-visible, .pc-dialog-body :is(button, a, input, select):focus-visible { outline: 2px solid var(--hp-acc); outline-offset: 2px; }
 .pc-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; border: 0; background: none; }
@@ -168,9 +168,12 @@
 .pc-computer { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--hp-line); background: var(--hp-card); border-radius: 18px; min-width: 0; }
 .pc-computer:hover { border-color: var(--hp-line-2); }
 .pc-machine-head { display: flex; align-items: flex-start; gap: 11px; flex-wrap: wrap; min-width: 0; }
-.pc-os { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--hp-card-2); font-size: 23px; color: white; box-shadow: inset 0 1px 0 #ffffff30; }
-.pc-os.windows { background: linear-gradient(145deg, #4f8cff, #2552c9); }
-.pc-os.linux { background: linear-gradient(145deg, #f2a347, #c66d12); font-size: 21px; }
+.pc-os { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--hp-card-2); color: var(--text-2); border: 1px solid var(--hp-line); }
+.pc-os > svg { width: 28px; height: 28px; }
+.pc-os.windows { background: var(--hp-blue-soft); color: var(--hp-blue); border-color: color-mix(in srgb, var(--hp-blue) 20%, transparent); }
+.pc-os.linux { background: var(--hp-card-2); color: #28303d; --pc-os-paper: #fff; --pc-os-beak: #dca245; }
+:root[data-theme="dark"] .pc-os.linux { color: #d1d9e5; --pc-os-paper: #252c36; --pc-os-beak: #e2b56d; }
+.pc-host-table .pc-os > svg { width: 23px; height: 23px; }
 .pc-computer > header > .pc-machine-name, .pc-machine-name { flex: 1; min-width: 140px; display: block; }
 .pc-machine-name > button { display: inline; padding: 0; border: 0; background: none; color: var(--text); font-size: 17px; font-weight: 700; letter-spacing: -.015em; cursor: pointer; overflow-wrap: anywhere; }
 .pc-machine-name small { display: block; font: 11px/1.6 var(--font-mono); color: var(--text-3); overflow-wrap: anywhere; margin-top: 3px; }
@@ -329,7 +332,19 @@
 .pc-module .hp-view, .pc-dialog-body .hp-view { display: flex; }
 .pc-mobile-sort { display: none; }
 @media (max-width: 760px) { .pc-mobile-sort { display: flex; gap: 8px; align-items: center; font-size: 12px; } }
-:root[data-theme="dark"] .hp.pc-dialog-body { background: transparent; }
-:root[data-theme="dark"] .overlay:has(.pc-dialog-body) > :is(.modal, .drawer) { background: #0e1211; }
+/* The portal provides controls; the module inherits the surrounding Shell canvas.
+   Keep the same neutral surfaces in either theme instead of painting a second page. */
+.hp.pc-module, .hp.pc-dialog-body,
+:root[data-theme="dark"] .hp.pc-module, :root[data-theme="dark"] .hp.pc-dialog-body {
+  background: transparent;
+  --hp-card: var(--surface);
+  --hp-card-2: var(--surface-2);
+  --hp-hover: var(--surface-3);
+  --hp-line: var(--border);
+  --hp-line-2: var(--border-strong);
+}
+.overlay:has(.pc-dialog-body) > :is(.modal, .drawer) { background: var(--surface); }
+.pc-module .icon, .pc-dialog-body .icon { flex-shrink: 0; }
+.pc-environment h3 button { display: inline-flex; align-items: center; gap: 6px; }
 .pc-module .hp-btn.pc-icon-btn, .pc-dialog-body .hp-btn.pc-icon-btn { display: inline-flex; justify-content: center; align-items: center; min-height: 28px; height: 28px; padding: 0; }
 .pc-distro > header > .pc-machine-name { display: block; min-width: 140px; }

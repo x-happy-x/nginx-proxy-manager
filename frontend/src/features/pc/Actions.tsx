@@ -32,7 +32,7 @@ export function Controls({ target, compact = false }: { target: Target; compact?
   const permitted = allowed(target);
   const actions: Action[] = target.c ? target.c.state === "running" ? ["restart", "stop"] : ["start"] : target.w.state === "running" ? ["terminate"] : ["start"];
   return <div className="pc-controls"><div className="pc-button-row">{actions.map((action) => <button type="button" key={action} className={`pve-btn${compact ? " pc-icon-btn" : ""}`} disabled={!!note || busy || !permitted.includes(action)}
-    aria-label={`${labels[action]} ${target.c?.name || target.w?.name}`} title={note || (busy ? "Операция выполняется" : !permitted.includes(action) ? "Действие не разрешено агентом или состоянием ресурса" : labels[action])} onClick={() => select({ ...target, action })}>{compact ? action === "start" ? "▶" : action === "restart" ? "↻" : "■" : <><Icon name={busy ? "clock" : action === "start" ? "play" : "refresh"} size={13} />{busy ? "Выполняется…" : labels[action]}</>}</button>)}</div>
+    aria-label={`${labels[action]} ${target.c?.name || target.w?.name}`} title={note || (busy ? "Операция выполняется" : !permitted.includes(action) ? "Действие не разрешено агентом или состоянием ресурса" : labels[action])} onClick={() => select({ ...target, action })}><Icon name={busy ? "clock" : action === "start" ? "play" : action === "restart" ? "refresh" : "stop"} size={compact ? 15 : 14} />{!compact ? busy ? "Выполняется…" : labels[action] : null}</button>)}</div>
     {note && !compact ? <span className="pc-control-note"><Icon name="lock" size={12} />{note}</span> : null}</div>;
 }
 
