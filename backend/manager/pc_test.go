@@ -74,6 +74,54 @@ func TestPCConfigPersistenceAndHostValidation(t *testing.T) {
 	}
 }
 
+func TestPCHistoryDiskPersistenceAndNetworkReset(t *testing.T) {
+	m := pcTestMonitor(t)
+	h := m.hosts[0]
+	now := time.Now().Unix()
+	h.Current.TS = now - 60
+	h.Current.Network[0].RX = 30000
+	h.Current.Network[0].TX = 40000
+	m.request = func(context.Context, pcHostConfig, string, bool) ([]byte, string, error) {
+		return pcFixture(t, now), "", nil
+	}
+	m.poll(h)
+	point := h.History[0]
+	if point.NetworkValid == nil || *point.NetworkValid || point.RX != 0 || point.TX != 0 {
+		t.Fatalf("counter reset must not produce throughput: %+v", point)
+	}
+	h.Current.Disks[0].Used = 1
+	if point.Disks[0].Used != 920 {
+		t.Fatal("historical disks changed with current snapshot")
+	}
+	m.mu.Lock()
+	m.saveStateLocked()
+	m.mu.Unlock()
+	if err := m.saveHosts([]pcHostConfig{h.Config}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PC_DIR", m.dir)
+	loaded := newPCMonitor()
+	if len(loaded.hosts[0].History) != 1 || loaded.hosts[0].History[0].Disks[0] != point.Disks[0] {
+		t.Fatal("disk history not persisted")
+	}
+	var legacy pcSample
+	if err := json.Unmarshal([]byte(`{"t":1,"cpu":25,"mem_used":10,"mem_total":20,"net_rx_bps":800,"net_tx_bps":1600}`), &legacy); err != nil || legacy.RX != 800 || len(legacy.Disks) != 0 || legacy.NetworkValid != nil {
+		t.Fatalf("legacy sample incompatible: %+v %v", legacy, err)
+	}
+	previous := pcm
+	pcm = m
+	t.Cleanup(func() { pcm = previous })
+	r := httptest.NewRecorder()
+	(&app{}).handlePC(r, httptest.NewRequest("GET", "/api/pc/history?host=office", nil))
+	var reply struct {
+		Step   int        `json:"step"`
+		Points []pcSample `json:"points"`
+	}
+	if err := json.Unmarshal(r.Body.Bytes(), &reply); r.Code != 200 || err != nil || reply.Step != 60 || len(reply.Points) != 1 || reply.Points[0].Disks[0].Used != 920 {
+		t.Fatalf("history API: %d %s %v", r.Code, r.Body, err)
+	}
+}
+
 func TestPCKnownHostIncludesPort(t *testing.T) {
 	m := pcTestMonitor(t)
 	if err := os.MkdirAll(filepath.Join(m.dir, ".ssh"), 0700); err != nil {
@@ -116,6 +164,9 @@ func TestPCPollingHistoryAndOfflineSnapshot(t *testing.T) {
 	m.poll(h)
 	if !h.Online || len(h.History) != 1 || h.History[0].RX != 800 || h.History[0].TX != 1600 {
 		t.Fatalf("history %+v", h.History)
+	}
+	if h.History[0].NetworkValid == nil || !*h.History[0].NetworkValid || len(h.History[0].Disks) != 1 || h.History[0].Disks[0] != (pcDiskSample{Path: "C:", Used: 920, Total: 1000}) {
+		t.Fatalf("network validity and disk usage missing: %+v", h.History[0])
 	}
 	m.poll(h)
 	if len(h.History) != 1 {
