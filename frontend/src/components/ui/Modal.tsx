@@ -5,6 +5,9 @@ import { Icon } from "./Icon";
 const FOCUSABLE =
   'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]';
 
+const dialogStack: HTMLElement[] = [];
+let bodyOverflow = "";
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -41,8 +44,11 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
+    const root = ref.current?.getRootNode() as Document | ShadowRoot;
+    const previous = root.activeElement as HTMLElement | null;
+    const dialog = ref.current!;
+    if (!dialogStack.length) bodyOverflow = document.body.style.overflow;
+    dialogStack.push(dialog);
     document.body.style.overflow = "hidden";
     const focusable = () =>
       Array.from(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || []);
@@ -53,6 +59,7 @@ export function Modal({
       : null;
     (initial || ref.current)?.focus();
     const listener = (event: KeyboardEvent) => {
+      if (dialogStack[dialogStack.length - 1] !== dialog) return;
       if (event.key === "Escape" && !lockedRef.current) {
         event.stopPropagation();
         closeRef.current();
@@ -66,19 +73,21 @@ export function Modal({
       }
       const first = list[0];
       const last = list[list.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (root.activeElement === first || root.activeElement === dialog)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && root.activeElement === last) {
         event.preventDefault();
         first.focus();
       }
     };
     document.addEventListener("keydown", listener);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      const index = dialogStack.indexOf(dialog);
+      if (index >= 0) dialogStack.splice(index, 1);
+      if (!dialogStack.length) document.body.style.overflow = bodyOverflow;
       document.removeEventListener("keydown", listener);
-      previous?.focus?.();
+      if (previous?.isConnected) previous.focus();
     };
   }, [open]);
 

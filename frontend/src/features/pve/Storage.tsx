@@ -1,82 +1,13 @@
-import { bytes, dateTime, loadTone, percent, rate, ratio, type PveHost } from "./model";
-import { Bar, Empty, Pill, Section } from "./parts";
-
-const TYPES: Record<string, string> = { dir: "каталог", lvmthin: "LVM-thin", lvm: "LVM", zfspool: "ZFS", nfs: "NFS", cifs: "SMB", pbs: "Proxmox Backup", rbd: "Ceph RBD", cephfs: "CephFS" };
-const CONTENT: Record<string, string> = { images: "диски ВМ", rootdir: "контейнеры", vztmpl: "шаблоны", iso: "ISO", backup: "бэкапы", import: "импорт", snippets: "сниппеты" };
-
-function HostStorage({ h }: { h: PveHost }) {
-  const c = h.current;
-  if (!c) return <Empty title="Нет данных">{h.error}</Empty>;
-  const backups = c.backups.slice(0, 6);
-  return (
-    <div className="pve-storage-grid">
-      <div className="card pve-list">
-        <div className="pve-card-head"><h3>Хранилища</h3><span className="pve-muted pve-small">{c.storage.length}</span></div>
-        {c.storage.map((s) => {
-          const p = ratio(s.used, s.total);
-          return (
-            <div className="pve-store" key={s.name}>
-              <div className="pve-store-head">
-                <strong>{s.name}</strong>
-                <span className="pve-muted">{TYPES[s.type] || s.type}{s.shared ? " · общее" : ""}</span>
-                {!s.active ? <Pill tone={s.enabled ? "bad" : "idle"}>{s.enabled ? "недоступно" : "выключено"}</Pill> : <b className={`tone-text-${loadTone(p)}`}>{percent(p)}</b>}
-              </div>
-              {s.active && s.total ? <Bar value={p} tone={loadTone(p)} marks={[90]} /> : null}
-              <div className="pve-store-foot">
-                <span>{s.active && s.total ? `${bytes(s.used)} из ${bytes(s.total, 0)} · свободно ${bytes(s.total - s.used)}` : "—"}</span>
-                <span className="pve-muted">{s.content.split(",").filter(Boolean).map((x) => CONTENT[x] || x).join(", ")}</span>
-              </div>
-            </div>
-          );
-        })}
-        {c.zfs.map((z) => (
-          <div className="pve-store" key={`zfs-${z.name}`}>
-            <div className="pve-store-head">
-              <strong>{z.name}</strong><span className="pve-muted">ZFS-пул · фрагментация {z.frag ?? "—"} %</span>
-              <Pill tone={z.health === "ONLINE" ? "ok" : "bad"}>{z.health}</Pill>
-            </div>
-            <Bar value={z.cap} tone={loadTone(z.cap)} marks={[80]} />
-            <div className="pve-store-foot"><span>{bytes(z.alloc)} из {bytes(z.size, 0)}</span></div>
-          </div>
-        ))}
-      </div>
-      <div className="pve-side">
-        <div className="card pve-list">
-          <div className="pve-card-head"><h3>Диски сейчас</h3></div>
-          {c.io.length ? c.io.map((d) => (
-            <div className="pve-io" key={d.dev}>
-              <span className="pve-mono">{d.dev}</span>
-              <span>R {rate(d.r)}</span>
-              <span>W {rate(d.w)}</span>
-              <span className="pve-io-util"><Bar value={d.util} tone={loadTone(d.util)} thin /><small>{percent(d.util)} занят</small></span>
-            </div>
-          )) : <p className="pve-muted pve-small">Нет данных</p>}
-        </div>
-        <div className="card pve-list">
-          <div className="pve-card-head"><h3>Резервные копии</h3><span className="pve-muted pve-small">vzdump</span></div>
-          {backups.length ? backups.map((b, i) => (
-            <div className="pve-backup" key={`${b.id}-${b.start}-${i}`}>
-              <Pill tone={b.status === "OK" ? "ok" : b.status === "running" ? "accent" : "bad"}>{b.status === "OK" ? "успешно" : b.status === "running" ? "идёт" : "ошибка"}</Pill>
-              <span>{b.id ? `машина ${b.id}` : "все машины"}</span>
-              <span className="pve-muted">{dateTime(b.end || b.start)}</span>
-              {b.status !== "OK" && b.status !== "running" ? <small className="tone-text-bad">{b.status}</small> : null}
-            </div>
-          )) : <p className="pve-muted pve-small">Заданий резервного копирования не было.</p>}
-        </div>
-      </div>
-    </div>
-  );
+import { backupFailed, bytes, dateTime, ratio, usageTone, type PveBackup, type PveHost } from "./model";
+import { Bar, Empty, Pill } from "./parts";
+import { NoMatches, SnapshotNote } from "./ui";
+export function BackupList({ backups }: { backups: PveBackup[] }) { return backups.length ? <div className="pv-backup-list">{[...backups].sort((a,b) => b.start-a.start).map((b,i) => <div key={`${b.id}:${i}`}><Pill tone={backupFailed(b) ? "bad" : b.status === "OK" ? "ok" : "warn"}>{b.status === "OK" ? "Успешно" : b.status === "running" ? "Выполняется" : "Ошибка"}</Pill><b>{b.vmid ? `VM ${b.vmid}` : "Задание копирования"}</b><span>{dateTime(b.start)} · {bytes(b.size)}{b.storage ? ` · ${b.storage}` : ""}</span>{backupFailed(b) && <p>{b.status}</p>}</div>)}</div> : <Empty title="Копий за 14 дней нет">Старый агент может передавать только последние задания без машины и размера.</Empty>; }
+export function BackupCalendar({ h }: { h: PveHost }) {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const days = Array.from({ length: 14 }, (_, i) => { const start = new Date(now); start.setDate(start.getDate() - 13 + i); const end = new Date(start); end.setDate(end.getDate()+1); const copies = (h.current?.backups || []).filter(b => b.start * 1000 >= +start && b.start * 1000 < +end); return { start, copies, state: copies.some(backupFailed) ? "bad" : copies.some(b=>b.status === "OK") ? "ok" : copies.length ? "warn" : "idle" }; });
+  return <div><b>{h.name}</b><div className="pv-calendar">{days.map(d => <span tabIndex={0} key={+d.start} className={`tone-${d.state}`} title={`${d.start.toLocaleDateString("ru-RU")}: ${d.copies.length ? d.copies.map(b => `${b.vmid || "задание"}: ${b.status}`).join("; ") : "нет копий"}`} aria-label={`${d.start.toLocaleDateString("ru-RU")}: ${d.state === "bad" ? "ошибка" : d.state === "ok" ? "успешно" : d.state === "warn" ? "выполняется" : "нет копий"}`}>{d.start.getDate()}</span>)}</div></div>;
 }
-
 export function Storage({ hosts }: { hosts: PveHost[] }) {
-  if (!hosts.length) return <Empty title="Хосты не настроены" />;
-  return (
-    <div className="pve-page">
-      {hosts.map((h) => (
-        <Section key={h.id} title={h.name} hint={h.address}>
-          <HostStorage h={h} />
-        </Section>
-      ))}
-    </div>
-  );
+  const errors = hosts.flatMap(h => (h.current?.backups || []).filter(backupFailed).map(b => ({ h, b }))).sort((a,b) => b.b.start-a.b.start);
+  return hosts.length ? <div className="pv-storage-layout"><section className="pv-card"><h2>Хранилища</h2>{hosts.map(h => <div key={h.id}><h3>{h.name}</h3><SnapshotNote h={h} />{(h.current?.storage || []).map(s => <div className="pv-storage-row" key={s.name}><div><b>{s.name}</b><small>{s.type} · {!s.active ? "недоступно" : s.shared ? "общее" : "локальное"}</small></div><Bar value={ratio(s.used,s.total)} tone={s.active ? usageTone(ratio(s.used,s.total)) : "idle"} /><span>{bytes(s.used)} / {bytes(s.total)}</span></div>)}{!h.current?.storage.length && <small>Нет данных о хранилищах</small>}{(h.current?.zfs || []).map(z => <div className="pv-storage-row" key={z.name}><b>ZFS · {z.name}</b><Bar value={ratio(z.alloc,z.size)} tone={usageTone(ratio(z.alloc,z.size))} /><Pill tone={z.health === "ONLINE" ? "ok" : "bad"}>{z.health}</Pill></div>)}</div>)}</section><section className="pv-card"><h2>Резервные копии · 14 дней</h2>{hosts.map(h => <BackupCalendar h={h} key={h.id} />)}<p className="pv-spec-line">Зелёный — успешно · красный — ошибка · серый — нет копий</p>{errors[0] && <p className="pv-warning">Последняя ошибка {dateTime(errors[0].b.start)} на {errors[0].h.name}: {errors[0].b.status}</p>}<details><summary>Все копии и задания</summary>{hosts.map(h => <div key={h.id}><h3>{h.name}</h3><BackupList backups={h.current?.backups || []} /></div>)}</details></section></div> : <NoMatches />;
 }

@@ -17,7 +17,7 @@ const Context = createContext<Controls>({ choose: () => undefined, pending: () =
 function reason(h: PveHost, g?: PveGuest): string {
   if (!h.online) return "Сервер не отвечает. Управление станет доступно после восстановления связи.";
   if (stale(h)) return "Данные устарели. Дождитесь свежего состояния сервера.";
-  if (!h.capabilities?.control) return "Управление не разрешено. Обновите агент и включите нужные разрешения по инструкции в настройках.";
+  if (!h.capabilities?.control) return "Ключ агента разрешает только чтение. Питание недоступно.";
   if (g?.template) return "Шаблоны не запускаются. Создайте машину из шаблона в Proxmox.";
   if (g?.lock) return `Машина занята: ${g.lock}. Дождитесь завершения операции.`;
   return "";
@@ -39,12 +39,13 @@ export function ActionButtons({ h, g, compact = false, onAction }: { h: PveHost;
   if (compact) actions = actions.slice(0, 1);
   return <div className="pve-control">
     <div className="pve-action-buttons">
+      {!actions.length && <button type="button" className="pve-btn ghost" disabled title={blocked || "Ключ не разрешает питание"}>Питание недоступно</button>}
       {actions.map((action) => <button key={action} type="button" className={`pve-btn${action === "start" || action === "resume" ? " primary" : action === "stop" ? " danger ghost" : ""}`}
         disabled={!!blocked || busy} title={blocked || (busy ? "Операция уже выполняется" : undefined)}
         onClick={() => { onAction?.(); choose(h, action, g); }}><Icon name={busy ? "clock" : ACTIONS[action].icon} size={14} />{busy ? "Выполняется…" : ACTIONS[action].label}</button>)}
     </div>
     {!compact && blocked ? <p className="pve-control-note"><Icon name="lock" size={13} />{blocked}</p> : null}
-    {!compact && !blocked && !actions.length ? <p className="pve-control-note">{g ? `Для состояния «${guestStatus(g)}» агент не предлагает действий.` : "Управление питанием сервера не разрешено. Включите его при установке агента."}</p> : null}
+    {!compact && !blocked && !actions.length ? <p className="pve-control-note">{g ? `Для состояния «${guestStatus(g)}» агент не предлагает действий.` : "Управление питанием сервера не разрешено этому ключу."}</p> : null}
   </div>;
 }
 

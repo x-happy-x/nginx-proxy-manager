@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
-import { fakePve } from './fixtures/pve.mjs';
+import { fakePve, pvePortalFixture } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await mkdir(path.join(root,'.local'),{recursive:true});
 const state = await mkdtemp(path.join(root, '.local/modular-preview-'));
@@ -100,6 +100,7 @@ async function startHAWorker(item, manifestPath, tokenPath) {
   process.on('exit', () => worker.kill());
 }
 async function freePort() { const s = createServer(); await new Promise(r => s.listen(0, '127.0.0.1', r)); const p = s.address().port; await new Promise(r => s.close(r)); return p; }
+if (process.env.PREVIEW_PVE === 'fake') await writeFile(path.join(state, 'portal.json'), JSON.stringify(pvePortalFixture));
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {

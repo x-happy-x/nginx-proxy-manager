@@ -9,6 +9,9 @@ export type PveGuest = {
   vmid: number; name: string; type: "qemu" | "lxc"; status: string; template: boolean;
   cpu: number; cpus: number; mem: number; maxmem: number; disk: number; maxdisk: number;
   netin_rate?: number; netout_rate?: number; diskread_rate?: number; diskwrite_rate?: number;
+  ips?: string[]; macs?: string[];
+  config?: { cpu?: string; cores?: number; sockets?: number; memory?: number; balloon?: number; agent?: string | number;
+    disks: { slot: string; volume: string; size: string }[]; networks: { slot: string; mac: string; bridge: string }[] };
   uptime: number; tags: string; lock: string;
 };
 export type PveDisk = {
@@ -16,6 +19,7 @@ export type PveDisk = {
   health: boolean | null; temp: number | null; hours: number | null; cycles: number | null; wear: number | null;
   written: number | null; media_errors: number | null; reallocated: number | null;
 };
+export type PveBackup = { id: string; status: string; start: number; end: number | null; vmid?: number | null; size?: number | null; storage?: string; source?: string };
 export type PveCurrent = {
   host: string; ts: number; interval: number;
   node: {
@@ -30,7 +34,7 @@ export type PveCurrent = {
   storage: { name: string; type: string; used: number; total: number; active: boolean; enabled: boolean; shared: boolean; content: string }[];
   zfs: { name: string; size: number; alloc: number; free: number; frag: number; cap: number; health: string }[];
   disks: PveDisk[]; updates: number | null; failed_units: string[];
-  backups: { id: string; status: string; start: number; end: number | null }[];
+  backups: PveBackup[];
   versions: { pve?: string; kernel?: string; agent?: string };
   cluster?: { name?: string; quorate?: boolean; nodes?: { name: string; ip: string; online: boolean; local: boolean }[] };
 };
@@ -74,6 +78,7 @@ export function usePoll<T>(host: Host, path: string | null, every: number): { da
     const id = ++seq.current;
     try {
       const res = await host.api(path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as T;
       if (id === seq.current && activePath.current === path) { setData(json); setError(""); }
     } catch (e) {
@@ -214,3 +219,11 @@ export function mainStorage(c: PveCurrent | null) {
   const list = (c?.storage || []).filter((s) => s.active && s.total > 0);
   return list.find((s) => s.name === "local") || list.sort((a, b) => b.total - a.total)[0] || null;
 }
+
+export function sensorThreshold(t?: PveTemp) {
+  const crit = t?.crit || (t?.chip === "nvme" ? 85 : 100);
+  return { warn: Math.min(crit - 10, t?.max || crit - 10), bad: crit - 3, crit };
+}
+export const cpuSensor = (h: PveHost) => h.current?.temps.find(t => /coretemp|k10temp|zenpower|cpu_thermal/.test(t.chip));
+export const usageTone = (v: number): Tone => v >= 95 ? "bad" : v >= 85 ? "warn" : "ok";
+export const backupFailed = (b: PveBackup) => b.status !== "OK" && b.status !== "running";

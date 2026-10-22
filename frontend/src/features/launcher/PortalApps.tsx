@@ -262,7 +262,7 @@ function CardMenu({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
             </button>
           ) : null}
           {place?.vm ? (
-            <a role="menuitem" href="#/pveguests">
+            <a role="menuitem" href={`#/pveguests/${encodeURIComponent(place.vm.server)}/${place.vm.type}/${place.vm.vmid}`}>
               <Svg d={P.vm} size={16} />
               {guestLabel(place.vm)} в «Серверах»
             </a>
