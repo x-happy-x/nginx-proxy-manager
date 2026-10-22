@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ViewSwitch } from "../monitoring/portal";
 import { ActionButtons } from "./Actions";
 import { usePve, useSaved } from "./context";
 import { ago, backupFailed, bits, bytes, celsius, cpuSensor, cpuShort, mainStorage, percent, platformName, ratio, sensorThreshold, tempTone, uptime, usageTone, type PveGuest, type PveHost } from "./model";
@@ -28,7 +29,7 @@ export function Machines({ hosts }: { hosts: PveHost[] }) {
     const av = value(a.g, sort), bv = value(b.g, sort); return (typeof av === "string" ? av.localeCompare(String(bv), "ru") : Number(av) - Number(bv)) * (desc ? -1 : 1);
   });
   const columns: [Sort, string][] = [["name", "Машина"], ["cpu", "CPU · сутки"], ["mem", "Память"], ["net", "Сеть и диск"], ["apps", "Приложения"], ["uptime", "Работает"]];
-  return <><div className="pv-tools"><div className="hp-view" role="group" aria-label="Группировка">{[true, false].map(v => <button key={String(v)} aria-pressed={grouped === v} className={grouped === v ? "is-on" : ""} onClick={() => setGrouped(v)}>{v ? "По серверам" : "Одним списком"}</button>)}</div><label className="pv-mobile-sort">Сортировка <select value={sort} onChange={e => setSort(e.target.value as Sort)}>{columns.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button onClick={() => setDesc(!desc)}>{desc ? "↓" : "↑"}</button></label></div>
+  return <><div className="pv-tools"><ViewSwitch label="Группировка" value={grouped ? "grouped" : "flat"} options={[{value:"grouped",label:"По серверам"},{value:"flat",label:"Одним списком"}]} onChange={v => setGrouped(v === "grouped")} /><label className="pv-mobile-sort">Сортировка <select value={sort} onChange={e => setSort(e.target.value as Sort)}>{columns.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button onClick={() => setDesc(!desc)}>{desc ? "↓" : "↑"}</button></label></div>
     {rows.length ? <div className="pv-table" role="table" aria-label="Машины"><div className="pv-tr pv-thead" role="row">{columns.map(([key, label]) => <div role="columnheader" key={key} aria-sort={sort === key ? desc ? "descending" : "ascending" : "none"}><button onClick={() => { if (sort === key) setDesc(!desc); else { setSort(key); setDesc(false); } }}>{label} {sort === key ? desc ? "↓" : "↑" : ""}</button></div>)}<span role="columnheader">Питание</span></div>
       {rows.map(({ h, g }, i) => <div className="pv-rowgroup" role="rowgroup" key={`${h.id}:${g.type}:${g.vmid}`}>{grouped && rows[i - 1]?.h.id !== h.id && <div className="pv-group" role="row"><span role="cell">{h.name} · {ctx.hide ? "Адрес скрыт" : h.address} · {cpuShort(h.hardware?.cpu.model)}</span></div>}<div className={`pv-tr ${g.status !== "running" ? "off" : ""}`} role="row">
         <div role="cell"><GuestName h={h} g={g} />{!h.online && <small>Нет связи с сервером</small>}</div>

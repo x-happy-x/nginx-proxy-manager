@@ -8,9 +8,8 @@ import { usePc } from "./context";
 export function Chip({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
   return <button type="button" className={`pc-chip${active ? " is-on" : ""}`} aria-pressed={active} onClick={onClick}>{children}</button>;
 }
-export function ViewSwitch<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (next: T) => void }) {
-  return <div className="hp-view" role="group" aria-label={label}>{options.map(o => <button type="button" key={o.value} aria-pressed={value === o.value} className={value === o.value ? "is-on" : ""} onClick={() => onChange(o.value)}>{o.label}</button>)}</div>;
-}
+export { ViewSwitch } from "../monitoring/portal";
+
 export function PcHeading({ title, subtitle, query, setQuery, children, privacy = true }: { title: string; subtitle: string; query?: string; setQuery?: (q: string) => void; children?: ReactNode; privacy?: boolean }) {
   const { hideAddresses, setHideAddresses } = usePc();
   return <header className="pc-heading"><div><h1>{title}</h1><p>{subtitle}</p></div><div className="pc-heading-tools">{setQuery ? <label className="pc-search"><Icon name="search" size={16} /><input aria-label="Поиск" placeholder="Компьютер, контейнер, образ, порт" value={query} onChange={e => setQuery(e.target.value)} /></label> : null}{children}{privacy ? <button type="button" className="hp-btn is-quiet" aria-pressed={hideAddresses} onClick={() => setHideAddresses(!hideAddresses)}>{hideAddresses ? "Адреса скрыты" : "Скрыть адреса"}</button> : null}</div></header>;

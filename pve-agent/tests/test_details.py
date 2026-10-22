@@ -45,13 +45,24 @@ class DetailsTests(unittest.TestCase):
                         {'id': '100', 'starttime': 1}]
             return [{'vmid': 100, 'ctime': now-180, 'size': 2048, 'volid': 'local:backup/a'},
                     {'vmid': 102, 'ctime': now-400, 'size': 4096, 'volid': 'local:backup/b'}, {'ctime': 1}]
-        with patch.object(agent.time, 'time', return_value=now), patch.object(agent, 'sh_json', side_effect=api), patch.object(agent, 'storage', return_value=[{'name': 'local', 'active': True, 'content': 'backup,iso'}]):
+        with patch.object(agent, 'backup_guests', return_value=[]), patch.object(agent.time, 'time', return_value=now), patch.object(agent, 'sh_json', side_effect=api), patch.object(agent, 'storage', return_value=[{'name': 'local', 'active': True, 'content': 'backup,iso'}]):
             result = agent.backups()
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0]['size'], 2048)
         self.assertEqual(result[1]['status'], 'ERROR: no space')
         self.assertIsNone(result[1]['vmid'])
         self.assertEqual(result[2]['vmid'], 102)
+
+    def test_scheduled_job_preserves_each_guest_result(self):
+        lines = [{'t': x} for x in ['INFO: Starting Backup of VM 100 (qemu)',
+                 'INFO: archive file size: 2.5GB', 'INFO: Finished Backup of VM 100 (00:03:00)',
+                 'INFO: Starting Backup of VM 101 (qemu)', 'ERROR: Backup of VM 101 failed - no space']]
+        with patch.object(agent, 'sh_json', return_value=lines):
+            rows = agent.backup_guests({'upid': 'job', 'starttime': 123, 'endtime': 456})
+        self.assertEqual(rows[0]['status'], 'OK')
+        self.assertEqual(rows[0]['size'], int(2.5 * 1024**3))
+        self.assertEqual(rows[1]['vmid'], 101)
+        self.assertEqual(rows[1]['status'], 'ERROR: no space')
 
     def test_tasks_paginate(self):
         with patch.object(agent.time, 'time', return_value=2000000), patch.object(agent, 'storage', return_value=[]), patch.object(agent, 'sh_json', side_effect=[[{'starttime': 1999000, 'id': str(i)} for i in range(100)], []]) as api:

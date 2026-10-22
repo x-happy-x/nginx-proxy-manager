@@ -1,16 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Host } from "../../platform/sdk";
-import type { LauncherConfig } from "../../api";
-import type { RoutesDocument } from "../../types";
-import { buildItems, defaultLauncher, type LauncherItem } from "../launcher/model";
+import { useSaved, usePortalItems } from "../monitoring/portal";
 import { splitTarget, type PlaceContainer } from "../launcher/placement";
 import { type PveGuest, type PveHost, type PveHistory, guestTags } from "./model";
 
-export function useSaved<T>(key: string, fallback: T) {
-  const [value, set] = useState<T>(() => { try { return JSON.parse(localStorage.getItem(key) || "null") ?? fallback; } catch { return fallback; } });
-  const save = (next: T) => { set(next); try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Storage is optional. */ } };
-  return [value, save] as const;
-}
+export { useSaved } from "../monitoring/portal";
 export type Target = { host: string; vmid?: number; type?: string };
 function useStateOf(host: Host, hosts: PveHost[]) {
   const [hide, setHide] = useSaved("homenet.portal.hide-hosts", false);
@@ -19,12 +13,12 @@ function useStateOf(host: Host, hosts: PveHost[]) {
   const [target, setTarget] = useState<Target | null>(null);
   const [history, setHistory] = useState<Record<string, PveHistory>>({});
   const [historyErrors, setHistoryErrors] = useState<Record<string, string>>({});
-  const [apps, setApps] = useState<LauncherItem[] | null>(null);
+  const apps = usePortalItems();
   const [containers, setContainers] = useState<PlaceContainer[] | null>(null);
   const ids = hosts.map(h => h.id).sort().join("\n");
   useEffect(() => {
     const read = () => { const [, id, type, vmid] = location.hash.replace(/^#\/?/, "").split("/");
-      if (id && type && /^\d+$/.test(vmid || "")) setTarget({ host: decodeURIComponent(id), type, vmid: Number(vmid) }); };
+      if (id && type && /^\d+$/.test(vmid || "")) setTarget({ host: decodeURIComponent(id), type: type === "node" ? undefined : type, vmid: type === "node" ? undefined : Number(vmid) }); };
     read(); window.addEventListener("hashchange", read); return () => window.removeEventListener("hashchange", read);
   }, []);
   useEffect(() => {
@@ -47,9 +41,6 @@ function useStateOf(host: Host, hosts: PveHost[]) {
     let alive = true;
     const get = async (path: string) => { const r = await fetch(path); if (!r.ok) throw new Error(); return r.json(); };
     const pull = () => {
-      void get("/api/portal").then((d: { doc: RoutesDocument; launcher: LauncherConfig | null; links: Record<string, { ip_url?: string; domain_url?: string }> }) => {
-        if (alive) setApps(buildItems(d.doc, d.launcher || defaultLauncher(), d.links).filter(i => !i.hidden));
-      }).catch(() => { if (alive) setApps(null); });
       void get("/api/integrations/pc/api/pc/placement").then(d => { if (alive) setContainers(d.containers || []); }).catch(() => { if (alive) setContainers(null); });
     };
     pull(); const timer = setInterval(() => { if (document.visibilityState !== "hidden") pull(); }, 60000);

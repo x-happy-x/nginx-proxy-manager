@@ -271,6 +271,33 @@ def guest_config(kind, vmid):
             "disks": disks, "networks": networks}
 
 
+def backup_guests(task):
+    """Split a scheduled multi-guest vzdump job using its public log."""
+    if not task.get("upid"):
+        return []
+    lines = sh_json(["pvesh", "get", "/nodes/%s/tasks/%s/log" % (NODE, task["upid"]),
+                     "--limit", "10000", "--output-format", "json"], 30, [])
+    rows, current = {}, None
+    for line in lines:
+        text = line.get("t", "")
+        start = re.search(r"Starting Backup of VM (\d+)", text)
+        finish = re.search(r"Finished Backup of VM (\d+)", text)
+        failure = re.search(r"Backup of VM (\d+) failed(.*)", text)
+        if start or finish or failure:
+            vmid = int((start or finish or failure).group(1))
+            current = rows.setdefault(vmid, {"id": task["upid"] + ":" + str(vmid), "vmid": vmid,
+                "start": task.get("starttime"), "end": task.get("endtime"), "size": None,
+                "status": "running" if not task.get("endtime") else "unknown", "source": "task_guest"})
+            if finish:
+                current["status"] = "OK"
+            if failure:
+                current["status"] = "ERROR: " + failure.group(2).lstrip(": -")
+        size = re.search(r"archive file size: ([0-9.]+)\s*([KMGT]?)i?B", text, re.I)
+        if size and current is not None:
+            current["size"] = round(float(size.group(1)) * 1024 ** (" KMGT".index(size.group(2).upper()) if size.group(2) else 0))
+    return list(rows.values())
+
+
 def backups():
     """Completed jobs plus retained archives, scoped to this node and the last 14 days.
 
@@ -288,6 +315,10 @@ def backups():
             if (t.get("starttime") or 0) < since:
                 continue
             vmid = int(t["id"]) if str(t.get("id", "")).isdigit() else None
+            children = backup_guests(t) if vmid is None else []
+            result.extend(children)
+            if children and (t.get("status") == "OK" or any(x["status"].startswith("ERROR:") for x in children)):
+                continue
             result.append({"id": t.get("upid") or str(t.get("id", "")), "vmid": vmid,
                            "status": t.get("status", "running"), "start": t.get("starttime"),
                            "end": t.get("endtime"), "size": None, "source": "task"})
