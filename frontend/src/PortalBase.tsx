@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import { buildItems, defaultLauncher, type LauncherItem } from "./features/launcher/model";
 import { usePlacement } from "./features/launcher/placement";
+import { useSystemItems } from "./features/launcher/system";
 import { AppTile, deviceList, loadLevel, loadParts, PortalApps, useDeviceLoads, usePlacedItems, useRouterNow } from "./features/launcher/PortalApps";
 import "./styles/portal-home.css";
 import type { LauncherConfig } from "./api";
@@ -141,14 +142,15 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
     void load();
   }, [load]);
 
-  const cfg = data?.launcher || defaultLauncher();
+  const cfg = useMemo(() => data?.launcher || defaultLauncher(), [data]);
+  const systemItems = useSystemItems(!!data?.admin, cfg);
   const items = useMemo(() => (data ? buildItems(data.doc, cfg, data.links).filter((i) => !i.hidden && i.key !== "app:homenet") : []), [data]);
 
   // Admins see policy badges and reachability; other users only their list.
   useEffect(() => {
     if (!data?.admin) return;
     get<Policy>("/api/access").then(setPolicy).catch(() => setPolicy({ apps: {} }));
-    const probes = [...new Set(items.map((i) => i.probe).filter(Boolean) as string[])];
+    const probes = [...new Set([...items, ...systemItems].map((i) => i.probe).filter(Boolean) as string[])];
     if (!probes.length) return;
     const pull = () =>
       fetch("/api/launcher/status?" + probes.map((t) => "t=" + encodeURIComponent(t)).join("&"))
@@ -158,7 +160,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
     void pull();
     const t = setInterval(() => document.visibilityState === "visible" && void pull(), 60000);
     return () => clearInterval(t);
-  }, [data?.admin, items]);
+  }, [data?.admin, items, systemItems]);
 
   // NPM-85: the signed-in user's name from Account, for the greeting (administrators can list users)
   const [name, setName] = useState("");
@@ -188,7 +190,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
           <button type="button" className={view === "apps" ? "is-on" : ""} onClick={() => goApps()}>
             <Icon d={I.apps} />
             Приложения
-            <em>{items.length || ""}</em>
+            <em>{items.length + systemItems.length || ""}</em>
           </button>
           {admin ? (
             <>
@@ -257,7 +259,8 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
 
 // Devices in the side menu: app count and a red mark when something there does not answer.
 function SideDevices({ items: listed, cfg, placement, router, status, device, onPick }: { items: LauncherItem[]; cfg: LauncherConfig; placement: ReturnType<typeof usePlacement>; router: ReturnType<typeof useRouterNow>; status: Record<string, Probe>; device: string; onPick: (d: string) => void }) {
-  const { items } = usePlacedItems(listed, cfg, placement);
+  const system = useSystemItems(true, cfg);
+  const { items } = usePlacedItems(useMemo(() => [...listed, ...system], [listed, system]), cfg, placement);
   const loads = useDeviceLoads(cfg, placement, router);
   const rows = deviceList(cfg)
     .map((d) => ({ d, apps: items.filter((i) => i.device === d.id) }))
@@ -295,7 +298,15 @@ function readTheme() {
 function AccountMenu({ login, name, admin }: { login: string; name: string; admin: boolean }) {
   const [open, setOpen] = useState(false);
   const [theme, setThemeState] = useState(readTheme);
+  const [at, setAt] = useState<CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
+  const toggle = (button: HTMLElement) => {
+    // fixed to the viewport: the menu floats over the page and never moves the side panel
+    const r = button.getBoundingClientRect();
+    const below = r.top < 160;
+    setAt(below ? { top: r.bottom + 8, right: Math.max(8, innerWidth - r.right) } : { bottom: innerHeight - r.top + 8, left: r.left, width: Math.max(220, r.width) });
+    setOpen(!open);
+  };
   const setTheme = (t: "light" | "dark") => {
     setThemeState(t);
     document.documentElement.dataset.theme = t;
@@ -319,7 +330,7 @@ function AccountMenu({ login, name, admin }: { login: string; name: string; admi
   }, [open]);
   return (
     <div className="hp-me" ref={ref}>
-      <button type="button" className="hp-me-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="hp-me-btn" aria-haspopup="menu" aria-expanded={open} onClick={(e) => toggle(e.currentTarget)}>
         <span className="hp-avatar">{(name || login || "?").slice(0, 1).toUpperCase()}</span>
         <span className="hp-me-text">
           <b>{name || login || "гость"}</b>
@@ -331,7 +342,11 @@ function AccountMenu({ login, name, admin }: { login: string; name: string; admi
         <Icon d={theme === "dark" ? I.sun : I.moon} size={16} />
       </button>
       {open ? (
-        <div className="pt-menu hp-me-menu" role="menu">
+        <div className="hp-me-menu" role="menu" style={at}>
+          <span className="hp-me-menu-who">
+            <b>{name || login}</b>
+            <small>{login}</small>
+          </span>
           <a role="menuitem" href="/_gate/login">
             Сменить учётную запись
           </a>

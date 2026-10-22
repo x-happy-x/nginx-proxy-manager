@@ -4,6 +4,8 @@ import { artFor } from "./art";
 import { defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "./model";
 import { containerLabel, deviceLoad, guestLabel, placedDevice, placeOf, placeSteps, unlistedContainers, type Found, type Load, type PlaceContainer, type Placement, type PlacementData } from "./placement";
 import { LogsDialog } from "./LogsDialog";
+import { EditDialog } from "./EditDialog";
+import { useSystemItems } from "./system";
 
 // NPM-85: the app list of the portal, after mock-up A2 — summary, frequent apps,
 // device tabs and cards in the style of Account. Administrators also see where
@@ -16,6 +18,7 @@ export type Probe = { ok: boolean; ms: number; since?: number; exact?: boolean }
 
 const OPENS_KEY = "homenet.portal.opens";
 const VIEW_KEY = "homenet.portal.view";
+const HIDE_KEY = "homenet.portal.hide-hosts";
 
 export function plural(n: number, forms: [string, string, string]) {
   const a = Math.abs(n) % 100;
@@ -74,7 +77,7 @@ export const P = {
   home: "M4 11 12 4l8 7v9H4zM10 20v-5h4v5",
   ext: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   cpu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
-  dots: "M5 12h.01M12 12h.01M19 12h.01",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   logs: "M5 4h14v16H5zM8 8h8M8 12h8M8 16h5",
   copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   pc: "M3 4h18v12H3zM8.5 20h7M12 16v4",
@@ -165,25 +168,52 @@ type Ctx = {
   remember: (key: string) => void;
   placement: PlacementData | null;
   showLogs: (c: PlaceContainer) => void;
+  edit: (item: LauncherItem) => void;
+  hideHosts: boolean;
+  drag: DragState | null;
 };
 
-function Where({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
+/** Cards are reordered by dragging; the order is saved to launcher.json (NPM-87). */
+type DragState = { over: string; start: (key: string) => void; enter: (key: string) => void; drop: (key: string) => void; end: () => void };
+
+/** Three filled dots: a stroked path of points renders too thin. */
+function Dots() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.9" />
+      <circle cx="12" cy="12" r="1.9" />
+      <circle cx="19" cy="12" r="1.9" />
+    </svg>
+  );
+}
+
+function Where({ item, ctx, inVM }: { item: LauncherItem; ctx: Ctx; inVM?: boolean }) {
   const place = ctx.places.get(item.key);
   const usage = ctx.usage(item);
-  const chips: { icon: string; text: string; title?: string }[] = [];
-  if (place?.vm) chips.push({ icon: P.vm, text: guestLabel(place.vm), title: `${place.vm.type === "lxc" ? "Контейнер LXC" : "Виртуальная машина"} на сервере ${place.server}` });
+  const chips: { icon: string; text: string; title?: string; href?: string }[] = [];
+  for (const m of item.modules || []) chips.push({ icon: P.box, text: `${m.name} ${m.version}`, title: m.description, href: m.page ? `#/${m.page}` : undefined });
+  if (inVM) {
+    // the group already names the VM
+  } else if (place?.vm) chips.push({ icon: P.vm, text: guestLabel(place.vm), title: `${place.vm.type === "lxc" ? "Контейнер LXC" : "Виртуальная машина"} на сервере ${place.server}` });
   else if (place) chips.push({ icon: P.server, text: place.server });
   if (place?.container) chips.push({ icon: P.box, text: containerLabel(place.container), title: `${place.container.image} — ${place.container.status}` });
   if (!place && usage) chips.push({ icon: P.cpu, text: `CPU ${usage.cpu >= 10 ? Math.round(usage.cpu) : usage.cpu.toFixed(1)}% · ${bytes(usage.rss)}`, title: `Процессы на роутере: ${usage.name}` });
   if (!chips.length) return null;
   return (
     <div className="hp-where">
-      {chips.map((c) => (
-        <span key={c.text} title={c.title}>
-          <Svg d={c.icon} size={13} />
-          {c.text}
-        </span>
-      ))}
+      {chips.map((c) =>
+        c.href ? (
+          <a key={c.text} href={c.href} title={c.title}>
+            <Svg d={c.icon} size={13} />
+            {c.text}
+          </a>
+        ) : (
+          <span key={c.text} title={c.title}>
+            <Svg d={c.icon} size={13} />
+            {c.text}
+          </span>
+        ),
+      )}
     </div>
   );
 }
@@ -216,11 +246,15 @@ function CardMenu({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
   };
   return (
     <span className="hp-menu-wrap" ref={ref}>
-      <button type="button" className="hp-icon" aria-label={`Ещё: ${item.title}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Svg d={P.dots} size={18} />
+      <button type="button" className="hp-icon hp-dots" aria-label={`Ещё: ${item.title}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Dots />
       </button>
       {open ? (
         <span className="hp-menu" role="menu">
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); ctx.edit(item); }}>
+            <Svg d={P.edit} size={16} />
+            Изменить название и описание
+          </button>
           {c ? (
             <button type="button" role="menuitem" disabled={host?.logs === false} title={host?.logs === false ? "Агент на этом компьютере не отдаёт логи" : undefined} onClick={() => { setOpen(false); ctx.showLogs(c); }}>
               <Svg d={P.logs} size={16} />
@@ -249,7 +283,7 @@ function CardMenu({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
   );
 }
 
-function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
+function AppCard({ item, ctx, inVM }: { item: LauncherItem; ctx: Ctx; inVM?: boolean }) {
   const probe = item.probe ? ctx.status[item.probe] : undefined;
   const place = ctx.places.get(item.key);
   const stopped = place?.container && place.container.state !== "running";
@@ -258,16 +292,24 @@ function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
   const badge = ctx.policy ? accessBadge(ctx.policy.apps[idOf(item.key)]) : null;
   const open = () => ctx.remember(item.key);
   return (
-    <article className={`hp-card${down ? " is-down" : ""}`}>
-      <a className="hp-hit" href={item.primary} onClick={open} aria-label={`Открыть ${item.title}`} />
+    <article
+      className={`hp-card${down ? " is-down" : ""}${ctx.drag?.over === item.key ? " is-drop" : ""}`}
+      draggable={!!ctx.drag}
+      onDragStart={ctx.drag ? (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-homenet-app", item.key); ctx.drag!.start(item.key); } : undefined}
+      onDragEnter={ctx.drag ? () => ctx.drag!.enter(item.key) : undefined}
+      onDragOver={ctx.drag ? (e) => e.preventDefault() : undefined}
+      onDrop={ctx.drag ? (e) => { e.preventDefault(); ctx.drag!.drop(item.key); } : undefined}
+      onDragEnd={ctx.drag ? () => ctx.drag!.end() : undefined}
+    >
+      <a className="hp-hit" href={item.primary} onClick={open} aria-label={`Открыть ${item.title}`} draggable={false} />
       <div className="hp-card-head">
         <AppTile item={item} />
         <div className="hp-card-title">
           <strong>
-            {item.title}
+            <span className="hp-title-text">{item.title}</span>
             {probe ? <i className={`hp-dot${down ? " is-down" : ""}`} title={down ? "Не отвечает" : `Работает · ${probe.ms} мс`} /> : null}
           </strong>
-          <span>{hostOf(item.public || item.primary)}</span>
+          <span className={ctx.hideHosts ? "hp-masked" : undefined}>{ctx.hideHosts ? "домен скрыт" : item.system ? item.subtitle : hostOf(item.public || item.primary)}</span>
         </div>
         <span className="hp-card-tools">
           {ctx.admin && item.repo ? (
@@ -291,12 +333,13 @@ function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
           {stopped ? ` · контейнер ${place!.container!.state === "exited" ? "остановлен" : place!.container!.state}` : ""}
         </div>
       ) : null}
-      {ctx.admin ? <Where item={item} ctx={ctx} /> : null}
+      {ctx.admin ? <Where item={item} ctx={ctx} inVM={inVM} /> : null}
       <div className="hp-card-foot">
-        {badge ? <span className={`hp-badge ${badge.cls}`}>{badge.text}</span> : null}
+        {badge && !item.system ? <span className={`hp-badge ${badge.cls}`}>{badge.text}</span> : null}
+        {item.system ? <span className="hp-badge is-system">Система</span> : null}
         <span className="hp-grow" />
-        <a className="hp-open" href={item.primary} onClick={open}>
-          Открыть
+        <a className="hp-open" href={item.primary} onClick={open} draggable={false}>
+          {item.system ? "Управление" : "Открыть"}
           <Svg d={P.ext} size={15} />
         </a>
       </div>
@@ -397,6 +440,58 @@ function useRouterUsage(router: SystemSnapshot | null, routerAddrs: string[]) {
   }, [router, routerAddrs]);
 }
 
+// A device's apps: those on the device itself first, then one shaded group per VM (NPM-87).
+function DeviceApps({ apps, ctx, view }: { apps: LauncherItem[]; ctx: Ctx; view: "cards" | "list" }) {
+  const own: LauncherItem[] = [];
+  const vms = new Map<string, { label: string; status: string; ip: string; apps: LauncherItem[] }>();
+  for (const i of apps) {
+    const vm = ctx.places.get(i.key)?.vm;
+    if (!vm) {
+      own.push(i);
+      continue;
+    }
+    const key = `${vm.server}/${vm.vmid}`;
+    // the address the app is reached at, not a bridge inside the guest
+    const ip = i.probe?.slice(0, i.probe.lastIndexOf(":")) || vm.ips[0] || "";
+    if (!vms.has(key)) vms.set(key, { label: guestLabel(vm), status: vm.status, ip, apps: [] });
+    vms.get(key)!.apps.push(i);
+  }
+  const box = view === "list" ? "hp-list" : "hp-grid";
+  return (
+    <>
+      {own.length ? (
+        <div className={box}>
+          {own.map((i) => (
+            <AppCard key={i.key} item={i} ctx={ctx} />
+          ))}
+        </div>
+      ) : null}
+      {[...vms.entries()].map(([key, g]) => {
+        const host = ctx.placement?.hosts.find((h) => h.ip === g.ip);
+        return (
+          <div key={key} className="hp-vm">
+            <header className="hp-vm-head">
+              <Svg d={P.vm} size={16} />
+              <strong>{g.label}</strong>
+              {g.ip && !ctx.hideHosts ? <small>{g.ip}</small> : null}
+              <span className="hp-grow" />
+              {loadParts(host).map((p) => (
+                <span key={p.text} className={`hp-pill${p.warn ? " is-warn" : ""}`}>{p.text}</span>
+              ))}
+              <span className="hp-pill">{g.apps.length} {plural(g.apps.length, APPS)}</span>
+            </header>
+            <div className={box}>
+              {g.apps.map((i) => (
+                <AppCard key={i.key} item={i} ctx={ctx} inVM />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export type AppsProps = {
   items: LauncherItem[];
   cfg: LauncherConfig;
@@ -448,7 +543,39 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const { items, places } = usePlacedItems(listed, cfg, placement);
+  const system = useSystemItems(admin, cfg);
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const merged = useMemo(() => {
+    const all = [...listed, ...system];
+    const order = new Map((localOrder || cfg.order || []).map((k, i) => [k, i]));
+    return all.map((it, i) => ({ it, i })).sort((a, b) => (order.get(a.it.key) ?? 1e6 + a.i) - (order.get(b.it.key) ?? 1e6 + b.i)).map((x) => x.it);
+  }, [listed, system, cfg.order, localOrder]);
+  const { items, places } = usePlacedItems(merged, cfg, placement);
+  const [hideHosts, setHideState] = useState(() => readJSON<boolean>(HIDE_KEY, false) === true);
+  const setHide = (v: boolean) => {
+    setHideState(v);
+    writeJSON(HIDE_KEY, v);
+  };
+  const [editing, setEditing] = useState<LauncherItem | null>(null);
+  const [dragKey, setDragKey] = useState("");
+  const [overKey, setOverKey] = useState("");
+  const [orderError, setOrderError] = useState("");
+  const saveOrder = async (from: string, to: string) => {
+    if (!from || from === to) return;
+    const keys = items.map((i) => i.key).filter((k) => k !== from);
+    keys.splice(Math.max(0, keys.indexOf(to)), 0, from);
+    setLocalOrder(keys);
+    setOrderError("");
+    try {
+      const fresh = (await fetchLauncher()) || defaultLauncher();
+      const rest = (fresh.order || []).filter((k) => !keys.includes(k));
+      fresh.order = [...keys, ...rest];
+      await saveLauncher(fresh);
+    } catch (e) {
+      setLocalOrder(null);
+      setOrderError(`Порядок не сохранился: ${e instanceof Error ? e.message : e}`);
+    }
+  };
   const routerAddrs = useMemo(() => cfg.devices.find((d) => d.kind === "router")?.addresses || [], [cfg.devices]);
   const usage = useRouterUsage(router, routerAddrs);
   const loads = useDeviceLoads(cfg, placement, router);
@@ -458,7 +585,10 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
     setOpens(next);
     writeJSON(OPENS_KEY, next);
   };
-  const ctx: Ctx = { admin, status, policy, places, usage, remember, placement, showLogs: setLogsOf };
+  const drag: DragState | null = admin
+    ? { over: overKey, start: (k) => setDragKey(k), enter: (k) => dragKey && setOverKey(k), drop: (k) => { void saveOrder(dragKey, k); setDragKey(""); setOverKey(""); }, end: () => { setDragKey(""); setOverKey(""); } }
+    : null;
+  const ctx: Ctx = { admin, status, policy, places, usage, remember, placement, showLogs: setLogsOf, edit: setEditing, hideHosts, drag };
 
   const devices = deviceList(cfg);
   const isDown = (i: LauncherItem) => !!(i.probe && status[i.probe] && !status[i.probe].ok);
@@ -541,8 +671,9 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
         </section>
       ) : null}
 
-      {admin ? (
-        <nav className="hp-tabs" aria-label="Устройства">
+      <nav className="hp-tabs" aria-label="Фильтры">
+        {admin ? (
+          <>
           <button type="button" className={!device && !onlyDown ? "is-on" : ""} aria-pressed={!device && !onlyDown} onClick={() => { setDevice(""); setOnlyDown(false); }}>
             Все <span>{items.length}</span>
           </button>
@@ -558,13 +689,21 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
               Не отвечают <span>{down.length}</span>
             </button>
           ) : null}
-          <span className="hp-grow" />
+          </>
+        ) : null}
+        <span className="hp-tabs-end">
+        <button type="button" className={`hp-chip-toggle${hideHosts ? " is-on" : ""}`} aria-pressed={hideHosts} onClick={() => setHide(!hideHosts)} title="Для скриншотов: домены и адреса не видны">
+          {hideHosts ? "Домены скрыты" : "Скрыть домены"}
+        </button>
+        {admin ? (
           <span className="hp-view" role="radiogroup" aria-label="Вид">
             <button type="button" role="radio" aria-checked={view === "cards"} className={view === "cards" ? "is-on" : ""} onClick={() => setView("cards")}>Карточки</button>
             <button type="button" role="radio" aria-checked={view === "list"} className={view === "list" ? "is-on" : ""} onClick={() => setView("list")}>Список</button>
           </span>
-        </nav>
-      ) : null}
+        ) : null}
+        </span>
+      </nav>
+      {orderError ? <p className="hp-error" role="alert">{orderError}</p> : null}
 
       {/* other users get one plain grid: servers are not their concern */}
       {!admin && visible.length ? (
@@ -583,18 +722,14 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
               <span className="hp-section-ico"><Svg d={P.server} /></span>
               <div>
                 <h2>{d.name}</h2>
-                {d.note ? <small>{d.note}</small> : null}
+                {d.note && !hideHosts ? <small>{d.note}</small> : null}
               </div>
               <span className="hp-grow" />
               {admin ? loadParts(loads[d.id]).map((p) => <span key={p.text} className={`hp-pill${p.warn ? " is-warn" : ""}`}>{p.text}</span>) : null}
               <span className="hp-pill">{apps.length} {plural(apps.length, APPS)}</span>
               {admin && dDown ? <span className="hp-pill is-bad">{dDown} не {dDown === 1 ? "отвечает" : "отвечают"}</span> : null}
             </header>
-            <div className={view === "list" ? "hp-list" : "hp-grid"}>
-              {apps.map((i) => (
-                <AppCard key={i.key} item={i} ctx={ctx} />
-              ))}
-            </div>
+            <DeviceApps apps={apps} ctx={ctx} view={view} />
           </section>
         );
       })}
@@ -608,6 +743,7 @@ export function PortalApps({ items: listed, cfg, admin, name, status, policy, pl
 
       {admin && found.length && browsing ? <FoundBlock found={found} devices={cfg.devices} onChanged={onChanged} /> : null}
       {logsOf ? <LogsDialog container={logsOf} onClose={() => setLogsOf(null)} /> : null}
+      {editing ? <EditDialog item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); onChanged(); }} /> : null}
       {admin && probed.length ? <p className="hp-foot">Состояние — проверка порта приложения с роутера раз в минуту. Домен работает отовсюду, значок дома — адрес в домашней сети.</p> : null}
     </main>
   );

@@ -26,11 +26,15 @@ export function defaultLauncher(): LauncherConfig {
 
 export type LauncherItem = {
   key: string;
-  source: "routes" | "manual";
+  source: "routes" | "manual" | "system";
   title: string;
   description: string;
   /** what the app is for, written by the administrator (NPM-85) */
   about?: string;
+  /** HomeNet itself, mihomo and XKeen: router software without a route of its own (NPM-87) */
+  system?: boolean;
+  subtitle?: string;
+  modules?: { name: string; version: string; description?: string; page?: string }[];
   device: string;
   art?: string;
   hints: string[];
