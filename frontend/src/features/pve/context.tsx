@@ -52,7 +52,7 @@ function useStateOf(host: Host, hosts: PveHost[]) {
     const q = query.trim().toLocaleLowerCase();
     return !q || [h.name, h.address, h.current?.host, ...(g ? [g.name, String(g.vmid), ...(g.ips || []), ...guestTags(g)] : (h.current?.guests || []).flatMap(v => [v.name, String(v.vmid), ...(v.ips || []), ...guestTags(v)]))].some(v => v?.toLocaleLowerCase().includes(q));
   };
-  const guestMatches = (h: PveHost, g: PveGuest) => matches(h, g) && (filter === "running" ? g.status === "running" : filter === "stopped" ? g.status === "stopped" : filter === "qemu" || filter === "lxc" ? g.type === filter : filter === "apps" ? appsOf(g).length > 0 : true);
+  const guestMatches = (h: PveHost, g: PveGuest) => !g.template && matches(h, g) && (filter === "running" ? g.status === "running" : filter === "stopped" ? g.status === "stopped" : filter === "qemu" || filter === "lxc" ? g.type === filter : filter === "apps" ? appsOf(g).length > 0 : true);
   return { host, hosts, hide, setHide, query, setQuery, filter, setFilter, target, setTarget, history, historyErrors, appsOf, containersOf, appsKnown: apps !== null, containersKnown: containers !== null, matches, guestMatches };
 }
 const Context = createContext<ReturnType<typeof useStateOf> | null>(null);
