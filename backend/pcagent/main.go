@@ -22,7 +22,7 @@ import (
 	"unicode/utf16"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 type CPU struct {
 	Percent *float64 `json:"percent"`
@@ -66,8 +66,9 @@ type Docker struct {
 	Containers []Container `json:"containers"`
 }
 type Capabilities struct {
-	Docker []string `json:"docker_actions"`
-	WSL    []string `json:"wsl_actions"`
+	Docker     []string `json:"docker_actions"`
+	WSL        []string `json:"wsl_actions"`
+	DockerLogs bool     `json:"docker_logs"`
 }
 type Snapshot struct {
 	V            int            `json:"v"`
@@ -104,6 +105,10 @@ type agent struct {
 	run                       runner
 	platform                  string
 	dockerControl, wslControl bool
+	// runAll returns stdout and stderr together: `docker logs` writes the
+	// container's stderr to its own (NPM-86).
+	runAll     runner
+	dockerLogs bool
 }
 
 type cappedBuffer struct{ bytes.Buffer }
@@ -158,6 +163,7 @@ func (a agent) capabilities() Capabilities {
 	if a.wslControl && a.platform == "windows" {
 		c.WSL = []string{"start", "terminate"}
 	}
+	c.DockerLogs = a.dockerLogs
 	return c
 }
 func namesFromOutput(b []byte) []string {
@@ -218,6 +224,9 @@ func (a agent) distributions(ctx context.Context) ([]Distribution, error) {
 	return out, nil
 }
 func (a agent) dockerCommand(ctx context.Context, target string, args ...string) ([]byte, error) {
+	return a.dockerWith(ctx, a.run, target, args...)
+}
+func (a agent) dockerWith(ctx context.Context, run runner, target string, args ...string) ([]byte, error) {
 	// Pin the local socket: an inherited DOCKER_HOST/context must not silently
 	// turn a local computer operation into one against another server.
 	endpoint := "unix:///var/run/docker.sock"
@@ -225,7 +234,7 @@ func (a agent) dockerCommand(ctx context.Context, target string, args ...string)
 		if a.platform == "windows" {
 			endpoint = "npipe:////./pipe/docker_engine"
 		}
-		return a.run(ctx, "docker", append([]string{"--host", endpoint}, args...)...)
+		return run(ctx, "docker", append([]string{"--host", endpoint}, args...)...)
 	}
 	if a.platform != "windows" || !strings.HasPrefix(target, "wsl:") || !validDistribution(strings.TrimPrefix(target, "wsl:")) {
 		return nil, fmt.Errorf("invalid Docker context")
@@ -247,7 +256,7 @@ func (a agent) dockerCommand(ctx context.Context, target string, args ...string)
 		return nil, fmt.Errorf("WSL distribution is stopped")
 	}
 	prefix := []string{"--distribution", name, "--exec", "docker", "--host", endpoint}
-	return a.run(ctx, "wsl.exe", append(prefix, args...)...)
+	return run(ctx, "wsl.exe", append(prefix, args...)...)
 }
 func (a agent) dockerInventory(ctx context.Context, target string) Docker {
 	d := Docker{Context: target, Containers: []Container{}}
@@ -425,14 +434,84 @@ func (a agent) control(ctx context.Context, action Action) Reply {
 	}
 	return Reply{OK: true, Message: message}
 }
+
+// LogsRequest asks for the last lines of one container's log (read-only, NPM-86).
+type LogsRequest struct {
+	Context string `json:"context"`
+	ID      string `json:"id"`
+	Tail    int    `json:"tail"`
+}
+
+// LogsReply carries the text; Truncated means the size cap cut the oldest part.
+type LogsReply struct {
+	OK        bool   `json:"ok"`
+	Error     string `json:"error,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
+const logsLimit = 512 * 1024
+
+func (a agent) logs(ctx context.Context, req LogsRequest) LogsReply {
+	if !a.dockerLogs {
+		return LogsReply{Error: "Docker logs are disabled for this SSH key"}
+	}
+	if !containerID.MatchString(req.ID) || req.Tail < 1 || req.Tail > 2000 {
+		return LogsReply{Error: "invalid logs request"}
+	}
+	inventory := a.dockerInventory(ctx, req.Context)
+	if !inventory.Available {
+		return LogsReply{Error: inventory.Error}
+	}
+	found := false
+	for _, c := range inventory.Containers {
+		found = found || c.ID == req.ID
+	}
+	if !found {
+		return LogsReply{Error: "container no longer exists in this context"}
+	}
+	b, err := a.dockerWith(ctx, a.runAll, req.Context, "container", "logs", "--tail", strconv.Itoa(req.Tail), "--timestamps", req.ID)
+	if err != nil {
+		return LogsReply{Error: err.Error()}
+	}
+	reply := LogsReply{OK: true}
+	if len(b) > logsLimit {
+		b, reply.Truncated = b[len(b)-logsLimit:], true
+	}
+	reply.Text = strings.ToValidUTF8(string(b), "�")
+	return reply
+}
+
+func runCombined(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	configureCommand(cmd)
+	cmd.WaitDelay = time.Second
+	var out cappedBuffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		detail := strings.TrimSpace(decodeOutput(out.Bytes()))
+		if len(detail) > 500 {
+			detail = detail[len(detail)-500:]
+		}
+		return nil, fmt.Errorf("%s: %s", name, detail)
+	}
+	return out.Bytes(), nil
+}
+
 func serve(argv []string, request string, envRequest bool, out io.Writer) int {
-	a := agent{run: runCommand, platform: runtime.GOOS}
+	a := agent{run: runCommand, runAll: runCombined, platform: runtime.GOOS}
 	for len(argv) > 0 && strings.HasPrefix(argv[0], "--") {
 		switch argv[0] {
 		case "--allow-docker-actions":
 			a.dockerControl = true
 		case "--allow-wsl-actions":
 			a.wslControl = true
+		case "--allow-docker-logs":
+			a.dockerLogs = true
 		default:
 			json.NewEncoder(out).Encode(Reply{Error: "unsupported serve option"})
 			return 2
@@ -459,6 +538,23 @@ func serve(argv []string, request string, envRequest bool, out io.Writer) int {
 	case "capabilities":
 		return encode(a.capabilities())
 	}
+	if strings.HasPrefix(request, "logs ") {
+		var req LogsRequest
+		encoded := strings.TrimPrefix(request, "logs ")
+		b, err := base64.RawURLEncoding.DecodeString(encoded)
+		if len(encoded) > 1024 || !encodedRequest.MatchString(encoded) || err != nil || json.Unmarshal(b, &req) != nil {
+			encode(LogsReply{Error: "invalid logs request"})
+			return 2
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		result := a.logs(ctx, req)
+		encode(result)
+		if !result.OK {
+			return 2
+		}
+		return 0
+	}
 	if strings.HasPrefix(request, "control ") {
 		action, err := decodeAction(strings.TrimPrefix(request, "control "))
 		if err != nil {
@@ -479,7 +575,7 @@ func serve(argv []string, request string, envRequest bool, out io.Writer) int {
 }
 func main() {
 	if len(os.Args) < 2 || os.Args[1] != "serve" {
-		fmt.Fprintln(os.Stderr, "usage: pc-agent serve [--allow-docker-actions] [--allow-wsl-actions] [ping|snapshot]")
+		fmt.Fprintln(os.Stderr, "usage: pc-agent serve [--allow-docker-actions] [--allow-wsl-actions] [--allow-docker-logs] [ping|snapshot]")
 		os.Exit(2)
 	}
 	request, present := os.LookupEnv("SSH_ORIGINAL_COMMAND")

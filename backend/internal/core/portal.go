@@ -1,11 +1,13 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/access"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/integration"
@@ -178,4 +180,21 @@ func (s *Server) portalAdmin(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+// WatchApps checks every app the portal lists once a minute, so the portal can
+// say how long one has been down even if nobody had it open (NPM-86).
+func (s *Server) WatchApps(ctx context.Context) {
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	for {
+		if doc, cfg, _, err := s.portalDocument(Identity{Admin: true}, access.Config{}); err == nil {
+			launcher.ProbeAll(launcher.Targets(doc.Apps, cfg))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }

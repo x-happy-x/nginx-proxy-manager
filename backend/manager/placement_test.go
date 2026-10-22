@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -65,10 +69,37 @@ func TestPCPlacementListsPublishedPorts(t *testing.T) {
 		{"id":"0123456789abcdef","name":"homeapps-account-1","image":"account","state":"running","status":"Up 2 days","ports":"0.0.0.0:4161->4161/tcp, [::]:4161->4161/tcp"}]}]}`), &snap)
 	m := &pcMonitor{hosts: []*pcHost{{Config: pcHostConfig{ID: "family-apps", Name: "family-apps", Address: "192.168.99.33"}, Online: true, Current: &snap}}}
 	containers := m.placement()["containers"].([]response)
-	if len(containers) != 1 || containers[0]["id"] != "0123456789ab" || containers[0]["ip"] != "192.168.99.33" {
+	if len(containers) != 1 || containers[0]["id"] != "0123456789abcdef" || containers[0]["ip"] != "192.168.99.33" {
 		t.Fatalf("got %+v", containers)
 	}
 	if ports := containers[0]["ports"].([]publishedPort); !reflect.DeepEqual(ports, []publishedPort{{Port: 4161, Target: "4161/tcp"}}) {
 		t.Fatalf("ports %+v", ports)
+	}
+}
+
+func TestPCLogsAsksAgent(t *testing.T) {
+	id := strings.Repeat("a", 64)
+	var asked string
+	m := &pcMonitor{hosts: []*pcHost{{Config: pcHostConfig{ID: "family-apps", Address: "192.168.99.33", Port: 22, User: "homenet-agent"}}},
+		request: func(_ context.Context, _ pcHostConfig, command string, _ bool) ([]byte, string, error) {
+			asked = command
+			return []byte(`{"ok":true,"text":"line"}`), "", nil
+		}}
+	a := &app{}
+	rec := httptest.NewRecorder()
+	m.serveLogs(a, rec, httptest.NewRequest("GET", "/api/pc/logs?host=family-apps&context=native&id="+id+"&tail=50", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"text":"line"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	b, _ := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(asked, "logs "))
+	if !strings.HasPrefix(asked, "logs ") || string(b) != `{"context":"native","id":"`+id+`","tail":50}` {
+		t.Fatalf("asked %q (%s)", asked, b)
+	}
+	for _, q := range []string{"host=nope&context=native&id=" + id, "host=family-apps&context=native;rm&id=" + id, "host=family-apps&context=native&id=web", "host=family-apps&context=native&id=" + id + "&tail=99999"} {
+		rec = httptest.NewRecorder()
+		m.serveLogs(a, rec, httptest.NewRequest("GET", "/api/pc/logs?"+q, nil))
+		if rec.Code == 200 {
+			t.Fatalf("accepted %s", q)
+		}
 	}
 }
