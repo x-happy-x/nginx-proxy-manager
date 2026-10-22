@@ -37,6 +37,8 @@ export type LauncherItem = {
   public?: string;
   direct?: string;
   probe?: string;
+  /** source repository, shown to admins as a Git link */
+  repo?: string;
   hidden: boolean;
 };
 
@@ -91,6 +93,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, link
       public: publicURL,
       direct,
       probe: `${up.address}:${up.port}`,
+      repo: override.repo,
       hidden: !!override.hidden,
     });
   }
@@ -105,6 +108,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, link
       hints: [link.id, link.title, link.url],
       primary: (byIP ? links["link:"+link.id]?.ip_url : links["link:"+link.id]?.domain_url) || link.url,
       probe: probeTarget(link.url),
+      repo: link.repo,
       hidden: false,
     });
   }

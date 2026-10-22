@@ -31,6 +31,7 @@ type Link struct {
 	Device      string `json:"device"`
 	Description string `json:"description,omitempty"`
 	Art         string `json:"art,omitempty"`
+	Repo        string `json:"repo,omitempty"` // source repository, e.g. in Forgejo
 }
 
 type AppOverride struct {
@@ -39,6 +40,7 @@ type AppOverride struct {
 	Description string `json:"description,omitempty"`
 	Art         string `json:"art,omitempty"`
 	Hidden      bool   `json:"hidden,omitempty"`
+	Repo        string `json:"repo,omitempty"`
 }
 
 type Config struct {
@@ -102,6 +104,14 @@ func (a Store) Save(cfg Config) error {
 	for _, link := range cfg.Links {
 		if strings.TrimSpace(link.Title) == "" || !ValidURL(link.URL) {
 			return fmt.Errorf("ссылка %q: нужны название и адрес http(s)://", link.Title)
+		}
+		if link.Repo != "" && !ValidURL(link.Repo) {
+			return fmt.Errorf("ссылка %q: адрес репозитория должен быть http(s)://", link.Title)
+		}
+	}
+	for id, app := range cfg.Apps {
+		if app.Repo != "" && !ValidURL(app.Repo) {
+			return fmt.Errorf("приложение %s: адрес репозитория должен быть http(s)://", id)
 		}
 	}
 	if cfg.Apps == nil {

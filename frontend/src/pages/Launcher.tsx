@@ -326,19 +326,19 @@ function toggleHidden(cfg: LauncherConfig, item: LauncherItem) {
   cfg.apps[id] = { ...cfg.apps[id], hidden: !item.hidden };
 }
 
-type Patch = { title: string; description: string; device: string; art: string; url: string };
+type Patch = { title: string; description: string; device: string; art: string; url: string; repo: string };
 
 function applyItemPatch(cfg: LauncherConfig, item: LauncherItem | null, patch: Patch) {
   if (!item) {
-    cfg.links.push({ id: slug(patch.title), title: patch.title, url: patch.url, device: patch.device, description: patch.description || undefined, art: patch.art || undefined });
+    cfg.links.push({ id: slug(patch.title), title: patch.title, url: patch.url, device: patch.device, description: patch.description || undefined, art: patch.art || undefined, repo: patch.repo || undefined });
     return;
   }
   const [kind, id] = splitKey(item.key);
   if (kind === "link") {
     const link = cfg.links.find((l) => l.id === id);
-    if (link) Object.assign(link, { title: patch.title, url: patch.url, device: patch.device, description: patch.description || undefined, art: patch.art || undefined });
+    if (link) Object.assign(link, { title: patch.title, url: patch.url, device: patch.device, description: patch.description || undefined, art: patch.art || undefined, repo: patch.repo || undefined });
   } else {
-    cfg.apps[id] = { ...cfg.apps[id], title: patch.title || undefined, description: patch.description || undefined, device: patch.device, art: patch.art || undefined };
+    cfg.apps[id] = { ...cfg.apps[id], title: patch.title || undefined, description: patch.description || undefined, device: patch.device, art: patch.art || undefined, repo: patch.repo || undefined };
   }
 }
 
@@ -367,7 +367,8 @@ function LauncherTile({
     item.local ? { label: "Дом", href: item.local, icon: "home" as const } : null,
     item.public ? { label: "Извне", href: item.public, icon: "globe" as const } : null,
     item.direct ? { label: "IP", href: item.direct, icon: "route" as const } : null,
-  ].filter(Boolean) as Array<{ label: string; href: string; icon: "home" | "globe" | "route" }>;
+    item.repo ? { label: "Git", href: item.repo, icon: "code" as const } : null,
+  ].filter(Boolean) as Array<{ label: string; href: string; icon: "home" | "globe" | "route" | "code" }>;
 
   return (
     <article
@@ -429,6 +430,7 @@ function ItemEditor({ item, cfg, onClose, onSave }: { item: LauncherItem | null;
     device: item?.device && item.device !== OTHER_DEVICE ? item.device : cfg.devices[0]?.id || "",
     art: item?.art || "",
     url: item?.primary && item.source === "manual" ? item.primary : "",
+    repo: item?.repo || "",
   });
   const [problem, setProblem] = useState("");
   const set = (key: keyof Patch, value: string) => setPatch((p) => ({ ...p, [key]: value }));
@@ -438,7 +440,11 @@ function ItemEditor({ item, cfg, onClose, onSave }: { item: LauncherItem | null;
       setProblem("Нужны название и адрес вида http(s)://…");
       return;
     }
-    onSave({ ...patch, title: patch.title.trim(), url: patch.url.trim(), description: patch.description.trim() });
+    if (patch.repo.trim() && !/^https?:\/\/\S+$/i.test(patch.repo.trim())) {
+      setProblem("Адрес репозитория — вида http(s)://…");
+      return;
+    }
+    onSave({ ...patch, title: patch.title.trim(), url: patch.url.trim(), description: patch.description.trim(), repo: patch.repo.trim() });
   };
   return (
     <Modal
@@ -470,6 +476,7 @@ function ItemEditor({ item, cfg, onClose, onSave }: { item: LauncherItem | null;
           </Field>
           {manual ? <Field label="Адрес" className="span-2"><input className="input mono" value={patch.url} placeholder="http://192.168.1.10:8080/" onChange={(e) => set("url", e.target.value)} /></Field> : null}
           <Field label="Подпись" className="span-2"><input className="input" value={patch.description} onChange={(e) => set("description", e.target.value)} /></Field>
+          <Field label="Git-репозиторий" className="span-2"><input className="input mono" value={patch.repo} placeholder="https://git.crubs.crazedns.ru/services/…" onChange={(e) => set("repo", e.target.value)} /></Field>
         </div>
         <Field label="Иконка и фон" group>
           <div className="art-picker">
