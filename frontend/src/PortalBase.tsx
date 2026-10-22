@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
-import { buildItems, defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "./features/launcher/model";
-import { artFor } from "./features/launcher/art";
-import { placedDevice, placeOf, placeSteps, unlistedContainers, usePlacement, type Found, type Placement, type PlacementData } from "./features/launcher/placement";
-import { fetchLauncher, saveLauncher, type LauncherConfig } from "./api";
+import { buildItems, defaultLauncher, type LauncherItem } from "./features/launcher/model";
+import { usePlacement } from "./features/launcher/placement";
+import { AppTile, deviceList, PortalApps, usePlacedItems } from "./features/launcher/PortalApps";
+import "./styles/portal-home.css";
+import type { LauncherConfig } from "./api";
 import type { RoutesDocument } from "./types";
 import "./styles/portal.css";
 
@@ -69,19 +70,12 @@ const I = {
   down: "m6 9 6 6 6-6",
   chevron: "m9 6 6 6-6 6",
   server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01",
-  git: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9",
+  apps: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  pc: "M3 4h18v12H3zM8.5 20h7M12 16v4",
+  sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+  moon: "M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z",
 };
 
-function AppIcon({ item, tint, size = 40 }: { item: LauncherItem; tint: number; size?: number }) {
-  const spec = artFor(item.art, item.title, ...item.hints);
-  return (
-    <span className={`pt-icon tint-${tint}`} style={{ width: size, height: size, borderRadius: Math.round(size / 4) }} aria-hidden="true">
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-        {spec.icon}
-      </svg>
-    </span>
-  );
-}
 
 function Brand() {
   return (
@@ -165,56 +159,143 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
     return () => clearInterval(t);
   }, [data?.admin, items]);
 
+  // NPM-85: the signed-in user's name from Account, for the greeting (administrators can list users)
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (!data?.admin) return;
+    get<{ users: { login: string; name: string }[] }>("/api/access/users")
+      .then((u) => setName(u.users?.find((x) => x.login === data.login)?.name || ""))
+      .catch(() => undefined);
+  }, [data?.admin, data?.login]);
+  const [device, setDevice] = useState("");
+
   if (view === "manage" && data?.admin)
     return <Console onPortal={() => setView("apps")} />;
 
   if (guest) return <Guest />;
 
+  const admin = !!data?.admin;
+  const goApps = (d = "") => {
+    setDevice(d);
+    setView("apps");
+  };
   return (
-    <div className="pt">
-      <header className="pt-head">
+    <div className="hp">
+      <aside className="hp-side">
         <Brand />
+        <nav className="hp-nav" aria-label="Разделы">
+          <button type="button" className={view === "apps" ? "is-on" : ""} onClick={() => goApps()}>
+            <Icon d={I.apps} />
+            Приложения
+            <em>{items.length || ""}</em>
+          </button>
+          {admin ? (
+            <>
+              <a href="#/pve">
+                <Icon d={I.server} />
+                Серверы и VM
+              </a>
+              <a href="#/pc">
+                <Icon d={I.pc} />
+                Компьютеры
+              </a>
+              <button type="button" className={view === "access" ? "is-on" : ""} onClick={() => setView("access")}>
+                <Icon d={I.lock} />
+                Доступы
+              </button>
+              <a href="#/overview">
+                <Icon d={I.gear} />
+                Управление роутером
+              </a>
+            </>
+          ) : null}
+        </nav>
+        {admin && data ? <SideDevices items={items} cfg={cfg} placement={placement} status={status} device={view === "apps" ? device : ""} onPick={goApps} /> : null}
         <span className="pt-grow" />
-        {data?.admin ? (
-          <>
-            <button type="button" className="pt-btn" onClick={() => setView("manage")}>
-              <Icon d={I.gear} size={16} />
-              <span className="pt-hide-sm">Управление роутером</span>
-            </button>
-            <button type="button" className={`pt-btn${view === "access" ? " is-on" : ""}`} onClick={() => setView(view === "access" ? "apps" : "access")}>
-              <Icon d={I.lock} size={16} />
-              <span className="pt-hide-sm">Доступы</span>
-            </button>
-          </>
-        ) : null}
-        {data ? <AccountMenu login={data.login} /> : null}
-      </header>
-      {error ? (
-        <main className="pt-main">
-          <div className="pt-notice" role="alert">
-            <strong>Не удалось загрузить приложения</strong>
-            <span>{error}</span>
-            <button type="button" className="pt-btn" onClick={() => void load()}>
-              Повторить
-            </button>
-          </div>
-        </main>
-      ) : !data ? (
-        <main className="pt-main">
-          <p className="pt-muted">Загружаю приложения…</p>
-        </main>
-      ) : view === "access" && data.admin ? (
-        <Access items={items} cfg={cfg} policy={policy} onSaved={(p) => { setPolicy(p); void load(); }} onBack={() => setView("apps")} />
-      ) : (
-        <Apps items={items} cfg={cfg} status={status} policy={data.admin ? policy : null} placement={data.admin ? placement : null} onChanged={() => void load()} />
-      )}
+        {data ? <AccountMenu login={data.login} name={name} admin={admin} /> : null}
+      </aside>
+      <div className="hp-body">
+        <header className="hp-mobile">
+          <Brand />
+          <span className="pt-grow" />
+          {admin ? (
+            <>
+              <button type="button" className={`hp-mobile-btn${view === "access" ? " is-on" : ""}`} aria-label="Доступы" onClick={() => setView(view === "access" ? "apps" : "access")}>
+                <Icon d={I.lock} size={16} />
+              </button>
+              <a className="hp-mobile-btn" href="#/overview" aria-label="Управление роутером">
+                <Icon d={I.gear} size={16} />
+              </a>
+            </>
+          ) : null}
+          {data ? <AccountMenu login={data.login} name={name} admin={admin} /> : null}
+        </header>
+        {error ? (
+          <main className="pt-main">
+            <div className="pt-notice" role="alert">
+              <strong>Не удалось загрузить приложения</strong>
+              <span>{error}</span>
+              <button type="button" className="pt-btn" onClick={() => void load()}>
+                Повторить
+              </button>
+            </div>
+          </main>
+        ) : !data ? (
+          <main className="pt-main">
+            <p className="pt-muted">Загружаю приложения…</p>
+          </main>
+        ) : view === "access" && data.admin ? (
+          <Access items={items} cfg={cfg} policy={policy} onSaved={(p) => { setPolicy(p); void load(); }} onBack={() => setView("apps")} />
+        ) : (
+          <PortalApps items={items} cfg={cfg} admin={admin} name={name} status={status} policy={admin ? policy : null} placement={admin ? placement : null} device={device} setDevice={setDevice} onChanged={() => void load()} />
+        )}
+      </div>
     </div>
   );
 }
 
-function AccountMenu({ login }: { login: string }) {
+// Devices in the side menu: app count and a red mark when something there does not answer.
+function SideDevices({ items: listed, cfg, placement, status, device, onPick }: { items: LauncherItem[]; cfg: LauncherConfig; placement: ReturnType<typeof usePlacement>; status: Record<string, Probe>; device: string; onPick: (d: string) => void }) {
+  const { items } = usePlacedItems(listed, cfg, placement);
+  const rows = deviceList(cfg)
+    .map((d) => ({ d, apps: items.filter((i) => i.device === d.id) }))
+    .filter((r) => r.apps.length);
+  if (rows.length < 2) return null;
+  return (
+    <div className="hp-devices">
+      <h2>Устройства</h2>
+      {rows.map(({ d, apps }) => {
+        const down = apps.filter((i) => i.probe && status[i.probe] && !status[i.probe].ok).length;
+        return (
+          <button key={d.id} type="button" className={device === d.id ? "is-on" : ""} onClick={() => onPick(device === d.id ? "" : d.id)} title={d.note || d.name}>
+            <i className={down ? "is-bad" : ""} />
+            {d.name}
+            <em>{apps.length}</em>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function readTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+// Account, theme and sign-out at the bottom of the side menu; the menu opens upwards.
+function AccountMenu({ login, name, admin }: { login: string; name: string; admin: boolean }) {
   const [open, setOpen] = useState(false);
+  const [theme, setThemeState] = useState(readTheme);
   const ref = useRef<HTMLDivElement>(null);
+  const setTheme = (t: "light" | "dark") => {
+    setThemeState(t);
+    document.documentElement.dataset.theme = t;
+    try {
+      localStorage.setItem("homenet-theme", t);
+    } catch {
+      /* per-browser preference */
+    }
+  };
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -228,14 +309,20 @@ function AccountMenu({ login }: { login: string }) {
     };
   }, [open]);
   return (
-    <div className="pt-account" ref={ref}>
-      <button type="button" className="pt-account-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="pt-avatar">{(login || "?").slice(0, 1).toUpperCase()}</span>
-        <span className="pt-hide-sm">{login || "гость"}</span>
+    <div className="hp-me" ref={ref}>
+      <button type="button" className="hp-me-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="hp-avatar">{(name || login || "?").slice(0, 1).toUpperCase()}</span>
+        <span className="hp-me-text">
+          <b>{name || login || "гость"}</b>
+          <small>{admin ? "администратор" : login}</small>
+        </span>
         <Icon d={I.down} size={14} />
       </button>
+      <button type="button" className="hp-theme" aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"} title={theme === "dark" ? "Светлая тема" : "Тёмная тема"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+        <Icon d={theme === "dark" ? I.sun : I.moon} size={16} />
+      </button>
       {open ? (
-        <div className="pt-menu" role="menu">
+        <div className="pt-menu hp-me-menu" role="menu">
           <a role="menuitem" href="/_gate/login">
             Сменить учётную запись
           </a>
@@ -280,257 +367,6 @@ function Guest() {
         <span className="pt-mono">{location.host}</span>
       </footer>
     </div>
-  );
-}
-
-function Apps({ items: listed, cfg, status, policy, placement, onChanged }: { items: LauncherItem[]; cfg: LauncherConfig; status: Record<string, Probe>; policy: Policy | null; placement: PlacementData | null; onChanged: () => void }) {
-  const [query, setQuery] = useState("");
-  const [device, setDevice] = useState("");
-  const [opens, setOpens] = useState<Record<string, number>>(readOpens);
-  const search = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(t.tagName)) {
-        e.preventDefault();
-        search.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  const devices = [...cfg.devices, { id: OTHER_DEVICE, name: "Другие устройства", kind: "other", note: "", addresses: [] }];
-  // NPM-84: server, VM and container of each app; an address no device lists goes to its Proxmox server's group
-  const places = useMemo(() => new Map(listed.map((i) => [i.key, placeOf(i.probe, placement)])), [listed, placement]);
-  const items = useMemo(
-    () => listed.map((i) => (i.device === OTHER_DEVICE && places.get(i.key) ? { ...i, device: placedDevice(places.get(i.key), cfg.devices) } : i)),
-    [listed, places, cfg.devices],
-  );
-  const found = useMemo(() => unlistedContainers(placement, new Set(items.map((i) => i.probe).filter(Boolean) as string[]), cfg.dismissed), [placement, items, cfg.dismissed]);
-  const tintOf = (id: string) => Math.max(0, devices.findIndex((d) => d.id === id)) % 5;
-  const q = query.trim().toLowerCase();
-  const match = (i: LauncherItem) => !q || [i.title, i.description, ...i.hints].join(" ").toLowerCase().includes(q);
-  const visible = items.filter((i) => (!device || i.device === device) && match(i));
-  const groups = devices.map((d) => ({ d, apps: visible.filter((i) => i.device === d.id) })).filter((g) => g.apps.length);
-  const counts = (id: string) => items.filter((i) => i.device === id).length;
-  const usedDevices = devices.filter((d) => counts(d.id));
-  const probed = items.filter((i) => i.probe && status[i.probe]);
-  const down = probed.filter((i) => !status[i.probe!].ok).length;
-  const pinned = Object.entries(opens)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k]) => items.find((i) => i.key === k))
-    .filter(Boolean)
-    .slice(0, 6) as LauncherItem[];
-
-  const remember = (key: string) => {
-    const next = { ...opens, [key]: (opens[key] || 0) + 1 };
-    setOpens(next);
-    try {
-      localStorage.setItem(OPENS_KEY, JSON.stringify(next));
-    } catch {
-      /* per-browser convenience */
-    }
-  };
-
-  return (
-    <main className="pt-main">
-      <section className="pt-top">
-        <div className="pt-title">
-          <h1>Приложения</h1>
-          <p>
-            {items.length} {plural(items.length, ["приложение", "приложения", "приложений"])} на {usedDevices.length} {plural(usedDevices.length, ["устройстве", "устройствах", "устройствах"])}
-            {probed.length ? (
-              <>
-                {" · "}
-                <span className="pt-ok">{probed.length - down} {probed.length - down === 1 ? "отвечает" : "отвечают"}</span>
-                {down ? (
-                  <>
-                    {" · "}
-                    <span className="pt-warn">{down} {down === 1 ? "не отвечает" : "не отвечают"}</span>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </p>
-        </div>
-        <label className="pt-search">
-          <Icon d={I.search} />
-          <input ref={search} type="search" placeholder="Найти приложение или домен" aria-label="Поиск приложений" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <kbd className="pt-hide-sm">/</kbd>
-        </label>
-      </section>
-
-      {usedDevices.length > 1 ? (
-        <nav className="pt-chips" aria-label="Устройства">
-          <button type="button" aria-pressed={!device} className={!device ? "is-on" : ""} onClick={() => setDevice("")}>
-            Все <span>{items.length}</span>
-          </button>
-          {usedDevices.map((d) => (
-            <button key={d.id} type="button" aria-pressed={device === d.id} className={device === d.id ? "is-on" : ""} onClick={() => setDevice(device === d.id ? "" : d.id)}>
-              {d.name} <span>{counts(d.id)}</span>
-            </button>
-          ))}
-        </nav>
-      ) : null}
-
-      {pinned.length && !q && !device ? (
-        <section className="pt-section">
-          <h2 className="pt-label">Часто открываете</h2>
-          <div className="pt-pinned">
-            {pinned.map((i) => (
-              <a key={i.key} className="pt-pin" href={i.primary} onClick={() => remember(i.key)}>
-                <AppIcon item={i} tint={tintOf(i.device)} size={36} />
-                <span>{i.title}</span>
-              </a>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {groups.map(({ d, apps }) => {
-        const dDown = apps.filter((i) => i.probe && status[i.probe] && !status[i.probe].ok).length;
-        return (
-          <section key={d.id} className="pt-section">
-            <div className="pt-device">
-              <h2>{d.name}</h2>
-              {d.note ? <span className="pt-mono pt-muted">{d.note}</span> : null}
-              <span className="pt-grow" />
-              <span className="pt-muted pt-hide-sm">
-                {apps.length} {plural(apps.length, ["приложение", "приложения", "приложений"])}
-                {probed.length ? (dDown ? ` · ${dDown} ${dDown === 1 ? "не отвечает" : "не отвечают"}` : " · все отвечают") : ""}
-              </span>
-            </div>
-            <div className="pt-grid">
-              {apps.map((i) => {
-                const probe = i.probe ? status[i.probe] : undefined;
-                const rule = policy ? policy.apps[idOf(i.key)] : undefined;
-                const mode: Mode = rule?.mode || "admin";
-                const lan = i.direct && i.direct !== i.primary ? i.direct : undefined;
-                return (
-                  <article key={i.key} className="pt-card">
-                    <a className="pt-card-main" href={i.primary} onClick={() => remember(i.key)}>
-                      <AppIcon item={i} tint={tintOf(i.device)} />
-                      <span className="pt-card-text">
-                        <strong>{i.title}</strong>
-                        <span>{i.description}</span>
-                      </span>
-                      <Icon d={I.chevron} size={16} />
-                    </a>
-                    {places.get(i.key) ? <PlaceLine place={places.get(i.key)!} /> : null}
-                    <div className="pt-card-foot">
-                      {probe ? (
-                        <span className={`pt-state ${probe.ok ? "is-ok" : "is-down"}`}>
-                          <i />
-                          {probe.ok ? "работает" : "не отвечает"}
-                        </span>
-                      ) : null}
-                      {policy ? <span className={`pt-access is-${mode}`}>{ACCESS_BADGE[mode]}</span> : null}
-                      <span className="pt-grow" />
-                      {policy && i.repo ? (
-                        <a className="pt-link is-git" href={i.repo} target="_blank" rel="noopener noreferrer" title={`Исходный код: ${i.repo}`}>
-                          <Icon d={I.git} size={13} />
-                          Git
-                        </a>
-                      ) : null}
-                      <a className="pt-link" href={i.primary} onClick={() => remember(i.key)} title={i.primary}>
-                        {hostLabel(i.public || i.primary)} ↗
-                      </a>
-                      {lan ? (
-                        <a className="pt-link is-lan" href={lan} onClick={() => remember(i.key)} title={`В домашней сети: ${lan}`}>
-                          LAN
-                        </a>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
-
-      {!groups.length ? (
-        <div className="pt-notice">
-          <strong>{items.length ? "Ничего не нашлось" : "Пока нет доступных приложений"}</strong>
-          <span>{items.length ? "Измените запрос или фильтр." : "Попросите администратора HomeNet открыть вам доступ."}</span>
-        </div>
-      ) : null}
-      {found.length && !q && !device ? <FoundList found={found} devices={cfg.devices} onChanged={onChanged} /> : null}
-      {probed.length ? <p className="pt-muted pt-small">Состояние — проверка порта приложения с роутера раз в минуту. Ссылка с доменом работает отовсюду, LAN — только дома.</p> : null}
-    </main>
-  );
-}
-
-function PlaceLine({ place }: { place: Placement }) {
-  const c = place.container;
-  const down = c && c.state !== "running";
-  const title = [place.vm ? `${place.vm.type === "lxc" ? "Контейнер LXC" : "Виртуальная машина"} ${place.vm.vmid} на ${place.server}` : "", c ? `Docker: ${c.name} (${c.image}) — ${c.status}` : ""].filter(Boolean).join(" · ");
-  return (
-    <div className={`pt-place${down ? " is-down" : ""}`} title={title || undefined}>
-      <Icon d={I.server} size={13} />
-      {placeSteps(place).map((step, n) => (
-        <span key={n}>{step}</span>
-      ))}
-      {down ? <em>{c!.state === "exited" ? "остановлен" : c!.state}</em> : null}
-    </div>
-  );
-}
-
-// Containers on home servers that publish a port nobody points at: add one as a link or hide it.
-function FoundList({ found, devices, onChanged }: { found: Found[]; devices: LauncherConfig["devices"]; onChanged: () => void }) {
-  const [busy, setBusy] = useState("");
-  const [msg, setMsg] = useState("");
-  const change = async (f: Found, add: boolean) => {
-    setBusy(f.key);
-    setMsg("");
-    try {
-      const cfg = (await fetchLauncher()) || defaultLauncher();
-      cfg.links ||= [];
-      cfg.order ||= [];
-      if (add) {
-        const id = slug(f.container.name);
-        cfg.links.push({ id, title: f.container.name, url: f.url, device: placedDevice(f.place, devices), description: f.container.image, upstream: f.key });
-        cfg.order.push("link:" + id);
-      } else {
-        cfg.dismissed = [...(cfg.dismissed || []), f.key];
-      }
-      await saveLauncher(cfg);
-      onChanged();
-    } catch (e) {
-      setMsg(`Не сохранилось: ${e instanceof Error ? e.message : e}`);
-    } finally {
-      setBusy("");
-    }
-  };
-  return (
-    <section className="pt-section">
-      <div className="pt-device">
-        <h2>Найдено на серверах</h2>
-        <span className="pt-muted">контейнеры с открытым портом, которых нет в списке</span>
-      </div>
-      {msg ? <p className="pt-warn" role="alert">{msg}</p> : null}
-      <div className="pt-found">
-        {found.map((f) => (
-          <div key={f.key} className="pt-found-row">
-            <span className="pt-found-name">
-              <strong>{f.container.name}</strong>
-              <small>{[...(f.place ? placeSteps(f.place).slice(0, -1) : []), f.container.image].join(" › ")}</small>
-            </span>
-            <a className="pt-link" href={f.url} target="_blank" rel="noopener noreferrer">
-              :{f.port} ↗
-            </a>
-            <button type="button" className="pt-btn" disabled={!!busy} onClick={() => void change(f, true)}>
-              {busy === f.key ? "…" : "Добавить"}
-            </button>
-            <button type="button" className="pt-btn pt-quiet" disabled={!!busy} onClick={() => void change(f, false)} title="Больше не предлагать">
-              Скрыть
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -619,7 +455,7 @@ function Access({ items, cfg, policy, onSaved, onBack }: { items: LauncherItem[]
           return (
             <div key={i.key} className="pt-row" role="row">
               <span className="pt-cell-app" role="cell">
-                <AppIcon item={i} tint={Math.max(0, cfg.devices.findIndex((d) => d.id === i.device)) % 5} size={34} />
+                <AppTile item={i} size={34} />
                 <span>
                   <strong>{i.title}</strong>
                   <small>{deviceName(i.device)}</small>
