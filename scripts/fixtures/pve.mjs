@@ -52,6 +52,7 @@ export function fakePve(req, res) {
       const now = new Date().toISOString(); events.forEach(e => { if (!e.read_at && (request.all || request.ids?.includes(e.id))) e.read_at = now; }); send(eventData());
     }); return true;
   }
+  if (url.pathname === '/api/pve/placement') { send({ nodes: [{ server: 's3', server_name: 's3', ip: '192.0.2.30', online: true }], machines: ['family-apps', 'forgejo-ci', 'home-server'].map((name, i) => ({ server: 's3', server_name: 's3', vmid: 101 + i, name, type: 'qemu', status: 'running', ips: [`192.0.2.${22 + i}`] })) }); return true; }
   if (url.pathname === '/api/pve/overview') { send({ configured: true, error: '', hosts: Array.from({ length: 4 }, (_, i) => host(i)) }); return true; }
   if (url.pathname === '/api/pve/history') {
     const now = Math.floor(Date.now() / 1000), points = Array.from({ length: 60 }, (_, i) => ({ t: now - (59 - i) * 60, cpu: 20 + Math.sin(i / 5) * 10, mem: 8 * GB, io: 1, load: 0.8, temp: 48 + Math.sin(i / 7) * 4, rx: 1200000, tx: 540000, r: 350000, w: 240000 }));
