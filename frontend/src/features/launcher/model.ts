@@ -29,6 +29,8 @@ export type LauncherItem = {
   source: "routes" | "manual";
   title: string;
   description: string;
+  /** what the app is for, written by the administrator (NPM-85) */
+  about?: string;
   device: string;
   art?: string;
   hints: string[];
@@ -85,6 +87,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, link
       source: "routes",
       title: override.title || app.name || app.id,
       description: override.description || [local?.host, pub?.host].filter(Boolean).join(" · ") || `${up.address}:${up.port}`,
+      about: override.description,
       device: override.device || deviceFor(up.address, cfg.devices),
       art: override.art,
       hints: [app.id, app.name, ...own.map((h) => h.host)],
@@ -103,6 +106,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, link
       source: "manual",
       title: link.title,
       description: link.description || link.url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      about: link.description,
       device: cfg.devices.some((d) => d.id === link.device) ? link.device : OTHER_DEVICE,
       art: link.art,
       hints: [link.id, link.title, link.url],
