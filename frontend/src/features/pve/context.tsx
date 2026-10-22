@@ -18,7 +18,8 @@ function useStateOf(host: Host, hosts: PveHost[]) {
   const ids = hosts.map(h => h.id).sort().join("\n");
   useEffect(() => {
     const read = () => { const [, id, type, vmid] = location.hash.replace(/^#\/?/, "").split("/");
-      if (id && type && /^\d+$/.test(vmid || "")) setTarget({ host: decodeURIComponent(id), type: type === "node" ? undefined : type, vmid: type === "node" ? undefined : Number(vmid) }); };
+      if (id && type && /^\d+$/.test(vmid || "")) setTarget({ host: decodeURIComponent(id), type: type === "node" ? undefined : type, vmid: type === "node" ? undefined : Number(vmid) });
+      else setTarget(null); }; // NPM-92: another section closes the machine panel
     read(); window.addEventListener("hashchange", read); return () => window.removeEventListener("hashchange", read);
   }, []);
   useEffect(() => {

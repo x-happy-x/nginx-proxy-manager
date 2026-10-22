@@ -36,7 +36,7 @@ export function Machines({ hosts }: { hosts: PveHost[] }) {
         <div role="cell" className="pv-metric">{percent(g.cpu)}<Chart title={`CPU ${g.name} за сутки`} times={(ctx.history[h.id]?.guests?.[g.vmid] || []).map(p => p[0])} values={(ctx.history[h.id]?.guests?.[g.vmid] || []).map(p => p[1])} format={percent} max={100} compact /></div>
         <div role="cell" className="pv-metric">{bytes(g.mem)} / {bytes(g.maxmem)}<Bar thin value={ratio(g.mem, g.maxmem)} tone={usageTone(ratio(g.mem, g.maxmem))} /></div>
         <div role="cell" className="pv-metric">↓{bits(g.netin_rate)} ↑{bits(g.netout_rate)}<small>R {bytes(g.diskread_rate)}/с · W {bytes(g.diskwrite_rate)}/с</small></div>
-        <div role="cell"><AppChips g={g} /></div><div role="cell">{uptime(g.uptime)}</div><div role="cell" className="pv-power-cell"><ActionButtons h={h} g={g} compact /><More h={h} g={g} /></div>
+        <div role="cell"><AppChips g={g} limit={2} /></div><div role="cell">{uptime(g.uptime)}</div><div role="cell" className="pv-power-cell"><ActionButtons h={h} g={g} compact /><More h={h} g={g} /></div>
       </div></div>)}
     </div> : <NoMatches />}</>;
 }
