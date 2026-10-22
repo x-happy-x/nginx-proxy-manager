@@ -14,7 +14,23 @@ export function PcHeading({ title, subtitle, query, setQuery, children, privacy 
   const { hideAddresses, setHideAddresses } = usePc();
   return <header className="pc-heading"><div><h1>{title}</h1><p>{subtitle}</p></div><div className="pc-heading-tools">{setQuery ? <label className="pc-search"><Icon name="search" size={16} /><input aria-label="Поиск" placeholder="Компьютер, контейнер, образ, порт" value={query} onChange={e => setQuery(e.target.value)} /></label> : null}{children}{privacy ? <button type="button" className="hp-btn is-quiet" aria-pressed={hideAddresses} onClick={() => setHideAddresses(!hideAddresses)}>{hideAddresses ? "Адреса скрыты" : "Скрыть адреса"}</button> : null}</div></header>;
 }
-export function OsIcon({ h }: { h: Computer }) { return <span className={`pc-os ${h.current?.os || "unknown"}`} aria-label={systemName(h)}>{h.current?.os === "windows" ? "⊞" : h.current?.os === "linux" ? "🐧" : <Icon name="system" />}</span>; }
+export function OsIcon({ h }: { h: Computer }) {
+  const os = h.current?.os;
+  return <span className={`pc-os ${os || "unknown"}`} role="img" aria-label={systemName(h)}>
+    {os === "windows" ? <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" fill="currentColor">
+      <path d="M4 6.3 14.5 4.9v10H4Zm12.5-1.7L28 3v11.9H16.5ZM4 17h10.5v10.1L4 25.7Zm12.5 0H28v12l-11.5-1.6Z" />
+    </svg> : os === "linux" ? <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M16 3c-4 0-6.2 3.2-6.2 7.5v2c-2.2 2.8-4 6.1-4 9.1 0 4.6 4.5 7 10.2 7s10.2-2.4 10.2-7c0-3-1.8-6.3-4-9.1v-2C22.2 6.2 20 3 16 3Z" />
+      <ellipse cx="16" cy="20.5" rx="6.3" ry="6.8" fill="var(--pc-os-paper)" />
+      <ellipse cx="13.5" cy="10.5" rx="2" ry="2.7" fill="var(--pc-os-paper)" />
+      <ellipse cx="18.5" cy="10.5" rx="2" ry="2.7" fill="var(--pc-os-paper)" />
+      <ellipse cx="14" cy="11" rx=".8" ry="1.3" fill="currentColor" />
+      <ellipse cx="18" cy="11" rx=".8" ry="1.3" fill="currentColor" />
+      <path d="m12.8 14 3.2-1.7 3.2 1.7-3.2 2.4Z" fill="var(--pc-os-beak)" />
+      <path d="M10.8 25.2c-1.2-.8-3.7.2-5 2.5-.5.8.1 1.5 1 1.5h6.5c1 0 1.5-.7 1-1.5Zm10.4 0c1.2-.8 3.7.2 5 2.5.5.8-.1 1.5-1 1.5h-6.5c-1 0-1.5-.7-1-1.5Z" fill="var(--pc-os-beak)" />
+    </svg> : <Icon name="servers" size={25} />}
+  </span>;
+}
 export function StatusDot({ state, label }: { state: "ok" | "warn" | "off"; label: string }) { return <span className={`pc-dot ${state}`} role="img" aria-label={label} title={label} />; }
 export function MachineHead({ h, badge = true }: { h: Computer; badge?: boolean }) {
   const { hideAddresses, vmOf, openComputer } = usePc();
