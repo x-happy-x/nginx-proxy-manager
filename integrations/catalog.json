@@ -64,7 +64,7 @@
   {
     "id": "pc", "name": "Компьютеры", "description": "Windows и Linux по SSH: ресурсы, WSL и Docker в системе и дистрибутивах", "port": 63506,
     "pages": ["pc", "pcwsl", "pcdocker", "pcsettings"],
-    "titles": {"pc": "Обзор", "pcwsl": "WSL", "pcdocker": "Docker", "pcsettings": "Настройка"},
+    "titles": {"pc": "Обзор", "pcwsl": "WSL", "pcdocker": "Контейнеры", "pcsettings": "Настройка"},
     "paths": ["/api/pc/"],
     "data": ["/opt/etc/homenet/pc"],
     "widgets": [
