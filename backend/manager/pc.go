@@ -325,6 +325,8 @@ func (a *app) handlePC(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, 200, pcm.widget())
 	case "/api/pc/summary/attention":
 		a.writeJSON(w, 200, response{"items": pcm.attention()})
+	case "/api/pc/placement":
+		a.writeJSON(w, 200, pcm.placement())
 	default:
 		http.NotFound(w, r)
 	}

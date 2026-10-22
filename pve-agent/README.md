@@ -5,6 +5,11 @@ HomeNet reads snapshots over SSH using a key restricted to `serve`. Version
 1.2.0 also supports power operations; a plain installation remains read-only.
 Python 3 and `pvesh` are provided by Proxmox VE. No Python packages are needed.
 
+Since 1.3.0 each running guest also carries `ips` (IPv4 from the QEMU guest
+agent or LXC interfaces, Docker and loopback interfaces skipped) and `macs`.
+HomeNet uses them to show on which server and VM an application runs; a guest
+without the guest agent is matched by its MAC in the router's ARP table.
+
 ## Installation and update
 
 Copy this directory to the Proxmox host and run the installer there as root.

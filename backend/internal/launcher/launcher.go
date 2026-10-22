@@ -32,6 +32,8 @@ type Link struct {
 	Description string `json:"description,omitempty"`
 	Art         string `json:"art,omitempty"`
 	Repo        string `json:"repo,omitempty"` // source repository, e.g. in Forgejo
+	// Upstream is host:port behind a public URL, so the link is probed and placed like a routed app (NPM-84).
+	Upstream string `json:"upstream,omitempty"`
 }
 
 type AppOverride struct {
@@ -48,6 +50,8 @@ type Config struct {
 	Links   []Link                 `json:"links"`
 	Apps    map[string]AppOverride `json:"apps"`
 	Order   []string               `json:"order,omitempty"`
+	// Dismissed lists ip:port of found containers the administrator chose not to add (NPM-84).
+	Dismissed []string `json:"dismissed,omitempty"`
 }
 
 var launcherFileMu sync.Mutex
@@ -88,7 +92,7 @@ func ValidURL(raw string) bool {
 }
 
 func (a Store) Save(cfg Config) error {
-	if len(cfg.Devices) > 64 || len(cfg.Links) > 512 {
+	if len(cfg.Devices) > 64 || len(cfg.Links) > 512 || len(cfg.Dismissed) > 1024 {
 		return errors.New("слишком много устройств или ссылок")
 	}
 	seen := map[string]bool{}
@@ -107,6 +111,9 @@ func (a Store) Save(cfg Config) error {
 		}
 		if link.Repo != "" && !ValidURL(link.Repo) {
 			return fmt.Errorf("ссылка %q: адрес репозитория должен быть http(s)://", link.Title)
+		}
+		if _, ok := Target(link.Upstream); link.Upstream != "" && !ok {
+			return fmt.Errorf("ссылка %q: upstream должен быть вида адрес:порт", link.Title)
 		}
 	}
 	for id, app := range cfg.Apps {

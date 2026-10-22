@@ -8,6 +8,7 @@ import { PageHeader } from "../navigation";
 import { errText } from "../lib/format";
 import { ART_KEYS, artFor, CardArt, deviceArt, ServiceIcon } from "../features/launcher/art";
 import { buildItems, defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "../features/launcher/model";
+import { placeOf, placeSteps, usePlacement, type Placement } from "../features/launcher/placement";
 import { useResources } from "./Resources";
 import { bytes } from "../lib/format";
 
@@ -62,6 +63,7 @@ export function Launcher({ doc }: { doc: RoutesDocument | null }) {
   }, []);
 
   const items = useMemo(() => (cfg ? buildItems(doc, cfg, links) : []), [doc, cfg, links]);
+  const placement = usePlacement(true);
 
   // Apps served by the router itself get live CPU/RAM of the process group
   // that listens on their upstream port.
@@ -261,6 +263,7 @@ export function Launcher({ doc }: { doc: RoutesDocument | null }) {
                       probe={item.probe ? status[item.probe] : undefined}
                       probeKnown={!statusLoaded || !item.probe || item.probe in status}
                       usage={usageFor(item)}
+                      place={placeOf(item.probe, placement)}
                       editing={editing}
                       onEdit={() => setEditItem(item)}
                       onToggleHidden={() => update((d) => toggleHidden(d, item))}
@@ -343,13 +346,14 @@ function applyItemPatch(cfg: LauncherConfig, item: LauncherItem | null, patch: P
 }
 
 function LauncherTile({
-  item, view, probe, probeKnown, usage, editing, onEdit, onToggleHidden, onDelete, dragProps,
+  item, view, probe, probeKnown, usage, place, editing, onEdit, onToggleHidden, onDelete, dragProps,
 }: {
   item: LauncherItem;
   view: View;
   probe?: Probe;
   probeKnown: boolean;
   usage?: Usage;
+  place?: Placement;
   editing: boolean;
   onEdit: () => void;
   onToggleHidden: () => void;
@@ -387,6 +391,12 @@ function LauncherTile({
         <div className="lt-text">
           <strong>{item.title}</strong>
           <span>{item.description}</span>
+          {place ? (
+            <span className="lt-place" title={place.container ? `${place.container.image} — ${place.container.status}` : undefined}>
+              {placeSteps(place).join(" › ")}
+              {place.container && place.container.state !== "running" ? " · остановлен" : ""}
+            </span>
+          ) : null}
           {usage ? (
             <span className="lt-usage" title={`Процессы на роутере: ${usage.name}`}>
               <span>CPU {usage.cpu >= 10 ? Math.round(usage.cpu) : usage.cpu.toFixed(1)} %</span>
