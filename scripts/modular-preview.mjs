@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
-import { fakePve } from './fixtures/pve.mjs';
+import { fakePve, pvePortalFixture } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await mkdir(path.join(root,'.local'),{recursive:true});
 const state = await mkdtemp(path.join(root, '.local/modular-preview-'));
@@ -100,6 +100,7 @@ async function startHAWorker(item, manifestPath, tokenPath) {
   process.on('exit', () => worker.kill());
 }
 async function freePort() { const s = createServer(); await new Promise(r => s.listen(0, '127.0.0.1', r)); const p = s.address().port; await new Promise(r => s.close(r)); return p; }
+if (process.env.PREVIEW_PVE === 'fake') await writeFile(path.join(state, 'portal.json'), JSON.stringify(pvePortalFixture));
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
@@ -143,7 +144,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
 }
 await writeFile(path.join(state, 'registry.json'), JSON.stringify({schema:1,items}));
 if (requested.has('pc') && process.env.PREVIEW_PC === 'fake') {
-  await writeFile(path.join(state, 'portal.json'), JSON.stringify({ apps: [{ id: 'tracker', name: 'Задачи', upstream: { address: '192.0.2.22', port: 4193, scheme: 'http' } }], hosts: [] }));
+  await writeFile(path.join(state, 'portal.json'), JSON.stringify({ apps: [...(process.env.PREVIEW_PVE === 'fake' ? pvePortalFixture.apps : []), { id: 'tracker', name: 'Задачи', upstream: { address: '192.0.2.22', port: 4193, scheme: 'http' } }], hosts: [] }));
 }
 await writeFile(path.join(state, 'config.json'), JSON.stringify({manage_workers:false,listen:`127.0.0.1:${port}`,state_dir:state,static_dir:path.join(root,'frontend/static/core'),packages_dir:path.join(state,'packages'),account_url:account,dms_url:'http://127.0.0.1:48660',dms_token_file:path.join(state,'absent-dms-token')}));
 const binary = path.join(state, process.platform === 'win32' ? 'core.exe' : 'core');
