@@ -1643,3 +1643,11 @@
   align-items: center;
   gap: 8px;
 }
+
+/* NPM-87: a <button> keeps the browser's padding and pushed the dots off-centre */
+.hp-card-tools .hp-icon {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  place-items: center;
+}
