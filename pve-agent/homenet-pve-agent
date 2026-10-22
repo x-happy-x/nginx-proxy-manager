@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 RUN = "/run/homenet-pve"
 LIB = "/var/lib/homenet-pve"
 INTERVAL = 10
@@ -145,7 +145,7 @@ def guests():
     data = sh_json(["pvesh", "get", "/cluster/resources", "--type", "vm", "--output-format", "json"], 30, [])
     out = []
     for g in data:
-        if g.get("node") and g["node"] != NODE:
+        if g.get("node") != NODE:
             continue
         out.append({
             "vmid": g.get("vmid"), "name": g.get("name", ""), "type": g.get("type"), "status": g.get("status"),
@@ -249,9 +249,70 @@ def updates():
 def failed_units():
     return [l.split()[0] for l in sh(["systemctl", "--failed", "--no-legend", "--plain"]).splitlines() if l.strip()]
 
+def guest_config(kind, vmid):
+    """Allowlisted fields only: never relay cloud-init passwords or SSH keys."""
+    if kind not in ("qemu", "lxc") or not str(vmid).isdigit():
+        return None
+    cfg = sh_json(["pvesh", "get", "/nodes/%s/%s/%s/config" % (NODE, kind, vmid), "--output-format", "json"], 10)
+    if not isinstance(cfg, dict):
+        return None
+    disks, networks = [], []
+    for key, value in sorted(cfg.items()):
+        value = str(value)
+        if re.fullmatch(r"(?:scsi|virtio|sata|ide|mp)\d+|rootfs", key):
+            disks.append({"slot": key, "volume": value.split(",")[0],
+                          "size": next((v[5:] for v in value.split(",") if v.startswith("size=")), "")})
+        if re.fullmatch(r"net\d+", key):
+            mac = MAC_RE.search(value)
+            networks.append({"slot": key, "mac": mac.group(1).lower() if mac else "",
+                             "bridge": next((v[7:] for v in value.split(",") if v.startswith("bridge=")), "")})
+    return {"cpu": cfg.get("cpu", ""), "cores": cfg.get("cores"), "sockets": cfg.get("sockets"),
+            "memory": cfg.get("memory"), "balloon": cfg.get("balloon"), "agent": cfg.get("agent"),
+            "disks": disks, "networks": networks}
+
+
 def backups():
-    data = sh_json(["pvesh", "get", "/nodes/%s/tasks" % NODE, "--typefilter", "vzdump", "--limit", "10", "--output-format", "json"], 30, [])
-    return [{"id": t.get("id", ""), "status": t.get("status", "running"), "start": t.get("starttime"), "end": t.get("endtime")} for t in data]
+    """Completed jobs plus retained archives, scoped to this node and the last 14 days.
+
+    An archive proves that a guest copy exists, not that the entire job succeeded.
+    Keep the job error as well, even when one guest in the job succeeded.
+    """
+    since = int(time.time()) - 14 * 86400
+    result = []
+    offset = 0
+    while True:
+        page = sh_json(["pvesh", "get", "/nodes/%s/tasks" % NODE, "--typefilter", "vzdump",
+                        "--since", str(since), "--start", str(offset), "--limit", "100",
+                        "--output-format", "json"], 30, [])
+        for t in page:
+            if (t.get("starttime") or 0) < since:
+                continue
+            vmid = int(t["id"]) if str(t.get("id", "")).isdigit() else None
+            result.append({"id": t.get("upid") or str(t.get("id", "")), "vmid": vmid,
+                           "status": t.get("status", "running"), "start": t.get("starttime"),
+                           "end": t.get("endtime"), "size": None, "source": "task"})
+        if len(page) < 100:
+            break
+        offset += len(page)
+    for store in storage():
+        if not store["active"] or "backup" not in store["content"].split(","):
+            continue
+        content = sh_json(["pvesh", "get", "/nodes/%s/storage/%s/content" % (NODE, store["name"]),
+                           "--content", "backup", "--output-format", "json"], 30, [])
+        for item in content:
+            stamp = item.get("ctime") or 0
+            if stamp < since:
+                continue
+            vmid = item.get("vmid")
+            match = next((t for t in result if t["vmid"] == vmid and t["status"] == "OK"
+                          and t["start"] <= stamp <= (t["end"] or t["start"]) + 60), None)
+            if match:
+                match.update(size=item.get("size"), storage=store["name"])
+            else:
+                result.append({"id": item.get("volid", ""), "vmid": vmid, "status": "OK", "start": stamp,
+                               "end": stamp, "size": item.get("size"), "storage": store["name"], "source": "archive"})
+    return sorted(result, key=lambda x: x["start"] or 0, reverse=True)
+
 
 def cluster():
     """Cluster name, quorum and members as this node sees them (empty for a standalone host)."""
@@ -373,6 +434,14 @@ class Agent:
         addrs = self.every("addresses", 60, lambda: guest_addresses(g)) or {}
         for x in g:
             x.update(addrs.get(str(x["vmid"])) or {"ips": [], "macs": []})
+            cfg = self.every("config:%s:%s" % (x["type"], x["vmid"]), 300,
+                             lambda x=x: guest_config(x["type"], x["vmid"]))
+            if cfg is not None:
+                x["config"] = cfg
+        live_configs = {"config:%s:%s" % (x["type"], x["vmid"]) for x in g}
+        for key in list(self.slow):
+            if key.startswith("config:") and key not in live_configs:
+                del self.slow[key]
         # pvestatd refreshes guest counters every ~10 s, out of step with this loop: a rate is
         # computed only when the counters moved, over the time since they last moved.
         keys = ("netin", "netout", "diskread", "diskwrite")

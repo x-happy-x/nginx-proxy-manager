@@ -201,3 +201,20 @@ func TestPVEClusterAttention(t *testing.T) {
 		t.Errorf("cluster problems once, whoever reports them: %v", count)
 	}
 }
+
+func TestPVESnapshot14AndLegacy(t *testing.T) {
+	var modern pvhSnapshot
+	if err := json.Unmarshal([]byte(`{"guests":[{"vmid":100,"cpus":4,"maxmem":4294967296,"maxdisk":68719476736,"config":{"agent":"1","disks":[]}}],"backups":[{"id":"job","status":"OK","vmid":100,"size":1234,"start":123,"end":456}]}`), &modern); err != nil {
+		t.Fatal(err)
+	}
+	if modern.Guests[0].MaxMem != 4294967296 || modern.Guests[0].CPUs != 4 || len(modern.Guests[0].Config) == 0 || *modern.Backups[0].VMID != 100 || *modern.Backups[0].Size != 1234 {
+		t.Fatalf("new fields lost: %+v", modern)
+	}
+	var legacy pvhSnapshot
+	if err := json.Unmarshal([]byte(`{"guests":[{"vmid":100}],"backups":[{"id":"100","status":"OK","end":456}]}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Guests[0].Config != nil || legacy.Backups[0].VMID != nil || legacy.Backups[0].Size != nil {
+		t.Fatal("absent data must stay absent")
+	}
+}

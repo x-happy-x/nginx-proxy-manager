@@ -55,14 +55,18 @@ type pvhSnapshot struct {
 		Crit  *float64 `json:"crit"`
 	} `json:"temps"`
 	Guests []struct {
-		VMID     int      `json:"vmid"`
-		Name     string   `json:"name"`
-		Type     string   `json:"type"`
-		Status   string   `json:"status"`
-		Template bool     `json:"template"`
-		Lock     string   `json:"lock"`
-		IPs      []string `json:"ips"`  // agent 1.3.0+
-		MACs     []string `json:"macs"` // agent 1.3.0+
+		VMID     int             `json:"vmid"`
+		Name     string          `json:"name"`
+		Type     string          `json:"type"`
+		Status   string          `json:"status"`
+		Template bool            `json:"template"`
+		Lock     string          `json:"lock"`
+		CPUs     float64         `json:"cpus,omitempty"`
+		MaxMem   float64         `json:"maxmem,omitempty"`
+		MaxDisk  float64         `json:"maxdisk,omitempty"`
+		Config   json.RawMessage `json:"config,omitempty"`
+		IPs      []string        `json:"ips"`  // agent 1.3.0+
+		MACs     []string        `json:"macs"` // agent 1.3.0+
 	} `json:"guests"`
 	Storage []struct {
 		Name    string  `json:"name"`
@@ -94,9 +98,14 @@ type pvhSnapshot struct {
 	FailedUnits []string `json:"failed_units"`
 	Updates     *int     `json:"updates"`
 	Backups     []struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-		End    int64  `json:"end"`
+		ID      string `json:"id"`
+		Status  string `json:"status"`
+		End     int64  `json:"end"`
+		Start   int64  `json:"start,omitempty"`
+		VMID    *int   `json:"vmid,omitempty"`
+		Size    *int64 `json:"size,omitempty"`
+		Storage string `json:"storage,omitempty"`
+		Source  string `json:"source,omitempty"`
 	} `json:"backups"`
 }
 
