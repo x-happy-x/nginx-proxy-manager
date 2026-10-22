@@ -30,3 +30,12 @@
 
 :root[data-theme="dark"] .hp.pv-root,:root[data-theme="dark"] .hp.pv-details{background:transparent}
 @media(max-width:600px){.pv-filters{flex-basis:100%}.pv-tools .hp-view{margin-left:0}}
+
+/* NPM-92: closer to the mock-up */
+.pv-avatar.server{--hue:28;background:linear-gradient(140deg,hsl(var(--hue) 75% 62%),hsl(var(--hue) 80% 40%))}
+.pv-heat>div{background:color-mix(in srgb,var(--tone) 85%,var(--hp-card));color:#06140e;font-weight:700}
+.pv-heat>div.tone-warn{color:#2b1a02}.pv-heat>div.tone-bad{color:#fff}.pv-heat>div.tone-idle{background:var(--hp-line-2);color:var(--text-2)}
+.pv-heat small{font-weight:500;opacity:.8}
+.pve-action-buttons.compact{display:flex;gap:4px;justify-content:flex-end}
+.pve-btn.icon{width:28px;height:28px;padding:0;display:inline-grid;place-items:center}
+.pv-detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

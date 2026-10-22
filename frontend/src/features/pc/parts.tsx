@@ -31,14 +31,39 @@ export function Spark({ points, label = "CPU · последний час" }: { 
 }
 export function Disks({ h }: { h: Computer }) { return <div className="pc-disks">{h.current?.disks.length ? h.current.disks.map(d => <div key={d.path} className="pc-disk"><div><b>{d.path}</b><span>{bytes(d.used)} / {bytes(d.total)}</span></div><Meter value={d.total ? ratio(d.used, d.total) : null} /><small>Свободно {bytes(d.free)}</small></div>) : <p className="pc-muted">Нет данных о дисках.</p>}</div>; }
 
-// Keep each binding visible, including loopback and unpublished container ports.
-export function Ports({ value }: { value: string }) {
+export type PortBinding = { label: string; local: boolean; raw: string[] };
+
+// NPM-92: `docker ps` lists one published port per address family and also the
+// ports a container only exposes inside Docker. Show each published binding
+// once («4161», «4191→3001», «lo:5001» for loopback); unpublished ones only in details.
+export function publishedPorts(value: string): { published: PortBinding[]; internal: string[] } {
+  const published = new Map<string, PortBinding>();
+  const internal: string[] = [];
+  for (const raw of value ? value.split(/,\s*/) : []) {
+    const m = raw.match(/^(?:\[?([0-9a-fA-F:.]*)\]?:)?(\d+(?:-\d+)?)->(\d+(?:-\d+)?)\/(tcp|udp)$/);
+    if (!m) {
+      if (raw.trim()) internal.push(raw.replace(/\/tcp$/, ""));
+      continue;
+    }
+    const local = /^(127\.|::1$|localhost)/.test(m[1] || "");
+    const label = `${local ? "lo:" : ""}${m[2]}${m[2] === m[3] ? "" : `→${m[3]}`}${m[4] === "udp" ? "/udp" : ""}`;
+    const seen = published.get(label);
+    if (seen) seen.raw.push(raw);
+    else published.set(label, { label, local, raw: [raw] });
+  }
+  return { published: [...published.values()], internal: [...new Set(internal)] };
+}
+
+export function Ports({ value, all = false, limit = 0 }: { value: string; all?: boolean; limit?: number }) {
   const { hideAddresses } = usePc();
-  return <span className="pc-ports">{value ? value.split(/,\s*/).map((raw, i) => {
-    const local = /^(127\.|\[?::1\]?:|localhost:)/.test(raw);
-    const published = raw.includes("->");
-    const short = published ? raw.replace(/^(?:\[[^\]]+\]|[^:]+|::):(?=\d)/, local ? "lo:" : "") : raw;
-    return <span key={i} className={published && !local ? "public" : ""} title={hideAddresses ? undefined : raw}>{short}</span>;
-  }) : "—"}</span>;
+  const { published, internal } = publishedPorts(value);
+  const shown = limit && published.length > limit ? published.slice(0, limit) : published;
+  const more = published.length - shown.length;
+  if (!published.length && !(all && internal.length)) return <span className="pc-ports">{all ? "—" : ""}</span>;
+  return <span className="pc-ports">
+    {shown.map(p => <span key={p.label} className={p.local ? "" : "public"} title={hideAddresses ? undefined : p.raw.join(", ")}>{p.label}</span>)}
+    {more > 0 ? <span title={published.slice(limit).map(p => p.label).join(", ")}>+{more}</span> : null}
+    {all && internal.length ? <span title="Порты внутри Docker, не опубликованы">внутри: {internal.join(", ")}</span> : null}
+  </span>;
 }
 export const shortImage = (s: string) => s.replace(/([:@](?:sha256:)?)([a-f0-9]{12})[a-f0-9]+$/i, "$1$2…");
