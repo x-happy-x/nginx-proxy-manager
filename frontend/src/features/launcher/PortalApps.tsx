@@ -466,28 +466,32 @@ function DeviceApps({ apps, ctx, view }: { apps: LauncherItem[]; ctx: Ctx; view:
           ))}
         </div>
       ) : null}
-      {[...vms.entries()].map(([key, g]) => {
-        const host = ctx.placement?.hosts.find((h) => h.ip === g.ip);
-        return (
-          <div key={key} className="hp-vm">
-            <header className="hp-vm-head">
-              <Svg d={P.vm} size={16} />
-              <strong>{g.label}</strong>
-              {g.ip && !ctx.hideHosts ? <small>{g.ip}</small> : null}
-              <span className="hp-grow" />
-              {loadParts(host).map((p) => (
-                <span key={p.text} className={`hp-pill${p.warn ? " is-warn" : ""}`}>{p.text}</span>
-              ))}
-              <span className="hp-pill">{g.apps.length} {plural(g.apps.length, APPS)}</span>
-            </header>
-            <div className={box}>
-              {g.apps.map((i) => (
-                <AppCard key={i.key} item={i} ctx={ctx} inVM />
-              ))}
+      {vms.size ? (
+        <div className={view === "list" ? "hp-vm-col" : "hp-vm-row"}>
+        {[...vms.entries()].map(([key, g]) => {
+          const host = ctx.placement?.hosts.find((h) => h.ip === g.ip);
+          return (
+            <div key={key} className="hp-vm">
+              <header className="hp-vm-head">
+                <Svg d={P.vm} size={16} />
+                <strong>{g.label}</strong>
+                {g.ip && !ctx.hideHosts ? <small>{g.ip}</small> : null}
+                <span className="hp-grow" />
+                {loadParts(host).map((p) => (
+                  <span key={p.text} className={`hp-pill${p.warn ? " is-warn" : ""}`}>{p.text}</span>
+                ))}
+                <span className="hp-pill">{g.apps.length} {plural(g.apps.length, APPS)}</span>
+              </header>
+              <div className={view === "list" ? "hp-list" : "hp-vm-cards"}>
+                {g.apps.map((i) => (
+                  <AppCard key={i.key} item={i} ctx={ctx} inVM />
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+        </div>
+      ) : null}
     </>
   );
 }
