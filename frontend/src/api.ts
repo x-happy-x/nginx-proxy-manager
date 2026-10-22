@@ -95,13 +95,14 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
 }
 
 export type LauncherDevice = { id: string; name: string; kind: string; note?: string; addresses: string[] };
-export type LauncherLink = { id: string; title: string; url: string; device: string; description?: string; art?: string; repo?: string };
+export type LauncherLink = { id: string; title: string; url: string; device: string; description?: string; art?: string; repo?: string; upstream?: string };
 export type LauncherAppOverride = { title?: string; device?: string; description?: string; art?: string; hidden?: boolean; repo?: string };
 export type LauncherConfig = {
   devices: LauncherDevice[];
   links: LauncherLink[];
   apps: Record<string, LauncherAppOverride>;
   order?: string[];
+  dismissed?: string[];
 };
 
 export async function fetchLauncher(): Promise<LauncherConfig | null> {

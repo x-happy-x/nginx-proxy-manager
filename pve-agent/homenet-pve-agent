@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 RUN = "/run/homenet-pve"
 LIB = "/var/lib/homenet-pve"
 INTERVAL = 10
@@ -155,6 +155,47 @@ def guests():
             "uptime": g.get("uptime") or 0, "tags": g.get("tags", ""), "lock": g.get("lock", ""),
         })
     return sorted(out, key=lambda g: g["vmid"] or 0)
+
+# NPM-84: where a guest is in the network, so HomeNet can place applications on it.
+SKIP_IFACES = ("lo", "docker", "br-", "veth", "virbr", "cni", "flannel", "tailscale", "wg")
+MAC_RE = re.compile(r"=([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})")
+
+def guest_net(kind, vmid):
+    """IPv4 addresses and MACs of a running guest: the QEMU guest agent or LXC interfaces, else only MACs."""
+    base = "/nodes/%s/%s/%s" % (NODE, kind, vmid)
+    ips, macs = [], []
+    if kind == "qemu":
+        data = sh_json(["pvesh", "get", base + "/agent/network-get-interfaces", "--output-format", "json"], 10, {}) or {}
+        for iface in data.get("result", []) if isinstance(data, dict) else []:
+            name = iface.get("name", "")
+            if name.startswith(SKIP_IFACES):
+                continue
+            mac = (iface.get("hardware-address") or "").lower()
+            if mac and mac != "00:00:00:00:00:00":
+                macs.append(mac)
+            for a in iface.get("ip-addresses") or []:
+                if a.get("ip-address-type") == "ipv4" and not a.get("ip-address", "").startswith("127."):
+                    ips.append(a["ip-address"])
+    else:
+        for iface in sh_json(["pvesh", "get", base + "/interfaces", "--output-format", "json"], 10, []) or []:
+            name = iface.get("name", "")
+            if name.startswith(SKIP_IFACES):
+                continue
+            if iface.get("hwaddr"):
+                macs.append(iface["hwaddr"].lower())
+            inet = (iface.get("inet") or "").split("/")[0]
+            if inet and not inet.startswith("127."):
+                ips.append(inet)
+    if not macs:
+        config = sh_json(["pvesh", "get", base + "/config", "--output-format", "json"], 10, {}) or {}
+        for key, value in sorted(config.items()):
+            m = MAC_RE.search(str(value)) if re.fullmatch(r"net\d+", key) else None
+            if m:
+                macs.append(m.group(1).lower())
+    return {"ips": sorted(set(ips)), "macs": sorted(set(macs))}
+
+def guest_addresses(listed):
+    return {str(g["vmid"]): guest_net(g["type"], g["vmid"]) for g in listed if g["status"] == "running" and not g["template"]}
 
 def storage():
     data = sh_json(["pvesh", "get", "/nodes/%s/storage" % NODE, "--output-format", "json"], 30, [])
@@ -329,6 +370,9 @@ class Agent:
         mem = meminfo()
         temps, fans = temperatures()
         g = self.every("guests", INTERVAL, guests) or []
+        addrs = self.every("addresses", 60, lambda: guest_addresses(g)) or {}
+        for x in g:
+            x.update(addrs.get(str(x["vmid"])) or {"ips": [], "macs": []})
         # pvestatd refreshes guest counters every ~10 s, out of step with this loop: a rate is
         # computed only when the counters moved, over the time since they last moved.
         keys = ("netin", "netout", "diskread", "diskwrite")

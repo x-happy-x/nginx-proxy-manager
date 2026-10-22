@@ -55,12 +55,14 @@ type pvhSnapshot struct {
 		Crit  *float64 `json:"crit"`
 	} `json:"temps"`
 	Guests []struct {
-		VMID     int    `json:"vmid"`
-		Name     string `json:"name"`
-		Type     string `json:"type"`
-		Status   string `json:"status"`
-		Template bool   `json:"template"`
-		Lock     string `json:"lock"`
+		VMID     int      `json:"vmid"`
+		Name     string   `json:"name"`
+		Type     string   `json:"type"`
+		Status   string   `json:"status"`
+		Template bool     `json:"template"`
+		Lock     string   `json:"lock"`
+		IPs      []string `json:"ips"`  // agent 1.3.0+
+		MACs     []string `json:"macs"` // agent 1.3.0+
 	} `json:"guests"`
 	Storage []struct {
 		Name    string  `json:"name"`
@@ -353,6 +355,8 @@ func (a *app) handlePVE(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, 200, pvh.widgetGuests())
 	case "/api/pve/summary/attention":
 		a.writeJSON(w, 200, response{"items": pvh.attention()})
+	case "/api/pve/placement":
+		a.writeJSON(w, 200, pvh.placement(readARP()))
 	default:
 		http.NotFound(w, r)
 	}

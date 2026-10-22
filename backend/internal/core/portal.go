@@ -86,14 +86,23 @@ func (s *Server) portalDocument(id Identity, policy access.Config) (PortalDocume
 		key := "link:" + l.ID
 		if access.Allowed(policy.Apps[key], id.Login, role) {
 			allowed[key] = true
+			if !id.Admin {
+				l.Repo, l.Upstream = "", "" // NPM-84: internal details stay with administrators
+			}
 			links = append(links, l)
 		}
 	}
 	cfg.Links = links
-	for key := range cfg.Apps {
+	for key, app := range cfg.Apps {
 		if !allowed[key] {
 			delete(cfg.Apps, key)
+		} else if !id.Admin && app.Repo != "" {
+			app.Repo = ""
+			cfg.Apps[key] = app
 		}
+	}
+	if !id.Admin {
+		cfg.Dismissed = nil
 	}
 	rules := map[string]access.Rule{}
 	for key, rule := range policy.Apps {

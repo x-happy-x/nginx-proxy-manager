@@ -29,3 +29,19 @@ func TestSaveKeepsRepo(t *testing.T) {
 		t.Fatal("non-http repo accepted")
 	}
 }
+
+// NPM-84: upstream is a private host:port, like a probe target.
+func TestSaveChecksUpstream(t *testing.T) {
+	store := Store{Path: filepath.Join(t.TempDir(), "launcher.json")}
+	cfg := Config{Links: []Link{{ID: "p3d", Title: "P3D", URL: "https://p3d.example/", Upstream: "192.168.99.33:4191"}}, Dismissed: []string{"192.168.99.33:18401"}}
+	if err := store.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if loaded, _ := store.Load(); loaded.Links[0].Upstream != "192.168.99.33:4191" || loaded.Dismissed[0] != "192.168.99.33:18401" {
+		t.Fatalf("lost: %+v", loaded)
+	}
+	cfg.Links[0].Upstream = "8.8.8.8:53"
+	if err := store.Save(cfg); err == nil {
+		t.Fatal("public upstream accepted")
+	}
+}

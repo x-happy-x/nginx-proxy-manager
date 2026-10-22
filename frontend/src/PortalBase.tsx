@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
-import { buildItems, defaultLauncher, OTHER_DEVICE, type LauncherItem } from "./features/launcher/model";
+import { buildItems, defaultLauncher, OTHER_DEVICE, slug, type LauncherItem } from "./features/launcher/model";
 import { artFor } from "./features/launcher/art";
-import type { LauncherConfig } from "./api";
+import { placedDevice, placeOf, placeSteps, unlistedContainers, usePlacement, type Found, type Placement, type PlacementData } from "./features/launcher/placement";
+import { fetchLauncher, saveLauncher, type LauncherConfig } from "./api";
 import type { RoutesDocument } from "./types";
 import "./styles/portal.css";
 
@@ -67,6 +68,7 @@ const I = {
   back: "M19 12H5M11 18l-6-6 6-6",
   down: "m6 9 6 6 6-6",
   chevron: "m9 6 6 6-6 6",
+  server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01",
   git: "M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9",
 };
 
@@ -126,6 +128,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
   }, []);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [status, setStatus] = useState<Record<string, Probe>>({});
+  const placement = usePlacement(!!data?.admin);
 
   const load = useCallback(() => {
     setError("");
@@ -203,7 +206,7 @@ export default function PortalBase({ Console }: { Console: ComponentType<{onPort
       ) : view === "access" && data.admin ? (
         <Access items={items} cfg={cfg} policy={policy} onSaved={(p) => { setPolicy(p); void load(); }} onBack={() => setView("apps")} />
       ) : (
-        <Apps items={items} cfg={cfg} status={status} policy={data.admin ? policy : null} />
+        <Apps items={items} cfg={cfg} status={status} policy={data.admin ? policy : null} placement={data.admin ? placement : null} onChanged={() => void load()} />
       )}
     </div>
   );
@@ -280,7 +283,7 @@ function Guest() {
   );
 }
 
-function Apps({ items, cfg, status, policy }: { items: LauncherItem[]; cfg: LauncherConfig; status: Record<string, Probe>; policy: Policy | null }) {
+function Apps({ items: listed, cfg, status, policy, placement, onChanged }: { items: LauncherItem[]; cfg: LauncherConfig; status: Record<string, Probe>; policy: Policy | null; placement: PlacementData | null; onChanged: () => void }) {
   const [query, setQuery] = useState("");
   const [device, setDevice] = useState("");
   const [opens, setOpens] = useState<Record<string, number>>(readOpens);
@@ -299,6 +302,13 @@ function Apps({ items, cfg, status, policy }: { items: LauncherItem[]; cfg: Laun
   }, []);
 
   const devices = [...cfg.devices, { id: OTHER_DEVICE, name: "Другие устройства", kind: "other", note: "", addresses: [] }];
+  // NPM-84: server, VM and container of each app; an address no device lists goes to its Proxmox server's group
+  const places = useMemo(() => new Map(listed.map((i) => [i.key, placeOf(i.probe, placement)])), [listed, placement]);
+  const items = useMemo(
+    () => listed.map((i) => (i.device === OTHER_DEVICE && places.get(i.key) ? { ...i, device: placedDevice(places.get(i.key), cfg.devices) } : i)),
+    [listed, places, cfg.devices],
+  );
+  const found = useMemo(() => unlistedContainers(placement, new Set(items.map((i) => i.probe).filter(Boolean) as string[]), cfg.dismissed), [placement, items, cfg.dismissed]);
   const tintOf = (id: string) => Math.max(0, devices.findIndex((d) => d.id === id)) % 5;
   const q = query.trim().toLowerCase();
   const match = (i: LauncherItem) => !q || [i.title, i.description, ...i.hints].join(" ").toLowerCase().includes(q);
@@ -408,6 +418,7 @@ function Apps({ items, cfg, status, policy }: { items: LauncherItem[]; cfg: Laun
                       </span>
                       <Icon d={I.chevron} size={16} />
                     </a>
+                    {places.get(i.key) ? <PlaceLine place={places.get(i.key)!} /> : null}
                     <div className="pt-card-foot">
                       {probe ? (
                         <span className={`pt-state ${probe.ok ? "is-ok" : "is-down"}`}>
@@ -446,8 +457,80 @@ function Apps({ items, cfg, status, policy }: { items: LauncherItem[]; cfg: Laun
           <span>{items.length ? "Измените запрос или фильтр." : "Попросите администратора HomeNet открыть вам доступ."}</span>
         </div>
       ) : null}
+      {found.length && !q && !device ? <FoundList found={found} devices={cfg.devices} onChanged={onChanged} /> : null}
       {probed.length ? <p className="pt-muted pt-small">Состояние — проверка порта приложения с роутера раз в минуту. Ссылка с доменом работает отовсюду, LAN — только дома.</p> : null}
     </main>
+  );
+}
+
+function PlaceLine({ place }: { place: Placement }) {
+  const c = place.container;
+  const down = c && c.state !== "running";
+  const title = [place.vm ? `${place.vm.type === "lxc" ? "Контейнер LXC" : "Виртуальная машина"} ${place.vm.vmid} на ${place.server}` : "", c ? `Docker: ${c.name} (${c.image}) — ${c.status}` : ""].filter(Boolean).join(" · ");
+  return (
+    <div className={`pt-place${down ? " is-down" : ""}`} title={title || undefined}>
+      <Icon d={I.server} size={13} />
+      {placeSteps(place).map((step, n) => (
+        <span key={n}>{step}</span>
+      ))}
+      {down ? <em>{c!.state === "exited" ? "остановлен" : c!.state}</em> : null}
+    </div>
+  );
+}
+
+// Containers on home servers that publish a port nobody points at: add one as a link or hide it.
+function FoundList({ found, devices, onChanged }: { found: Found[]; devices: LauncherConfig["devices"]; onChanged: () => void }) {
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const change = async (f: Found, add: boolean) => {
+    setBusy(f.key);
+    setMsg("");
+    try {
+      const cfg = (await fetchLauncher()) || defaultLauncher();
+      cfg.links ||= [];
+      cfg.order ||= [];
+      if (add) {
+        const id = slug(f.container.name);
+        cfg.links.push({ id, title: f.container.name, url: f.url, device: placedDevice(f.place, devices), description: f.container.image, upstream: f.key });
+        cfg.order.push("link:" + id);
+      } else {
+        cfg.dismissed = [...(cfg.dismissed || []), f.key];
+      }
+      await saveLauncher(cfg);
+      onChanged();
+    } catch (e) {
+      setMsg(`Не сохранилось: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <section className="pt-section">
+      <div className="pt-device">
+        <h2>Найдено на серверах</h2>
+        <span className="pt-muted">контейнеры с открытым портом, которых нет в списке</span>
+      </div>
+      {msg ? <p className="pt-warn" role="alert">{msg}</p> : null}
+      <div className="pt-found">
+        {found.map((f) => (
+          <div key={f.key} className="pt-found-row">
+            <span className="pt-found-name">
+              <strong>{f.container.name}</strong>
+              <small>{[...(f.place ? placeSteps(f.place).slice(0, -1) : []), f.container.image].join(" › ")}</small>
+            </span>
+            <a className="pt-link" href={f.url} target="_blank" rel="noopener noreferrer">
+              :{f.port} ↗
+            </a>
+            <button type="button" className="pt-btn" disabled={!!busy} onClick={() => void change(f, true)}>
+              {busy === f.key ? "…" : "Добавить"}
+            </button>
+            <button type="button" className="pt-btn pt-quiet" disabled={!!busy} onClick={() => void change(f, false)} title="Больше не предлагать">
+              Скрыть
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

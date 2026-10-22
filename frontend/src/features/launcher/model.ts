@@ -107,7 +107,7 @@ export function buildItems(doc: RoutesDocument | null, cfg: LauncherConfig, link
       art: link.art,
       hints: [link.id, link.title, link.url],
       primary: (byIP ? links["link:"+link.id]?.ip_url : links["link:"+link.id]?.domain_url) || link.url,
-      probe: probeTarget(link.url),
+      probe: link.upstream || probeTarget(link.url),
       repo: link.repo,
       hidden: false,
     });

@@ -407,3 +407,10 @@
     opacity: 1;
   }
 }
+
+/* NPM-84: server › VM › container under the address */
+.lt-text .lt-place {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.8;
+}
