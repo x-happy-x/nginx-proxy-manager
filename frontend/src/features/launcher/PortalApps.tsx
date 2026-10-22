@@ -153,6 +153,18 @@ function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
           </strong>
           <span>{hostOf(item.public || item.primary)}</span>
         </div>
+        <span className="hp-card-tools">
+          {ctx.admin && item.repo ? (
+            <a className="hp-icon" href={item.repo} target="_blank" rel="noopener noreferrer" title={`Исходный код: ${item.repo}`} aria-label="Исходный код">
+              <Svg d={P.git} size={16} />
+            </a>
+          ) : null}
+          {lan ? (
+            <a className="hp-icon" href={lan} onClick={open} title={`В домашней сети: ${lan}`} aria-label="Открыть в домашней сети">
+              <Svg d={P.home} size={16} />
+            </a>
+          ) : null}
+        </span>
       </div>
       {item.about ? <p className="hp-about">{item.about}</p> : null}
       {down || stopped ? (
@@ -166,16 +178,6 @@ function AppCard({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
       <div className="hp-card-foot">
         {badge ? <span className={`hp-badge ${badge.cls}`}>{badge.text}</span> : null}
         <span className="hp-grow" />
-        {ctx.admin && item.repo ? (
-          <a className="hp-icon" href={item.repo} target="_blank" rel="noopener noreferrer" title={`Исходный код: ${item.repo}`} aria-label="Исходный код">
-            <Svg d={P.git} size={16} />
-          </a>
-        ) : null}
-        {lan ? (
-          <a className="hp-icon" href={lan} onClick={open} title={`В домашней сети: ${lan}`} aria-label="Открыть в домашней сети">
-            <Svg d={P.home} size={16} />
-          </a>
-        ) : null}
         <a className="hp-open" href={item.primary} onClick={open}>
           Открыть
           <Svg d={P.ext} size={15} />
