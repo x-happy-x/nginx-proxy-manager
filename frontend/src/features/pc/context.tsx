@@ -72,9 +72,10 @@ function usePcState(host: Host, computers: Computer[], machinePages: boolean) {
   };
 }
 const PcContext = createContext<ReturnType<typeof usePcState> | null>(null);
-export function PcProvider({ host, computers, machinePages = false, children }: { host: Host; computers: Computer[]; machinePages?: boolean; children: ReactNode }) {
+export function PcProvider({ host, computers, machinePages = false, privacy, children }: { host: Host; computers: Computer[]; machinePages?: boolean; privacy?: readonly [boolean, (hide: boolean) => void]; children: ReactNode }) {
   const value = usePcState(host, computers, machinePages);
-  return <PcContext.Provider value={value}>{children}</PcContext.Provider>;
+  const shared = privacy ? { ...value, hideAddresses: privacy[0], setHideAddresses: privacy[1] } : value;
+  return <PcContext.Provider value={shared}>{children}</PcContext.Provider>;
 }
 export function usePc() { const ctx = useContext(PcContext); if (!ctx) throw new Error("PC context missing"); return ctx; }
 export const diskOf = (h: Computer) => [...(h.current?.disks || [])].filter(d => d.total > 0).sort((a, b) => b.used / b.total - a.used / a.total)[0];

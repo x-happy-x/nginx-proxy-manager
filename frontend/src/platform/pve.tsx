@@ -3,7 +3,7 @@ import { ModuleBoundary } from "./module-base";
 import { request, type Host } from "./sdk";
 import { Icon } from "../components/ui/Icon";
 import { PveProvider, usePve } from "../features/pve/context";
-import { PcProvider } from "../features/pc/context";
+import { MachineComputers as PcProvider } from "../features/machines/Provider";
 import { useComputers } from "../features/pc/model";
 import { Management } from "../features/pve/Actions";
 import { Management as PcManagement } from "../features/pc/Actions";
