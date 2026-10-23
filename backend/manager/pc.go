@@ -77,6 +77,8 @@ type pcSnapshot struct {
 		WSLActions    []string `json:"wsl_actions"`
 	} `json:"capabilities"`
 	Errors []string `json:"errors"`
+	// Keep extensions and unrecognised devices intact across polling and persistence.
+	Hardware json.RawMessage `json:"hardware,omitempty"`
 }
 
 type pcSample struct {
