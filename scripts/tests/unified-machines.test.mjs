@@ -8,7 +8,7 @@ async function source(file) {
  const code=ts.transpileModule(await readFile(new URL(file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 }
-const {machineTree,flatten,machineContainers,machineRoute}=await source('../../frontend/src/features/machines/model.ts');
+const {machineTree,flatten,machineContainers,machineRoute,stoppedWsl}=await source('../../frontend/src/features/machines/model.ts');
 const {unifiedMachineRoute}=await source('../../frontend/src/platform/machine-routes.ts');
 const {combinedEvents}=await source('../../frontend/src/features/machines/events.ts');
 
@@ -33,8 +33,14 @@ test('names alone cannot merge an unrelated PC with a VM',()=>{
  assert.equal(tree.length,4);
  assert.equal(flatten(tree).filter(m=>m.name==='family-apps').length,2);
 });
+test('loss of the PC connection does not turn running WSL into stopped WSL',()=>{
+ const [pc]=machineTree([],[{id:'pc',name:'PC',address:'203.0.113.1',online:false,current:{wsl:[{name:'Ubuntu',state:'running'},{name:'Debian',state:'stopped'}],docker:[]}}]);
+ assert.deepEqual(pc.children.map(w=>w.online),[false,false]);
+ assert.deepEqual(pc.children.filter(stoppedWsl).map(w=>w.name),['Debian']);
+});
 test('legacy links redirect only while PVE is enabled',()=>{
  assert.equal(unifiedMachineRoute('#/pcdocker',true),'pve/containers');
+ assert.equal(unifiedMachineRoute('#/pcdocker?host=pc&context=wsl%3AUbuntu',true),'pve/containers?host=pc&context=wsl%3AUbuntu');
  assert.equal(unifiedMachineRoute('#/pc',true),'pveguests?filter=pc');
  assert.equal(unifiedMachineRoute('#/pcwsl',true),'pveguests?filter=wsl');
  assert.equal(unifiedMachineRoute('#/pc/host/family-apps',true),'pveguests/pc/family-apps');

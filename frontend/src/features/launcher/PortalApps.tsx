@@ -264,11 +264,11 @@ function CardMenu({ item, ctx }: { item: LauncherItem; ctx: Ctx }) {
           {place?.vm ? (
             <a role="menuitem" href={`#/pveguests/${encodeURIComponent(place.vm.server)}/${place.vm.type}/${place.vm.vmid}`}>
               <Svg d={P.vm} size={16} />
-              {guestLabel(place.vm)} в «Серверах»
+              {guestLabel(place.vm)} в «Машинах»
             </a>
           ) : null}
           {c ? (
-            <a role="menuitem" href="#/pcdocker">
+            <a role="menuitem" href={`#/pcdocker?${new URLSearchParams({host:c.host,context:c.context})}`}>
               <Svg d={P.box} size={16} />
               Docker на {c.host_name}
             </a>
