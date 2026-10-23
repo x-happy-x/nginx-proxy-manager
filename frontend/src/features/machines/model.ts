@@ -26,6 +26,8 @@ export function machineTree(hosts: PveHost[], computers: Computer[], placements:
   return roots;
 }
 export const flatten = (roots: Machine[]): Machine[] => roots.flatMap(m => [m, ...flatten(m.children)]);
+/** Reachability and power state differ: an offline PC can have running WSL in its last snapshot. */
+export const stoppedWsl = (m: Machine) => m.kind === "wsl" && m.wsl?.state === "stopped";
 export function machineRoute(m: Machine): string {
   if (m.standalone) return `pc/host/${encodeURIComponent(m.pc!.id)}${m.wsl ? `/wsl/${encodeURIComponent(m.wsl.name)}` : ""}`;
   if (m.guest) return `pveguests/${encodeURIComponent(m.pve!.id)}/${m.guest.type}/${m.guest.vmid}`;
