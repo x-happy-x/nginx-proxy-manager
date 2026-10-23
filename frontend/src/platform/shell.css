@@ -58,3 +58,19 @@ h1{font-weight:800;letter-spacing:-.02em}
 @media(max-width:760px){.hn-pve-cluster{display:none}}
 
 @media(max-width:760px){.hn-seg button{font-size:11px}}
+
+@media(max-width:760px){.hn-sidebar-bottom .hn-seg{flex:none}.hn-sidebar-bottom .hn-seg button{flex:none;padding:0 6px;white-space:nowrap}}
+
+/* The machines mockup gives the content the full width from 900px down. */
+@media(max-width:900px){
+  .hn-machines-layout{display:block;height:auto;min-height:100dvh;overflow:visible}
+  .hn-machines-layout .hn-sidebar{position:sticky;top:0;z-index:30;padding:10px 12px;gap:6px;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  .hn-machines-layout .hn-brand{padding:0;font-size:15px}
+  .hn-machines-layout .hn-sidebar nav{flex-direction:row;flex-basis:100%;order:3;overflow-x:auto;gap:4px;scrollbar-width:none}
+  .hn-machines-layout .hn-sidebar nav a{white-space:nowrap;padding:8px 12px;font-size:13px}
+  .hn-machines-layout .hn-nav-group{flex-direction:row;gap:4px}
+  .hn-machines-layout .hn-nav-label,.hn-machines-layout .hn-module-title,.hn-machines-layout .hn-more,.hn-machines-layout .hn-pve-cluster,.hn-machines-layout .hn-login{display:none}
+  .hn-machines-layout .hn-sidebar-bottom{display:flex;margin:0 0 0 auto;padding:0;border:0;gap:6px;align-items:center}
+  .hn-machines-layout .hn-seg{flex:none}.hn-machines-layout .hn-seg button{flex:none;padding:0 6px;height:30px;font-size:11px;white-space:nowrap}
+  .hn-machines-layout .hn-workspace{overflow:visible;min-height:0}.hn-machines-layout .hn-main{padding:20px 16px 32px}
+}

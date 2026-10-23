@@ -38,9 +38,9 @@
     "summary": {"attention": "/api/core/summary/attention", "tasks": "/api/core/summary/tasks"}
   },
   {
-    "id": "pve", "name": "Сервера", "description": "Сервера Proxmox: нагрузка, температуры, машины, диски, железо и кластер", "port": 63504,
+    "id": "pve", "name": "Машины", "description": "Сервера Proxmox: нагрузка, температуры, машины, диски, железо и кластер", "port": 63504,
     "pages": ["pve", "pveguests", "pvehw", "pvestorage", "pvesettings"],
-    "titles": {"pve": "Обзор", "pveguests": "Машины", "pvehw": "Железо и температуры", "pvestorage": "Хранилища", "pvesettings": "Настройка"},
+    "titles": {"pve": "Обзор", "pveguests": "Устройства", "pve/containers": "Контейнеры", "pve/resources": "Ресурсы", "pve/events": "События", "pvehw": "Железо", "pvestorage": "Хранилища и копии", "pvesettings": "Настройка"},
     "paths": ["/api/pve/"],
     "data": ["/opt/etc/homenet/pve"],
     "widgets": [
@@ -64,7 +64,7 @@
   {
     "id": "pc", "name": "Компьютеры", "description": "Windows и Linux по SSH: ресурсы, WSL и Docker в системе и дистрибутивах", "port": 63506,
     "pages": ["pc", "pcwsl", "pcdocker", "pcsettings"],
-    "titles": {"pc": "Обзор", "pcwsl": "WSL", "pcdocker": "Контейнеры", "pcsettings": "Настройка"},
+    "titles": {"pc": "Обзор", "pcwsl": "WSL", "pcdocker": "Контейнеры", "pcsettings": "Настройка", "pc/events": "События"},
     "paths": ["/api/pc/"],
     "data": ["/opt/etc/homenet/pc"],
     "widgets": [

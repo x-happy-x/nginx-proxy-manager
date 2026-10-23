@@ -32,7 +32,7 @@ export function useHomeMode(): HomeMode {
 }
 
 export function usePage() {
-  const read = () => location.hash.replace(/^#\/?/, "").split("/")[0] || "overview";
+  const read = () => location.hash.replace(/^#\/?/, "").split(/[/?]/)[0] || "overview";
   const [page, setPage] = useState(read);
   useEffect(() => { const update = () => setPage(read()); window.addEventListener("hashchange", update); return () => window.removeEventListener("hashchange", update); }, []);
   return page;

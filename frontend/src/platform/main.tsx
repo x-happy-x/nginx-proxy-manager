@@ -10,6 +10,7 @@ import { request, type Installed, type IntegrationModule } from "./sdk";
 import { moduleBase, moduleHost, navigate } from "./host";
 import { Home } from "./Home";
 import { Sidebar } from "./Shell";
+import { unifiedMachineRoute } from "./machine-routes";
 import type { HomeMode } from "./sdk";
 import "../styles/tokens.css";
 import "./style.css";
@@ -37,6 +38,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 };
 
 const catalog = [
+  { id: "pve", name: "Машины", icon: "▣", description: "Серверы Proxmox, компьютеры, VM, WSL и контейнеры.", detail: "Единый интерфейс устройств, ресурсов, железа и копий. Данные компьютеров доступны с интеграцией «Компьютеры»." },
   { id: "proxy", name: "Прокси и домены", icon: "↗", description: "Сервисы на своих доменах, HTTPS, сертификаты и DNS.", detail: "Управление nginx с сохранением существующих маршрутов и сертификатов." },
   { id: "network", name: "Мониторинг связи", icon: "⌁", description: "Доступность интернета, LTE и состояние устройств.", detail: "История связи, диагностика, сканер и ресурсы роутеров и Proxmox." },
   { id: "vpn", name: "VPN и маршрутизация", icon: "◇", description: "Подписки, узлы, правила и проверка обхода ограничений.", detail: "mihomo / XKeen, Tailscale и OLCRTC, включая режим «Всё через OLCRTC»." },
@@ -87,7 +89,7 @@ function ModuleView({ item, notify }: { item: Installed; notify: (text: string) 
 function App({onPortal}: {onPortal: () => void}) {
   const [data, setData] = useState<Platform>();
   const [error, setError] = useState("");
-  const [page, setPage] = useState(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview");
+  const [page, setPage] = useState(location.hash.replace(/^#\/?/, "").split(/[/?]/)[0] || "overview");
   const [tab, setTab] = useState("installed");
   const [detail, setDetail] = useState<string>();
   const dialog = useRef<HTMLElement>(null);
@@ -118,7 +120,7 @@ function App({onPortal}: {onPortal: () => void}) {
   useEffect(() => { const on = () => setExpired(true); window.addEventListener("homenet:session-expired", on); return () => window.removeEventListener("homenet:session-expired", on); }, []);
   const notify = React.useCallback((message: string) => setNotice(message), []);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem("homenet-theme", theme); } catch { /* per-viewer convenience */ } }, [theme]);
-  useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split("/")[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
+  useEffect(() => { const change = () => setPage(location.hash.replace(/^#\/?/, "").split(/[/?]/)[0] || "overview"); window.addEventListener("hashchange", change); return () => window.removeEventListener("hashchange", change); }, []);
   useEffect(() => {
     let alive = true;
     request("/api/platform").then(r => r.json()).then(p => { if (alive) setData(p); }).catch(e => { if (alive) setError(String(e)); });
@@ -134,12 +136,18 @@ function App({onPortal}: {onPortal: () => void}) {
   }, [page, tab]);
   const installed = data?.integrations || [];
   const active = installed.filter(i => i.enabled);
+  const unified = active.some(i => i.manifest.id === "pve");
+  useEffect(() => {
+    const redirect = () => { const next = unifiedMachineRoute(location.hash, unified); if (next) location.replace(`#/${next}`); };
+    redirect(); window.addEventListener("hashchange", redirect);
+    return () => window.removeEventListener("hashchange", redirect);
+  }, [unified]);
   const selected = installed.find(i => i.manifest.id === detail);
   const module = installed.find(i => i.manifest.ui.pages.some(p => p.id === page || p.aliases?.includes(page)));
   const choose = () => { setTab("catalog"); navigate("integrations"); };
   if (!data) return <main className="hn-boot"><div className="hn-logo">H</div><h1>HomeNet</h1><p role="status">{error || "Подключение к HomeNet…"}</p>{error && <a className="hn-primary" href="/_gate/login?return=/">Войти через Account</a>}</main>;
-  return <div className="hn-layout">
-    <Sidebar page={page} module={["overview", "integrations", "system"].includes(page) ? undefined : module} active={active} installedCount={installed.length} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} login={data.identity.login} attention={attention} onPortal={onPortal} />
+  return <div className={`hn-layout${["pve","pc"].includes(module?.manifest.id || "") ? " hn-machines-layout" : ""}`}>
+    <Sidebar page={page} module={["overview", "integrations", "system"].includes(page) ? undefined : module} active={active.filter(i=>!(unified&&i.manifest.id==="pc"))} installedCount={installed.length} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} login={data.identity.login} attention={attention} onPortal={onPortal} />
     <div className="hn-workspace">
       <main className="hn-main">{expired && <div className="hn-expired" role="alert"><span>Сессия входа истекла — данные не обновляются.</span><button type="button" className="hn-primary" onClick={() => location.reload()}>Войти снова</button></div>}{notice && <div className="hn-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Закрыть уведомление">×</button></div>}
         {page === "overview" && installed.length > 0 && <Home installed={installed} notify={notify} onCatalog={choose} mode={mode} setMode={setMode} onAttention={setAttention} />}

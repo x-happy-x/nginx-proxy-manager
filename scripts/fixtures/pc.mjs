@@ -1,7 +1,7 @@
 // Isolated PC fixtures; no SSH, Docker or WSL processes are run.
 const GB = 1024 ** 3;
 const tasks = [];
-const wsl = [{ name: 'Ubuntu', state: 'running', version: 2 }, { name: 'Debian', state: 'stopped', version: 2 }, { name: 'Fedora', state: 'running', version: 2 }];
+const wsl = [{ name: 'Ubuntu', state: 'running', version: 2 }, { name: 'Debian', state: 'stopped', version: 2 }, { name: 'Fedora', state: 'running', version: 2 }, ...['Arch', 'Alpine', 'Test', 'Build'].map(name => ({name, state:'stopped', version:2}))];
 const container = (id, name, state, image, ports = '') => ({ id: id.repeat(64), name, state, image, status: state === 'running' ? 'Up 3 hours' : 'Exited (0) 2 days ago', ports });
 const inventories = [
   [{ context: 'native', available: false, error: 'Docker в Windows не запущен', containers: [] }, { context: 'wsl:Ubuntu', available: true, containers: [container('a', 'web', 'running', 'nginx:stable', '127.0.0.1:8080->80/tcp'), container('b', 'redis', 'exited', 'redis:7', '6379/tcp'), container('c', 'dev-postgres', 'running', 'postgres:17', '0.0.0.0:5432->5432/tcp')] }, { context: 'wsl:Debian', available: false, error: 'Дистрибутив остановлен', containers: [] }, { context: 'wsl:Fedora', available: false, error: 'Нет доступа к Docker socket', containers: [] }],
@@ -9,6 +9,12 @@ const inventories = [
   [{ context: 'native', available: true, containers: [container('1', 'forgejo', 'running', 'codeberg.org/forgejo/forgejo:11', '0.0.0.0:3000->3000/tcp'), container('2', 'runner', 'running', 'forgejo/runner:latest')] }],
   [{ context: 'native', available: true, containers: [container('3', 'grafana', 'running', 'grafana/grafana:latest', '0.0.0.0:3001->3000/tcp'), container('4', 'prometheus', 'running', 'prom/prometheus:latest', '127.0.0.1:9090->9090/tcp')] }],
 ];
+// Unified module acceptance: 7 WSL, 96 containers, VM agents, duplicate ports.
+for (const [index, extra] of [[0,65],[1,11],[2,1],[3,7]]) {
+ const context=inventories[index].find(d=>d.available);
+ context.containers.push(...Array.from({length:extra},(_,i)=>({...container('8',`service-${index}-${i+1}`,i%3?'running':'exited','registry.example.net/team/application:stable',`0.0.0.0:${8100+index*100+i}->8080/tcp, [::]:${8100+index*100+i}->8080/tcp`),id:(1000+index*100+i).toString(16).padStart(64,'0')})));
+}
+Object.assign(inventories[0].find(d=>d.context==='wsl:Fedora'),{available:true,error:undefined,containers:[container('5','runner-1','running','forgejo/runner:latest'),container('6','runner-2','running','forgejo/runner:latest')]});
 // Opt-in visual stress case: long names and many containers.
 if (process.env.PREVIEW_PC_DENSE) {
   const context = inventories[0].find(d => d.context === 'wsl:Ubuntu');
@@ -33,7 +39,7 @@ function overview() {
       cpu: { percent: [2.5, 5, 18, 50][i], cores: i ? 2 : 32, model: i ? 'QEMU Virtual CPU' : 'Intel Core i9' }, memory: { total: (i ? 4 : 96) * GB, used: (i ? 2 : 53.7) * GB, available: (i ? 2 : 42.3) * GB },
       disks: [{ path: i ? '/' : 'C:', total: 512 * GB, used: (i ? 220 : 450) * GB, free: (i ? 292 : 62) * GB }],
       network: [{ name: 'Ethernet', rx_bytes: 42 * GB, tx_bytes: 8 * GB, aggregate: true }],
-      wsl: i ? [] : wsl, docker: inventories[i] || [], capabilities: { docker_logs: i > 0, docker_actions: i ? [] : ['start', 'stop', 'restart'], wsl_actions: i ? [] : ['start', 'terminate'] }, errors: [],
+      wsl: i ? [] : wsl, docker: inventories[i] || [], capabilities: { docker_logs: i > 0, docker_actions: [], wsl_actions: [] }, errors: [],
     } };
   }) };
 }
@@ -49,7 +55,7 @@ export function fakePc(req, res) {
   if (url.pathname === '/api/pc/config' && req.method === 'GET') { send({ hosts: configs.map(({ os, ...h }) => ({ ...h, pinned: true })), public_key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPreviewKey homenet-pc@router' }); return true; }
   if (url.pathname === '/api/pc/config' && req.method === 'PUT') { read(body => { configs = body.hosts.map(h => ({ ...h, os: configs.find(old => old.id === h.id)?.os || 'linux' })); send({ ok: true }); }); return true; }
   if (url.pathname === '/api/pc/config/test') { read(() => send({ ok: true, pinned: true, host: 'workstation', agent: '1.0.0', os: 'windows', latency_ms: 18, fingerprint: 'SHA256:preview-only' })); return true; }
-  if (url.pathname === '/api/pc/history') { const now = Math.floor(Date.now() / 60000) * 60; send({ step: 60, points: Array.from({ length: 1440 }, (_, i) => ({ t: now - (1439 - i) * 60, cpu: 25 + Math.sin(i / 5) * 12, mem_used: (12 + Math.sin(i / 8)) * GB, mem_total: 32 * GB, net_rx_bps: 2000000 + Math.sin(i / 6) * 800000, net_tx_bps: 420000, network_valid: true, disks: [{ path: url.searchParams.get('host') === 'workstation' ? 'C:' : '/', total: 512 * GB, used: (420 + i / 48) * GB }] })) }); return true; }
+  if (url.pathname === '/api/pc/history') { const now = Math.floor(Date.now() / 60000) * 60; send({ step: 60, points: Array.from({ length: 1440 }, (_, i) => ({ t: now - (1439 - i) * 60, cpu: 25 + Math.sin(i / 5) * 12, mem_used: (url.searchParams.get('host') === 'workstation' ? 53.7 + Math.sin(i / 80) : 2 + Math.sin(i / 80) * .15) * GB, mem_total: (url.searchParams.get('host') === 'workstation' ? 96 : 4) * GB, net_rx_bps: 2000000 + Math.sin(i / 6) * 800000, net_tx_bps: 420000, network_valid: true, disks: [{ path: url.searchParams.get('host') === 'workstation' ? 'C:' : '/', total: 512 * GB, used: (420 + i / 48) * GB }] })) }); return true; }
   if (url.pathname === '/api/pc/tasks') { send({ tasks }); return true; }
   if (url.pathname === '/api/pc/actions' && req.method === 'POST') {
     read(body => {

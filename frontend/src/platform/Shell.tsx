@@ -3,6 +3,8 @@ import type { PveOverview } from "../features/pve/model";
 import { Icon, type IconName } from "../components/ui/Icon";
 import type { Computer } from "../features/pc/model";
 import { NAV } from "../navigation";
+import { machineTree } from "../features/machines/model";
+import { usePlacement } from "../features/launcher/placement";
 import type { HomeMode, Installed } from "./sdk";
 
 // Two-level menu of the redesign (NPM-65, canvas «HomeNet — редизайн», page
@@ -29,8 +31,8 @@ const PLANS: Record<string, Plan> = {
   },
   // NPM-74
   pve: {
-    simple: ["pve", "pveguests", "pve/resources", "pvehw", "pvestorage", "pve/events", "pvesettings"],
-    pro: [{ pages: ["pve", "pveguests", "pve/resources", "pvehw", "pvestorage", "pve/events", "pvesettings"] }],
+    simple: ["pve", "pveguests", "pve/containers", "pve/resources", "pvehw", "pvestorage", "pve/events", "pvesettings"],
+    pro: [{ pages: ["pve", "pveguests", "pve/containers", "pve/resources", "pvehw", "pvestorage", "pve/events", "pvesettings"] }],
   },
   pc: {
     simple: ["pc", "pcdocker", "pcwsl", "pc/events", "pcsettings"],
@@ -51,9 +53,10 @@ const PLANS: Record<string, Plan> = {
 };
 // a page inside a section lights up the section's menu entry
 const SECTION_OF: Record<string, string> = { subs: "vservers", checks: "vservers", proxies: "vroute", rules: "vroute", why: "vpnsvc", traffic: "vstats", vnow: "vstats", connections: "corelog", core: "coreconfig", torrents: "coreconfig" };
-const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx", "pve/resources": "Ресурсы", "pve/events": "События", pve: "Серверы", pveguests: "Машины", pvehw: "Железо и температуры", pvestorage: "Хранилища", pvesettings: "Настройка", pc: "Компьютеры", "pc/events": "События", pcdocker: "Контейнеры", pcwsl: "WSL", pcsettings: "Настройка", ha: "Обзор", hasettings: "Настройка" };
+const TITLES: Record<string, string> = { vpn: "Обзор", vservers: "Серверы", vstats: "Статистика", coreconfig: "Настройка", vroute: "Маршруты", corelog: "Журнал", why: "Почему не открывается", "proxy-system": "Прокси nginx", "pve/resources": "Ресурсы", "pve/events": "События", pve: "Обзор", pveguests: "Устройства", "pve/containers": "Контейнеры", pvehw: "Железо", pvestorage: "Хранилища и копии", pvesettings: "Настройка", pc: "Компьютеры", "pc/events": "События", pcdocker: "Контейнеры", pcwsl: "WSL", pcsettings: "Настройка", ha: "Обзор", hasettings: "Настройка" };
+const PVE_ICONS: Record<string, IconName> = {pve:"clock",pveguests:"servers","pve/containers":"dms","pve/resources":"overview",pvehw:"system",pvestorage:"layers","pve/events":"inbox",pvesettings:"advanced"};
 const PC_ICONS: Record<string, IconName> = { pc: "overview", pcdocker: "dms", pcwsl: "terminal", "pc/events": "clock", pcsettings: "advanced" };
-const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь", pve: "Сервера", pc: "Компьютеры", ha: "Умный дом" };
+const SHORT: Record<string, string> = { vpn: "VPN", proxy: "Прокси", network: "Связь", pve: "Машины", pc: "Компьютеры", ha: "Умный дом" };
 
 export const pageTitle = (id: string, item?: Installed) =>
   TITLES[id] || NAV.find(n => n.id === id)?.tab || item?.manifest.ui.pages.find(p => p.id === id)?.title || id;
@@ -84,7 +87,7 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
   const own = module?.manifest.ui.pages.find(p => p.id === page || p.aliases?.includes(page))?.id || page;
   const current = module && PLANS[module.manifest.id] ? SECTION_OF[own] || own : own;
   const link = (id: string, title: string, extra?: React.ReactNode) =>
-    <a key={id} href={`#/${id}`} className={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/events", "pc/events"].includes(subroute) ? subroute === id : current === id) ? "active" : ""} aria-current={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/events", "pc/events"].includes(subroute) ? subroute === id : current === id) ? "page" : undefined}><span className="hn-nav-title">{module?.manifest.id === "pc" && PC_ICONS[id] ? <Icon name={PC_ICONS[id]} size={16} /> : null}{title}</span>{module?.manifest.id === "pc" && pcCounts[id] !== undefined ? <span className="hn-count hn-count-muted">{pcCounts[id]}</span> : extra}</a>;
+    <a key={id} href={`#/${id}`} className={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/containers", "pve/events", "pc/events"].includes(subroute.split("?")[0]) ? subroute.split("?")[0] === id : current === id) ? "active" : ""} aria-current={(["pve", "pc"].includes(module?.manifest.id || "") && ["pve/resources", "pve/containers", "pve/events", "pc/events"].includes(subroute.split("?")[0]) ? subroute.split("?")[0] === id : current === id) ? "page" : undefined}><span className="hn-nav-title">{module?.manifest.id === "pve" && PVE_ICONS[id] ? <Icon name={PVE_ICONS[id]} size={16}/> : module?.manifest.id === "pc" && PC_ICONS[id] ? <Icon name={PC_ICONS[id]} size={16} /> : null}{title}</span>{module?.manifest.id === "pc" && pcCounts[id] !== undefined ? <span className="hn-count hn-count-muted">{pcCounts[id]}</span> : extra}</a>;
   return <aside className="hn-sidebar" aria-label="Меню HomeNet">
     <a className="hn-brand" href="#/overview"><span className="hn-logo" aria-hidden="true">H</span><span>HomeNet</span></a>
     {module ? <nav aria-label={`Разделы: ${module.manifest.name}`}>
@@ -112,8 +115,8 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
       </div>
       <div className="hn-account">
         <span className="hn-login" title={login}>{login || "Администратор"}</span>
-        <button type="button" className="hn-icon-btn" aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "◐"}</button>
-        <button type="button" className="hn-icon-btn" aria-label="Приложения" title="Приложения" onClick={onPortal}>▦</button>
+        <button type="button" className="hn-icon-btn" aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><Icon name={theme === "dark" ? "sun" : "moon"} size={17}/></button>
+        <button type="button" className="hn-icon-btn" aria-label="Приложения" title="Приложения" onClick={onPortal}><Icon name="apps" size={17}/></button>
       </div>
     </div>
   </aside>;
@@ -121,6 +124,8 @@ export function Sidebar({ page, module, active, installedCount, mode, setMode, t
 
 function PveSidebarStatus() {
   const [data, setData] = useState<PveOverview | null>(null);
+  const computers=useSidebarComputers(true);
+  const placement=usePlacement(true);
   useEffect(() => {
     let alive = true;
     const pull = async () => { try { const r = await fetch("/api/integrations/pve/api/pve/overview"); if (r.ok) { const d = await r.json(); if (alive) setData(d); } } catch { /* Main view reports connection failures. */ } };
@@ -128,7 +133,7 @@ function PveSidebarStatus() {
     return () => { alive=false; clearInterval(timer); };
   }, []);
   const cluster = data?.hosts.map(h => h.current?.cluster).find(c => c?.name);
-  return <div className="hn-pve-cluster">{cluster && <><b>Кластер {cluster.name}</b><small>{cluster.quorate ? "Кворум есть" : "Нет кворума"} · {cluster.nodes?.filter(n=>n.online).length} / {cluster.nodes?.length} узлов</small></>}{data?.hosts.map(h => <a key={h.id} href={`#/pve/${encodeURIComponent(h.id)}/node/0`}><span className={h.online ? "online" : "offline"} />{h.name}<i title={`CPU ${h.current?.node.cpu ?? "—"}%`}><em style={{width:`${Math.min(100,h.current?.node.cpu || 0)}%`}} /></i></a>)}</div>;
+  return <div className="hn-pve-cluster">{cluster && <><b>Кластер {cluster.name}</b><small>{cluster.quorate ? "Кворум есть" : "Нет кворума"} · {cluster.nodes?.filter(n=>n.online).length} / {cluster.nodes?.length} узлов</small></>}{machineTree(data?.hosts || [],computers,placement?.machines).map(m => { const h=m.pve, pc=m.pc; return <a key={m.key} href={h ? `#/pveguests/${encodeURIComponent(h.id)}/node/0` : `#/pveguests/pc/${encodeURIComponent(pc!.id)}`}><span className={m.online ? "online" : "offline"} />{m.name}<i title={`CPU ${h?.current?.node.cpu ?? pc?.current?.cpu.percent ?? "—"}%`}><em style={{width:`${Math.min(100,h?.current?.node.cpu || pc?.current?.cpu.percent || 0)}%`}} /></i></a>; })}</div>;
 }
 
 function useSidebarComputers(enabled: boolean) {

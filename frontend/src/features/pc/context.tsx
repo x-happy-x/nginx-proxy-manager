@@ -38,7 +38,7 @@ function useHistories(host: Host, computers: Computer[]) {
 }
 
 
-function usePcState(host: Host, computers: Computer[]) {
+function usePcState(host: Host, computers: Computer[], machinePages: boolean) {
   const [hideAddresses, setHideAddresses] = useSaved("homenet.portal.hide-hosts", false);
   const [computer, setComputer] = useState<string | null>(null);
   const [container, setContainer] = useState<ContainerTarget | null>(null);
@@ -46,13 +46,14 @@ function usePcState(host: Host, computers: Computer[]) {
   const [environment, setEnvironment] = useState<Environment | null>(null);
   useEffect(() => {
     const openFromRoute = () => {
+      if (machinePages) return;
       const match = location.hash.match(/^#\/pc\/host\/([^/]+)$/);
       if (match) { try { const id = decodeURIComponent(match[1]); setApplication(null); setContainer(null); setComputer(id); } catch { setComputer(null); } }
       else setComputer(null);
     };
     openFromRoute(); window.addEventListener("hashchange", openFromRoute);
     return () => window.removeEventListener("hashchange", openFromRoute);
-  }, []);
+  }, [machinePages]);
   const history = useHistories(host, computers);
   const placement = usePlacement(true);
   const items = usePortalItems();
@@ -61,7 +62,7 @@ function usePcState(host: Host, computers: Computer[]) {
     const p = placeOf(i.probe, placement)?.container;
     return p?.host === h.id && p.context === context && p.id === c.id;
   });
-  return { host, computers, hideAddresses, setHideAddresses, computer, container, application, environment, history, vmOf, appsOf,
+  return { host, computers, hideAddresses, setHideAddresses, computer, container, application, environment, history, placement, vmOf, appsOf,
     appsKnown: items !== null && placement !== null && computers.every(h => placement.hosts.some(p => p.id === h.id)),
     openComputer: (id: string | null) => { setApplication(null); setContainer(null); setComputer(id); if (!id && location.hash.startsWith("#/pc/host/")) host.navigate("pc"); },
     openContainer: (target: ContainerTarget | null) => { setApplication(null); setComputer(null); setContainer(target); },
@@ -71,9 +72,10 @@ function usePcState(host: Host, computers: Computer[]) {
   };
 }
 const PcContext = createContext<ReturnType<typeof usePcState> | null>(null);
-export function PcProvider({ host, computers, children }: { host: Host; computers: Computer[]; children: ReactNode }) {
-  const value = usePcState(host, computers);
-  return <PcContext.Provider value={value}>{children}</PcContext.Provider>;
+export function PcProvider({ host, computers, machinePages = false, privacy, children }: { host: Host; computers: Computer[]; machinePages?: boolean; privacy?: readonly [boolean, (hide: boolean) => void]; children: ReactNode }) {
+  const value = usePcState(host, computers, machinePages);
+  const shared = privacy ? { ...value, hideAddresses: privacy[0], setHideAddresses: privacy[1] } : value;
+  return <PcContext.Provider value={shared}>{children}</PcContext.Provider>;
 }
 export function usePc() { const ctx = useContext(PcContext); if (!ctx) throw new Error("PC context missing"); return ctx; }
 export const diskOf = (h: Computer) => [...(h.current?.disks || [])].filter(d => d.total > 0).sort((a, b) => b.used / b.total - a.used / a.total)[0];

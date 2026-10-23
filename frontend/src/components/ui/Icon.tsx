@@ -60,6 +60,8 @@ const paths = {
       <path d="m7 9 3 3-3 3M13 15h4" />
     </>
   ),
+  computer: <><rect x="2.5" y="4" width="19" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></>,
+  virtualMachine: <><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18M7 12l2.5 3 2.5-3M15 12v3"/></>,
   activity: <path d="M3 12h4l3-8 4 16 3-8h4" />,
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,

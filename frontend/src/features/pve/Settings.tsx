@@ -96,7 +96,7 @@ export function Settings({ host, onSaved }: { host: Host; onSaved?: () => void }
   if (!cfg) return error ? <Empty title="Настройки недоступны">{error}</Empty> : <div className="pve-skeleton" />;
   return (
     <div className="pve-page">
-      <Section title="Сервера" hint="Proxmox-хосты, которые опрашивает HomeNet. Изменения применяются без перезапуска."
+      <Section title="Серверы Proxmox" hint="Proxmox-хосты, которые опрашивает HomeNet. Изменения применяются без перезапуска."
         actions={<>
           <button type="button" className="pve-btn" onClick={() => setRows((rs) => [...rs, row()])}>Добавить сервер</button>
           <button type="button" className="pve-btn primary" onClick={save} disabled={!dirty || busy}>{busy ? "Сохраняю…" : "Сохранить"}</button>
