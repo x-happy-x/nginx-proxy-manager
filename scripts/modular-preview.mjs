@@ -102,10 +102,20 @@ async function startHAWorker(item, manifestPath, tokenPath) {
 }
 async function freePort() { const s = createServer(); await new Promise(r => s.listen(0, '127.0.0.1', r)); const p = s.address().port; await new Promise(r => s.close(r)); return p; }
 if (process.env.PREVIEW_PVE === 'fake') await writeFile(path.join(state, 'portal.json'), JSON.stringify(pvePortalFixture));
+const hardwarePreview=process.env.PREVIEW_HARDWARE_FILE?JSON.parse(await readFile(process.env.PREVIEW_HARDWARE_FILE,'utf8')):null;
 const items = [];
 for (const item of catalog.filter(i => requested.has(i.id))) {
   const endpoint = await listen((req, res) => {
     res.setHeader('Content-Type', 'application/json');
+    if(hardwarePreview && ['/api/pc/overview','/api/pve/overview'].includes(req.url?.split('?')[0])){
+      const end=res.end.bind(res);
+      res.end=body=>{
+        try{const data=JSON.parse(body);for(const host of data.hosts||[]){
+          if(item.id==='pve'){const d=hardwarePreview.machines[host.id];if(d){host.hardware={...d.hardware,ts:d.ts};if(host.current){host.current.temps=d.temps;host.current.fans=d.fans;host.current.disks=d.disks;}}}
+          if(item.id==='pc'&&host.id==='workstation'&&host.current&&hardwarePreview.machines.pc)host.current.hardware=hardwarePreview.machines.pc;
+        }body=JSON.stringify(data);}catch{}return end(body);
+      };
+    }
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
     if (item.id === 'pc' && process.env.PREVIEW_PC === 'fake' && fakePc(req, res)) return;
     if (item.id === 'pve' && process.env.PREVIEW_PVE === 'fake' && fakePve(req, res)) return;

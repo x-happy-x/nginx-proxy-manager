@@ -9,6 +9,7 @@ const port=Number(process.argv[2]||48690), origin=`http://127.0.0.1:${port}`;
 const dataPath=resolve(root,'.local/qa/NPM-96/hardware.json');
 let collecting=null;
 const files=new Map([
+  ['/frontend/src/features/machines/hardware-model.js',['frontend/src/features/machines/hardware-model.js','text/javascript; charset=utf-8']],
   ['/docs/machines-hardware-design.html',['docs/machines-hardware-design.html','text/html; charset=utf-8']],
   ['/docs/machines-hardware-data.js',['docs/machines-hardware-data.js','text/javascript; charset=utf-8']],
   ['/frontend/src/styles/tokens.css',['frontend/src/styles/tokens.css','text/css; charset=utf-8']],
