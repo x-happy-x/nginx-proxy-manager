@@ -11,6 +11,7 @@ export type Snapshot = {
   network: { name: string; rx_bytes: number; tx_bytes: number; aggregate?: boolean }[];
   wsl: Distro[]; docker: DockerContext[];
   capabilities: { docker_actions: string[]; wsl_actions: string[]; docker_logs?: boolean }; errors: string[];
+  hardware?: Record<string, unknown>;
 };
 export type Computer = { id: string; name: string; address: string; online: boolean; error: string; checked_at?: string; last_ok?: string; latency_ms: number; current: Snapshot | null };
 export type OverviewData = { hosts: Computer[]; configured: boolean; error?: string };
