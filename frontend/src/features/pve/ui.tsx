@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "../../components/ui/Icon";
 import { TimeChart } from "../../components/charts/TimeChart";
 import { ActionButtons } from "./Actions";
 import { usePve } from "./context";
@@ -10,7 +11,7 @@ const SERVER_HUES = [28, 205, 155, 265, 340, 190];
 export function ServerAvatar({ h }: { h: PveHost }) {
   const { hosts } = usePve();
   const hue = SERVER_HUES[Math.max(0, hosts.findIndex(x => x.id === h.id)) % SERVER_HUES.length];
-  return <span className="pv-avatar server" style={{ ["--hue" as string]: String(hue) }}>{h.name.slice(0, 2)}</span>;
+  return <span className="pv-avatar server" style={{ ["--hue" as string]: String(hue) }}><Icon name="servers" size={21}/></span>;
 }
 
 /** Addresses a person uses: the server's own subnet first, bridges inside the guest (Docker, HA) left out. */

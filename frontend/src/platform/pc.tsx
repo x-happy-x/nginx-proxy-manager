@@ -1,49 +1,37 @@
 import { useEffect, useState } from "react";
+import { Icon } from "../components/ui/Icon";
+import { ModuleBoundary } from "./module-base";
+import type { Host } from "./sdk";
+import { PveProvider, usePve } from "../features/pve/context";
+import { PcProvider, usePc } from "../features/pc/context";
 import { Management } from "../features/pc/Actions";
-import { EventCenter } from "../features/monitoring/EventCenter";
-import { Overview } from "../features/pc/Overview";
 import { Settings } from "../features/pc/Settings";
-import { Docker, Wsl } from "../features/pc/Workloads";
 import { Details } from "../features/pc/Details";
-import { PcProvider } from "../features/pc/context";
-import { PcHeading } from "../features/pc/parts";
 import { useComputers } from "../features/pc/model";
 import { Empty } from "../features/pve/parts";
-import "../features/pve/pve.css";
+import { EventCenter } from "../features/monitoring/EventCenter";
+import { Containers, Devices, MachinePage, useMachineTree } from "../features/machines/Views";
+import { flatten, machineRoute } from "../features/machines/model";
 import "../styles/portal-home.css";
+import "../features/pve/pve.css";
+import "../features/pve/redesign.css";
 import "../features/pc/pc.css";
-import { ModuleBoundary, usePage } from "./module-base";
-import type { Host } from "./sdk";
+import "../features/machines/machines.css";
 
-const pages = [{ id: "pc", title: "Компьютеры" }, { id: "pcdocker", title: "Контейнеры" }, { id: "pcwsl", title: "WSL" }, { id: "pcsettings", title: "Настройка" }];
-function Computers({ host }: { host: Host }) {
-  const route = usePage(), page = pages.some(p => p.id === route) ? route : "pc";
-  const [eventsPage, setEventsPage] = useState(location.hash === "#/pc/events");
-  useEffect(() => { const update = () => setEventsPage(location.hash === "#/pc/events"); window.addEventListener("hashchange", update); return () => window.removeEventListener("hashchange", update); }, []);
-  const { data, loading, error, reload } = useComputers(host);
-  const [refreshing, setRefreshing] = useState(false);
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [page, eventsPage]);
-  const computers = data?.hosts || [];
-  const refresh = () => { setRefreshing(true); void reload().finally(() => setRefreshing(false)); };
-  let content;
-  if (page === "pcsettings") content = <div className="pc-page"><PcHeading privacy={false} title="Настройка" subtitle="Подключение компьютеров и разрешения агента" /><Settings host={host} onSaved={reload} /></div>;
-  else if (loading && !data) content = <div className="pve-skeleton tall" aria-label="Загрузка компьютеров" />;
-  else if (!data) content = <Empty title="Интеграция не отвечает">{error || "Попробуйте обновить страницу."}<button type="button" className="hp-btn" onClick={refresh}>Повторить</button></Empty>;
-  else if (!data.configured) content = <div className="pc-welcome card"><h2>Подключите домашние компьютеры</h2><p>Windows и Linux, ресурсы, Docker и окружения WSL.</p><button type="button" className="hp-btn is-primary" onClick={() => host.navigate("pcsettings")}>Подключить компьютер</button></div>;
-  else if (page === "pcdocker") content = <Docker />;
-  else if (page === "pcwsl") content = <Wsl />;
-  else if (eventsPage) content = <PcHeading title="События" subtitle="История связи, состояние окружений и результаты операций" />;
-  else content = <Overview reload={refresh} refreshing={refreshing} />;
-  return <PcProvider host={host} computers={computers}><div className="hp pve-module pc-module">
-    {!host.shellNav ? <nav className="section-tabs module-tabs" aria-label="Компьютеры">{pages.map(p => <a className="section-tab" key={p.id} href={`#/${p.id}`} aria-current={p.id === page ? "page" : undefined}>{p.title}</a>)}</nav> : null}
-    {error && data ? <div className="pc-error" role="alert">Не удалось обновить данные: {error}. Показан последний снимок.</div> : null}
-    <Management host={host} computers={computers} enabled={!!data?.configured} reload={reload}>{content}<Details /></Management>
-    <EventCenter key={eventsPage ? "events" : "summary"} defaultExpanded={eventsPage} host={host} service="pc" hosts={computers} enabled={!!data?.configured} />
-  </div></PcProvider>;
+function Dashboard({reload}:{reload:()=>Promise<void>}) {
+  const ctx=usePve(), pc=usePc(), roots=useMachineTree(), [route,setRoute]=useState(location.hash.replace(/^#\/?/,""));
+  useEffect(()=>{const update=()=>setRoute(location.hash.replace(/^#\/?/,""));window.addEventListener("hashchange",update);return()=>window.removeEventListener("hashchange",update);},[]);
+  const path=route.split("?")[0], target=flatten(roots).find(m=>machineRoute(m)===path), events=path==="pc/events", settings=path==="pcsettings", containers=path==="pcdocker", title=settings ? "Настройка" : events ? "События" : containers ? "Контейнеры" : "Компьютеры";
+  return <>{!ctx.host.shellNav&&<nav className="pv-nav">{[["pc","Компьютеры"],["pcdocker","Контейнеры"],["pcwsl","WSL"],["pc/events","События"],["pcsettings","Настройка"]].map(([id,label])=><a href={`#/${id}`} key={id}>{label}</a>)}</nav>}
+    {!target&&<header className="pv-heading"><div><h1>{title}</h1><p>Windows и Linux · {roots.length} компьютеров</p></div><div className="pv-heading-tools">{!settings&&<label className="mc-search"><Icon name="search" size={16}/><input aria-label="Поиск машины или контейнера" type="search" placeholder="Компьютер, контейнер или порт" value={ctx.query} onChange={e=>ctx.setQuery(e.target.value)}/></label>}<button className="pve-btn ghost" aria-label={ctx.hide ? "Показать адреса" : "Скрыть адреса"} onClick={()=>ctx.setHide(!ctx.hide)}><Icon name={ctx.hide ? "eyeOff" : "eye"} size={16}/></button><button className="pve-btn ghost" onClick={()=>void reload()}><Icon name="refresh" size={15}/>Обновить</button></div></header>}
+    <Management host={ctx.host} computers={pc.computers} enabled reload={reload}>
+      {target ? <MachinePage key={target.key} m={target} onBack={()=>ctx.setTarget(null)}/> : settings ? <Settings host={ctx.host} onSaved={reload}/> : events ? <EventCenter host={ctx.host} service="pc" hosts={pc.computers} enabled defaultExpanded/> : containers ? <Containers roots={roots} route={route}/> : <Devices roots={roots} route={path==="pcwsl" ? "pc?filter=wsl" : route}/>}
+      <Details/>
+    </Management>
+  </>;
 }
-export function mount(element: HTMLElement, host: Host) {
-  if (host.protocol !== 1) throw new Error("Несовместимая версия HomeNet");
-  const root = host.createRoot(element);
-  root.render(<ModuleBoundary><Computers host={host} /></ModuleBoundary>);
-  return () => root.unmount();
+function Computers({host}:{host:Host}) {
+  const pc=useComputers(host);
+  return <div className="hp pv-root mc-root"><div className="pve-module">{pc.error&&<p className="pv-warning" role="alert">Данные компьютеров не обновились: {pc.error}</p>}{pc.loading&&!pc.data ? <div className="pve-skeleton"/> : !pc.data ? <Empty title="Интеграция не отвечает"/> : <PveProvider host={host} hosts={[]} standalone><PcProvider host={host} computers={pc.data.hosts || []} machinePages><Dashboard reload={pc.reload}/></PcProvider></PveProvider>}</div></div>;
 }
+export function mount(element:HTMLElement,host:Host){if(host.protocol!==1)throw new Error("Несовместимая версия HomeNet");const root=host.createRoot(element);root.render(<ModuleBoundary><Computers host={host}/></ModuleBoundary>);return()=>root.unmount();}

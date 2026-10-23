@@ -8,7 +8,7 @@ export type MonitoringEvent = {
   id: string; host: string; kind: "connection_lost" | "connection_restored" | "task_error" | "task_unknown";
   severity: "warning" | "info" | "error"; title: string; message: string; created_at: string; read_at?: string;
 };
-type Events = { events: MonitoringEvent[]; unread: number; storage_error?: string };
+type Events = { events: MonitoringEvent[]; unread: number; storage_error?: string; source_error?: string };
 type Service = "pc" | "pve";
 const eventIcons: Record<MonitoringEvent["kind"], IconName> = { connection_lost: "network", connection_restored: "checkCircle", task_error: "error", task_unknown: "alert" };
 const formatTime = (value: string) => new Date(value).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -74,6 +74,7 @@ export function EventCenter({ host, service, hosts, enabled, defaultExpanded = f
       <span className="sr-only" role="status">{data ? `Непрочитанных событий: ${unread}` : ""}</span>
       <button type="button" className="monitor-events-read-all" disabled={!unread || !!writing || !!error} onClick={() => void markRead()}><Icon name="check" size={14} />{writing === "all" ? "Сохраняю…" : "Прочитать все"}</button>
     </header>
+    {data?.source_error ? <div className="monitor-events-alert" role="alert"><Icon name="alert" size={17}/><div><strong>Не удалось обновить часть источников</strong><p>{data.source_error}</p><small>Показаны события доступных модулей.</small></div></div> : null}
     {data?.storage_error ? <div className="monitor-events-alert storage" role="alert"><Icon name="alert" size={17} /><div><strong>Не удалось сохранить данные мониторинга</strong><p>Новые данные могут не пережить перезапуск. Проверьте доступность хранилища интеграции.</p><small>{data.storage_error}</small></div></div> : null}
     {error || actionError ? <div className="monitor-events-alert" role="alert"><Icon name="error" size={17} /><div><strong>{actionError ? "Не удалось отметить события прочитанными" : "Не удалось обновить события"}</strong><p>{actionError || error}</p>{error && data ? <small>Показан последний полученный список.</small> : null}</div><button type="button" className="monitor-events-retry" disabled={refreshing} onClick={() => { setActionError(""); void load(); }}>Обновить</button></div> : null}
     {expanded ? <div className="monitor-events-panel" id={panel}>

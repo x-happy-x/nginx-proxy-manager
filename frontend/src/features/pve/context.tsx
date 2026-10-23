@@ -6,7 +6,7 @@ import { type PveGuest, type PveHost, type PveHistory, guestTags } from "./model
 
 export { useSaved } from "../monitoring/portal";
 export type Target = { host: string; vmid?: number; type?: string };
-function useStateOf(host: Host, hosts: PveHost[]) {
+function useStateOf(host: Host, hosts: PveHost[], standalone = false) {
   const [hide, setHide] = useSaved("homenet.portal.hide-hosts", false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -54,8 +54,8 @@ function useStateOf(host: Host, hosts: PveHost[]) {
     return !q || [h.name, h.address, h.current?.host, ...(g ? [g.name, String(g.vmid), ...(g.ips || []), ...guestTags(g)] : (h.current?.guests || []).flatMap(v => [v.name, String(v.vmid), ...(v.ips || []), ...guestTags(v)]))].some(v => v?.toLocaleLowerCase().includes(q));
   };
   const guestMatches = (h: PveHost, g: PveGuest) => !g.template && matches(h, g) && (filter === "running" ? g.status === "running" : filter === "stopped" ? g.status === "stopped" : filter === "qemu" || filter === "lxc" ? g.type === filter : filter === "apps" ? appsOf(g).length > 0 : true);
-  return { host, hosts, hide, setHide, query, setQuery, filter, setFilter, target, setTarget, history, historyErrors, appsOf, containersOf, appsKnown: apps !== null, containersKnown: containers !== null, matches, guestMatches };
+  return { host, hosts, standalone, hide, setHide, query, setQuery, filter, setFilter, target, setTarget, history, historyErrors, appsOf, containersOf, appsKnown: apps !== null, containersKnown: containers !== null, matches, guestMatches };
 }
 const Context = createContext<ReturnType<typeof useStateOf> | null>(null);
-export function PveProvider({ host, hosts, children }: { host: Host; hosts: PveHost[]; children: ReactNode }) { const value = useStateOf(host, hosts); return <Context.Provider value={value}>{children}</Context.Provider>; }
+export function PveProvider({ host, hosts, standalone = false, children }: { host: Host; hosts: PveHost[]; standalone?: boolean; children: ReactNode }) { const value = useStateOf(host, hosts, standalone); return <Context.Provider value={value}>{children}</Context.Provider>; }
 export function usePve() { const value = useContext(Context); if (!value) throw new Error("PVE context missing"); return value; }
