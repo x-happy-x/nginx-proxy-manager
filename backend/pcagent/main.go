@@ -22,7 +22,7 @@ import (
 	"unicode/utf16"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 type CPU struct {
 	Percent *float64 `json:"percent"`
@@ -86,6 +86,7 @@ type Snapshot struct {
 	Docker       []Docker       `json:"docker"`
 	Capabilities Capabilities   `json:"capabilities"`
 	Errors       []string       `json:"errors"`
+	Hardware     map[string]any `json:"hardware,omitempty"`
 }
 type Action struct {
 	Target  string `json:"target"`
@@ -137,7 +138,9 @@ func runCommand(ctx context.Context, name string, args ...string) ([]byte, error
 		if len(detail) > 500 {
 			detail = detail[:500]
 		}
-		return nil, fmt.Errorf("%s: %s", name, detail)
+		// Some read-only tools (notably smartctl) return valid JSON with a
+		// nonzero status mask. Callers still decide whether to accept it.
+		return out.Bytes(), fmt.Errorf("%s: %s", name, detail)
 	}
 	return out.Bytes(), nil
 }
@@ -283,6 +286,9 @@ func (a agent) snapshot(ctx context.Context) Snapshot {
 	host, _ := os.Hostname()
 	s := Snapshot{V: 1, TS: time.Now().Unix(), Host: host, OS: a.platform, Arch: runtime.GOARCH, Agent: version,
 		CPU: CPU{Cores: runtime.NumCPU()}, Disks: []Disk{}, Network: []Network{}, WSL: []Distribution{}, Docker: []Docker{}, Capabilities: a.capabilities(), Errors: []string{}}
+	// Inventory has its own budget and never delays the existing metric probes.
+	hardware := make(chan map[string]any, 1)
+	go func() { hardware <- collectHardware(ctx, a.run) }()
 	collectSystem(ctx, a.run, &s)
 	wslctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	distros, err := a.distributions(wslctx)
@@ -322,6 +328,7 @@ func (a agent) snapshot(ctx context.Context) Snapshot {
 		}(target)
 	}
 	wg.Wait()
+	s.Hardware = <-hardware
 	sort.Slice(s.Docker, func(i, j int) bool { return s.Docker[i].Context < s.Docker[j].Context })
 	return s
 }
@@ -537,6 +544,10 @@ func serve(argv []string, request string, envRequest bool, out io.Writer) int {
 		return encode(a.snapshot(ctx))
 	case "capabilities":
 		return encode(a.capabilities())
+	case "hardware":
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		return encode(collectHardware(ctx, a.run))
 	}
 	if strings.HasPrefix(request, "logs ") {
 		var req LogsRequest
@@ -575,7 +586,7 @@ func serve(argv []string, request string, envRequest bool, out io.Writer) int {
 }
 func main() {
 	if len(os.Args) < 2 || os.Args[1] != "serve" {
-		fmt.Fprintln(os.Stderr, "usage: pc-agent serve [--allow-docker-actions] [--allow-wsl-actions] [--allow-docker-logs] [ping|snapshot]")
+		fmt.Fprintln(os.Stderr, "usage: pc-agent serve [--allow-docker-actions] [--allow-wsl-actions] [--allow-docker-logs] [ping|snapshot|hardware]")
 		os.Exit(2)
 	}
 	request, present := os.LookupEnv("SSH_ORIGINAL_COMMAND")

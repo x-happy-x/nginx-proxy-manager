@@ -9,6 +9,33 @@ Windows it lists WSL distributions and their state/version. It discovers native
 Docker containers and containers in running WSL distributions. Optional actions
 start/stop/restart containers and start/terminate WSL distributions.
 
+Since 1.2.0 snapshots also include the optional extensible `hardware` document.
+The read-only `hardware` request collects this inventory without probing Docker
+or WSL. On Windows independent, bounded CIM providers report CPU topology,
+board/BIOS, DIMM capacity and labels, GPU drivers, physical/virtual disks and
+their logical-drive associations, network adapters, and every PCI/USB PnP record.
+Unrecognised devices keep their IDs, class, driver and OS problem code.
+Adapters sharing one exact PnP ID can have several OS interface instances.
+
+Temperature and fan readings come from an already available
+LibreHardwareMonitor/OpenHardwareMonitor WMI provider, or NVIDIA's installed
+`nvidia-smi` for GPU readings. The agent does not install providers, drivers,
+services, or request elevation. Storage reliability counters may be denied to
+the SSH account: that reason is returned per disk, not replaced with zero.
+Raw SMBIOS type 17 is read through `GetSystemFirmwareTable` to include empty
+DIMM sockets and their exact device/bank locator strings. `DIMM 1` in channel A
+is kept distinct from `DIMM 1` in channel B; no motherboard A1/A2 naming is guessed.
+Windows `HealthStatus` is distinct from a SMART self-test result. Driver-reported
+VRAM is used when available; `Win32_VideoController.AdapterRAM` is not used.
+
+On Linux the inventory uses sysfs, `lscpu`, `lspci`, `lsblk`, and optional
+`dmidecode` under the existing account. Missing commands/permissions are recorded
+in `sources`; PCI records still survive through sysfs without an ID database.
+No `sudo` or additional key permissions are used. Hardware collection has a
+12-second budget, runs alongside snapshot metrics, and does not discard a
+successful provider when another provider fails. Hardware fields and unknown
+extensions survive the manager's polling and persisted snapshots.
+
 Network details retain each interface; aggregate host traffic uses only
 interfaces with a default IPv4/IPv6 route, avoiding duplicate Docker bridge and
 veth traffic. Multiple default routes (for example a VPN and its physical
@@ -127,7 +154,7 @@ global WSL shutdown or unregister operation is exposed.
 
 ## Protocol and verification
 
-Read-only SSH requests: `ping`, `capabilities`, `snapshot`. Actions use
+Read-only SSH requests: `ping`, `capabilities`, `snapshot`, `hardware`. Actions use
 `control BASE64URL` where the unpadded Base64URL payload is a strict JSON object:
 
 ```json

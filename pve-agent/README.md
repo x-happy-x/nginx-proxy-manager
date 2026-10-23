@@ -10,6 +10,14 @@ agent or LXC interfaces, Docker and loopback interfaces skipped) and `macs`.
 HomeNet uses them to show on which server and VM an application runs; a guest
 without the guest agent is matched by its MAC in the router's ARP table.
 
+Since 1.5.0 hardware includes the complete PCI/USB inventory (`devices`),
+including unrecognised models with stable bus addresses, numeric IDs, class,
+driver and original `lspci` fields. sysfs preserves devices even when `lspci`
+has no names. The memory inventory distinguishes installed DIMM bytes from
+OS-visible memory and keeps explicit empty/unknown slot records. NICs distinguish
+Wi-Fi from Ethernet. Existing fields and the restricted SSH protocol remain
+compatible; no additional permissions or packages are required.
+
 ## Installation and update
 
 Copy this directory to the Proxmox host and run the installer there as root.

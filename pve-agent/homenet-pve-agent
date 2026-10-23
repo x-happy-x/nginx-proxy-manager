@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 RUN = "/run/homenet-pve"
 LIB = "/var/lib/homenet-pve"
 INTERVAL = 10
@@ -360,18 +360,56 @@ def versions():
     m = re.search(r"pve-manager/([\w.\-]+)", pve)
     return {"pve": m.group(1) if m else pve, "kernel": os.uname().release, "agent": VERSION}
 
+def hardware_devices():
+    """Retain every PCI/USB record, even without a name in the local ID database."""
+    named = {}
+    for block in sh(["lspci", "-D", "-vmm", "-nn", "-k"], 10).split("\n\n"):
+        fields = dict(line.split(":\t", 1) for line in block.splitlines() if ":\t" in line)
+        if fields.get("Slot"):
+            named[fields["Slot"]] = fields
+    devices = []
+    for path in sorted(glob.glob("/sys/bus/pci/devices/*")):
+        address = os.path.basename(path)
+        fields = named.get(address, {})
+        name = re.sub(r"\s*\[[0-9a-fA-F]{4}\]$", "", fields.get("Device", "")).strip()
+        if re.fullmatch(r"(?:Device\s*)?[0-9a-fA-F]{4}|Device", name, re.I):
+            name = ""
+        driver = os.path.basename(os.path.realpath(path + "/driver")) if os.path.islink(path + "/driver") else ""
+        devices.append({"id": "pci:" + address, "bus": "pci", "address": address, "name": name,
+                        "kind": re.sub(r"\s*\[[0-9a-fA-F]{4}\]$", "", fields.get("Class", "")),
+                        "vendor_id": read(path + "/vendor").removeprefix("0x"),
+                        "device_id": read(path + "/device").removeprefix("0x"),
+                        "class_id": read(path + "/class").removeprefix("0x"), "driver": driver,
+                        "status": "identified" if name else "unrecognized", "source": "sysfs pci + lspci", "raw": fields})
+    for path in sorted(glob.glob("/sys/bus/usb/devices/*")):
+        vendor = read(path + "/idVendor")
+        if not vendor:
+            continue
+        name = read(path + "/product")
+        drivers = sorted({os.path.basename(os.path.realpath(p)) for p in glob.glob(path + ":*/driver")})
+        devices.append({"id": "usb:" + os.path.basename(path), "bus": "usb", "address": os.path.basename(path),
+                        "name": name, "kind": "USB", "vendor_id": vendor, "device_id": read(path + "/idProduct"),
+                        "class_id": read(path + "/bDeviceClass"), "driver": ", ".join(drivers),
+                        "status": "identified" if name else "unrecognized", "source": "sysfs usb"})
+    return devices
+
+
 def hardware():
     dmi = lambda k: read("/sys/class/dmi/id/" + k)
     clean = lambda v: "" if v in ("Default string", "To be filled by O.E.M.", "System Product Name", "") else v
     lscpu = {x["field"].rstrip(":"): x["data"] for x in (sh_json(["lscpu", "-J"], 10, {}) or {}).get("lscpu", [])}
-    modules, slots = [], 0
+    modules, slot_records, slots = [], [], 0
     block = {}
     for line in sh(["dmidecode", "-t", "17"]).splitlines() + ["Handle"]:
         if line.startswith("Handle"):
             if block:
                 slots += 1
+                size = block.get("Size", "")
+                slot_records.append({"slot": block.get("Locator", ""), "state": "empty" if size == "No Module Installed" else "populated" if size.split(" ")[0].isdigit() else "unknown"})
                 if block.get("Size", "").split(" ")[0].isdigit():
-                    modules.append({"slot": block.get("Locator", ""), "size": block.get("Size", ""), "type": block.get("Type", ""),
+                    amount, unit = (size.split() + [""])[:2]
+                    size_bytes = int(amount) * {"kB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}.get(unit, 0)
+                    modules.append({"slot": block.get("Locator", ""), "size": size, "size_bytes": size_bytes, "type": block.get("Type", ""),
                                     "speed": block.get("Configured Memory Speed") or block.get("Speed", ""),
                                     "vendor": clean(block.get("Manufacturer", "")).replace("Unknown", ""), "part": block.get("Part Number", "").strip()})
             block = {}
@@ -385,7 +423,8 @@ def hardware():
         p = "/sys/class/net/" + n
         speed = read(p + "/speed")
         nics.append({"iface": n, "mac": read(p + "/address"), "driver": os.path.basename(os.path.realpath(p + "/device/driver")),
-                     "speed": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None, "state": read(p + "/operstate")})
+                     "speed": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None, "state": read(p + "/operstate"),
+                     "kind": "wifi" if os.path.isdir(p + "/wireless") else "ethernet"})
     pci = sh(["lspci"]).splitlines()
     pick = lambda words: [l.split(": ", 1)[-1] for l in pci if any(w in l for w in words)]
     return {
@@ -396,9 +435,10 @@ def hardware():
                 "cores": int(lscpu.get("Core(s) per socket", "0") or 0) * int(lscpu.get("Socket(s)", "1") or 1),
                 "sockets": int(lscpu.get("Socket(s)", "1") or 1), "max_mhz": round(float(lscpu.get("CPU max MHz", "0") or 0)) or None,
                 "virt": lscpu.get("Virtualization", ""), "arch": lscpu.get("Architecture", "")},
-        "memory": {"total": meminfo().get("MemTotal", 0), "slots": slots, "modules": modules},
+        "memory": {"total": meminfo().get("MemTotal", 0), "installed": sum(m["size_bytes"] for m in modules), "slots": slots, "slot_records": slot_records, "modules": modules},
         "nics": nics, "gpus": pick(["VGA compatible", "3D controller", "Display controller"]),
         "controllers": pick(["SATA controller", "Non-Volatile memory", "RAID bus", "SCSI storage"]),
+        "devices": hardware_devices(), "source": "Linux sysfs + DMI + lspci", "agent": VERSION,
     }
 
 # ---------- loop ----------
