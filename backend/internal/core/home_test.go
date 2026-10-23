@@ -21,6 +21,23 @@ type homeFixture struct {
 	calls atomic.Int32
 }
 
+func TestUnifiedMachineWidgetDefaultsPreserveSavedPC(t *testing.T) {
+	catalog := map[string]HomeWidget{
+		"pc/hosts":  {Key: "pc/hosts", Module: "pc", ID: "hosts", Modes: []string{"pro"}, Sizes: []string{"m"}, Default: map[string]int{"pro": 48}},
+		"pve/hosts": {Key: "pve/hosts", Module: "pve", ID: "hosts", Modes: []string{"pro"}, Sizes: []string{"m"}, Default: map[string]int{"pro": 40}},
+	}
+	for _, pve := range []bool{false, true} {
+		layout := defaultLayout(catalog, map[string]bool{"pc": true, "pve": pve}, "pro")
+		if len(layout) != 1 || pve && layout[0].W != "pve/hosts" || !pve && layout[0].W != "pc/hosts" {
+			t.Fatalf("pve enabled %v: unexpected defaults %+v", pve, layout)
+		}
+	}
+	saved := effectiveLayout([]LayoutItem{{W: "pc/hosts", Size: "m"}}, catalog, "pro")
+	if len(saved) != 1 || saved[0].W != "pc/hosts" {
+		t.Fatalf("saved PC widget lost: %+v", saved)
+	}
+}
+
 func newHomeFixture(t *testing.T) *homeFixture {
 	t.Helper()
 	f := &homeFixture{}

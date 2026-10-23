@@ -192,6 +192,11 @@ func hasString(list []string, v string) bool {
 func defaultLayout(catalog map[string]HomeWidget, enabled map[string]bool, mode string) []LayoutItem {
 	list := []HomeWidget{}
 	for _, w := range catalog {
+		// NPM-95: keep the PC widget available to saved layouts and PC-only
+		// installations; the unified module supplies the default machine summary.
+		if w.Module == "pc" && w.ID == "hosts" && enabled["pve"] {
+			continue
+		}
 		if _, ok := w.Default[mode]; ok && enabled[w.Module] && hasString(w.Modes, mode) {
 			list = append(list, w)
 		}
