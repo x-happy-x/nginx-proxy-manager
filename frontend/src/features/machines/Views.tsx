@@ -14,6 +14,7 @@ import { Chart } from "../pve/ui";
 import { BackupList } from "../pve/Storage";
 import { EventCenter, type MonitoringEvent } from "../monitoring/EventCenter";
 import { Board } from "./Board";
+import { hardwareForMachine } from "./hardware-model.js";
 import { combinedEvents } from "./events";
 import { containerLink, flatten, machineContainers, machineRoute, machineTree, stoppedWsl, type Machine } from "./model";
 
@@ -104,11 +105,11 @@ export function Containers({ roots, route }: { roots: Machine[]; route: string }
     {pc.computers.some(h=>h.current?.docker.some(d=>!d.available))&&<details className="mc-more"><summary>Недоступные окружения Docker</summary>{pc.computers.flatMap(h=>(h.current?.docker || []).filter(d=>!d.available).map(d=><p key={`${h.id}/${d.context}`}>{h.name} › {d.context}: {d.error || "нет данных"}</p>))}</details>}</>;
 }
 export function Hardware({ roots }: { roots: Machine[] }) {
-  const {query}=usePve(), [filter,setFilter]=useState("all");
-  return <><div className="mc-chips">{[["all","Все"],["server","Серверы"],["pc","ПК"]].map(([id,label])=><button className={`pv-chip${filter===id ? " is-on" : ""}`} key={id} aria-pressed={filter===id} onClick={()=>setFilter(id)}>{label} · {roots.filter(m=>id==="all"||m.kind===id).length}</button>)}</div><div className="mc-hardware">{roots.filter(m=>(filter==="all"||m.kind===filter)&&(!query||m.name.toLowerCase().includes(query.toLowerCase()))).map(m=>{
-    const disk=stats(m), warning=!!disk.diskTotal&&ratio(disk.diskUsed || 0,disk.diskTotal)>=85;
-    return <article className="pv-card" key={m.key}><div className="mc-hardware-head"><MachineName m={m}/>{warning&&<span className="mc-badge warn">диск {percent(ratio(disk.diskUsed || 0,disk.diskTotal || 0))}</span>}</div><Board machine={m}/></article>;
-  })}</div></>;
+  const {query}=usePve(),[saved,setSaved]=useSaved("homenet.machines.hardware-selected","");
+  const visible=roots.filter(m=>(m.kind==="server"||m.kind==="pc")&&(!query||m.name.toLowerCase().includes(query.toLowerCase())));
+  const selected=visible.find(m=>m.key===saved)||visible[0];
+  const info=selected?hardwareForMachine(selected):null;
+  return <>{visible.length>0?<><div className="mc-hardware-selector" aria-label="Выбор машины">{visible.map(m=><button key={m.key} aria-pressed={selected?.key===m.key} onClick={()=>setSaved(m.key)}><Avatar m={m}/><span><strong>{m.name}</strong><i className={`mc-dot${m.online?"":" off"}`}/><small>{hardwareForMachine(m).sub}</small></span></button>)}</div>{selected&&info&&<article className="mc-hardware-workspace"><header className="mc-hardware-heading"><div><h2>{selected.name}</h2><p>{info.description}</p></div><span className="mc-hw-tag">{info.agent?`Агент ${info.agent}`:"Инвентарь"}</span></header><Board key={selected.key} machine={selected}/></article>}</>:<Empty title="Физические машины не найдены">Измените поиск или подключите машину в настройках.</Empty>}</>;
 }
 
 export function Events({ pcEnabled }: { pcEnabled:boolean }) { const pve=usePve(), pc=usePc(), host=useMemo(()=>combinedEvents(pve.host,pc.host,pcEnabled),[pve.host,pc.host,pcEnabled]); return <EventCenter host={host} service="pve" hosts={[...pve.hosts.map(h=>({id:`pve:${h.id}`,name:h.name})),...pc.computers.map(h=>({id:`pc:${h.id}`,name:h.name}))]} enabled defaultExpanded/>; }
