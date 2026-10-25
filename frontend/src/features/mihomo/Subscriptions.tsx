@@ -10,6 +10,7 @@ import { Pill, type Tone } from "./VpnOverview";
 import { OlcrtcPage, TailscalePage } from "./Proxies";
 import { useExits } from "./useExits";
 import { lastDelay } from "./shared";
+import { SubLab } from "./SubLab";
 
 type SubTab = "nodes" | "overview" | "log" | "settings";
 type Fit = "match" | "region" | "diff" | "added" | "dead" | "unknown";
@@ -175,6 +176,7 @@ export function Subscriptions() {
         Откуда берутся узлы: подписки, свои серверы и сети. Для каждого узла HomeNet проверяет, в какой стране он на самом деле выходит в интернет.
       </PageHeader>
       {err ? <p className="vn-err">{err}</p> : null}
+      <div className="vs"><SubLab onSynced={pull} /></div>
 
       <div className="hub">
         <aside className="hub-rail" aria-label="Источники узлов">
