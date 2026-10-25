@@ -80,8 +80,9 @@ type trafficState struct {
 	// the channel's own mode by minute and hour, one for all subscriptions
 	Uplink *providerHealth `json:"uplink,omitempty"`
 	// delay of each group's node by minute and hour, subscription updates (NPM-51)
-	Groups  map[string]*groupHistory `json:"groups,omitempty"`
-	ProvLog map[string][]provUpdate  `json:"prov_log,omitempty"`
+	Groups        map[string]*groupHistory `json:"groups,omitempty"`
+	ProvLog       map[string][]provUpdate  `json:"prov_log,omitempty"`
+	Subscriptions []slUsageDay             `json:"subscriptions,omitempty"`
 }
 
 type liveConn struct {
@@ -90,14 +91,15 @@ type liveConn struct {
 }
 
 type mihomoConn struct {
-	ID          string   `json:"id"`
-	Upload      int64    `json:"upload"`
-	Download    int64    `json:"download"`
-	Start       string   `json:"start"`
-	Chains      []string `json:"chains"`
-	Rule        string   `json:"rule"`
-	RulePayload string   `json:"rulePayload"`
-	Metadata    struct {
+	ID             string   `json:"id"`
+	Upload         int64    `json:"upload"`
+	Download       int64    `json:"download"`
+	Start          string   `json:"start"`
+	Chains         []string `json:"chains"`
+	ProviderChains []string `json:"providerChains"`
+	Rule           string   `json:"rule"`
+	RulePayload    string   `json:"rulePayload"`
+	Metadata       struct {
 		Network       string `json:"network"`
 		SourceIP      string `json:"sourceIP"`
 		Host          string `json:"host"`
@@ -108,15 +110,17 @@ type mihomoConn struct {
 }
 
 type trafficCollector struct {
-	mu        sync.Mutex
-	path      string
-	st        trafficState
-	live      map[string]liveConn
-	lastUp    int64
-	lastDown  int64
-	haveTotal bool
-	started   bool
-	dirty     bool
+	mu           sync.Mutex
+	path         string
+	st           trafficState
+	live         map[string]liveConn
+	lastUp       int64
+	lastDown     int64
+	haveTotal    bool
+	started      bool
+	dirty        bool
+	slLastPoll   time.Time
+	slLastHealth int64
 }
 
 var traffic *trafficCollector
@@ -168,6 +172,9 @@ func (a *app) startMihomoTraffic() {
 					traffic.observeHealth(now, body.Providers)
 					nodes.observe(now, body.Providers)
 					traffic.observeUplink(now, channelNow(body.Providers).Mode)
+					traffic.mu.Lock()
+					traffic.slHealth(now, body.Providers)
+					traffic.mu.Unlock()
 					var px struct {
 						Proxies map[string]proxySnapshot `json:"proxies"`
 					}
@@ -334,6 +341,7 @@ func (t *trafficCollector) observe(now time.Time, upTotal, downTotal int64, conn
 	// earlier bytes belong to time this process did not observe.
 	cls := currentClassifier()
 	baseline := len(t.live) == 0 && !t.started
+	t.slConnections(now, conns, baseline)
 	t.started = true
 	seen := make(map[string]liveConn, len(conns))
 	for _, c := range conns {

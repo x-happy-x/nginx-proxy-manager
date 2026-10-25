@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { core, mihomo, type Board, type BoardScan, type BoardServer, type BoardSource } from "../api";
+import { call, core, mihomo, type Board, type BoardScan, type BoardServer, type BoardSource } from "../api";
 import { OlcrtcPage, TailscalePage } from "../Proxies";
+import { SubLab } from "../SubLab";
 import { NodePanel, Strip } from "./NodePanel";
 import { ago, hhmm } from "./VpnHome";
 import "./servers.css";
@@ -133,11 +134,11 @@ function AdaptiveSource({ b, src, navigate }: { b: Board; src: BoardSource; navi
     <section className="vs-hero" aria-labelledby="vs-name">
       <span className="vs-muted">{KIND_TEXT[src.kind]} · обновлена {p.updated_at ? hhmm(p.updated_at) : "—"} · {p.total} серверов{p.skipped?.length ? `, пропущено строк: ${p.skipped.length}` : ""}</span>
       <div className="vs-hero-row">
-        <div className="vs-hero-text"><h1 id="vs-name">{p.name}</h1><p>{sentence}</p></div>
+        <div className="vs-hero-text"><h1 id="vs-name">{src.title || p.name}</h1><p>{sentence}</p></div>
         <dl className="vs-numbers"><div><dt>в подписке</dt><dd>{p.total}</dd></div><div><dt>работают сейчас</dt><dd>{working}</dd></div><div><dt>надёжных</dt><dd className="vs-good">{stable}</dd></div></dl>
       </div>
       <div className="vs-actions">
-        <button type="button" disabled={!!busy} onClick={() => void run("update", () => mihomo.updateProvider(p.name), "Подписка обновлена")}>{busy === "update" ? "Обновляю…" : "Обновить подписку"}</button>
+        <button type="button" disabled={!!busy} onClick={() => void run("update", () => src.sublab ? call("/api/core/sublab/sync-now", { method: "POST", body: "{}" }) : mihomo.updateProvider(p.name), src.sublab ? "Синхронизация завершена; состояние источников — в Sub Lab" : "Подписка обновлена")}>{busy === "update" ? "Обновляю…" : src.sublab ? "Синхронизировать Sub Lab" : "Обновить подписку"}</button>
         <button type="button" className="vs-primary" disabled={!!busy || !!p.scan?.running} onClick={() => void run("check", () => mihomo.healthcheck(p.name), "Проверка запущена")}>{p.scan?.running ? "Проверка идёт" : "Проверить серверы"}</button>
         {note && <span className="vs-muted" role="status">{note}</span>}
       </div>
@@ -166,24 +167,26 @@ function AdaptiveSource({ b, src, navigate }: { b: Board; src: BoardSource; navi
 }
 
 export function ServersPage({ navigate, initial }: { navigate: (p: string) => void; initial?: string }) {
-  const { board, error } = useServersBoard();
+  const { board, error, reload } = useServersBoard();
   const [pick, setPick] = useState(initial || "");
-  if (!board) return <div className="vs">{error ? <div className="vs-warn" role="alert">Не удалось получить данные: {error}</div> : <p className="vs-muted" role="status">Собираю серверы…</p>}</div>;
+  if (!board) return <div className="vs"><SubLab onSynced={() => void reload()} />{error ? <div className="vs-warn" role="alert">Не удалось получить данные: {error}</div> : <p className="vs-muted" role="status">Собираю серверы…</p>}</div>;
   const sources = board.sources || [];
   const main = board.provider?.name || sources[0]?.name || "";
   const current = sources.find(s => s.name.toLowerCase() === pick.toLowerCase()) || sources.find(s => s.name === main) || sources[0];
   return <div className="vs">
+    <SubLab onSynced={() => void reload()} />
     <div className="vs-top">
-      <div className="vs-tabs" role="tablist" aria-label="Источник серверов">{sources.map(s => <button key={s.name} type="button" role="tab" aria-selected={current?.name === s.name} onClick={() => setPick(s.name)}>{s.name}<span>{s.alive}/{s.total}</span></button>)}</div>
+      <div className="vs-tabs" role="tablist" aria-label="Источник серверов">{sources.map(s => <button key={s.name} type="button" role="tab" aria-selected={current?.name === s.name} onClick={() => setPick(s.name)}>{s.title || s.name}<span>{s.alive}/{s.total}</span></button>)}</div>
       <a className="vs-add" href="#/coreconfig/providers">+ Источник</a>
     </div>
     {board.core_error && <div className="vs-warn" role="alert">{board.core_error}</div>}
+    {current?.error && <div className="vs-warn" role="alert">{current.error}</div>}
     {!current ? <p className="vs-muted">Источников серверов нет — добавьте подписку.</p>
       : current.kind === "olcrtc" ? <OlcrtcPage embedded />
         : current.kind === "tailscale" ? <TailscalePage embedded />
           : current.name === board.provider?.name ? <AdaptiveSource b={board} src={current} navigate={navigate} />
-            : <section className="vs-hero"><span className="vs-muted">{KIND_TEXT[current.kind]}{current.depends_on ? ` · проверяется через ${current.depends_on}` : ""}</span><h1>{current.name}</h1>
-              <p>{current.depends_on ? `Каскады: те же серверы ${current.depends_on}, но через обход. Работает, когда работает ${current.depends_on}.` : "Ядро проверяет эти серверы обычной проверкой, без истории по режимам."}</p>
+            : <section className="vs-hero"><span className="vs-muted">{KIND_TEXT[current.kind]}{current.depends_on ? ` · проверяется через ${current.depends_on}` : ""}</span><h1>{current.title || current.name}</h1>
+              <p>{current.depends_on ? `Каскады: те же серверы ${current.depends_on}, но через обход. Работает, когда работает ${current.depends_on}.` : current.sublab ? "Отдельный источник Sub Lab. Использование и доступность по режимам — в разделе Sub Lab выше." : current.adaptive ? "Ядро проверяет доступность серверов в текущем режиме сети." : "Ядро проверяет эти серверы обычной проверкой, без истории по режимам."}</p>
               <dl className="vs-numbers"><div><dt>серверов</dt><dd>{current.total}</dd></div><div><dt>работают</dt><dd>{current.alive}</dd></div></dl>
               {current.skipped?.map(line => <div key={line} className="vs-warn"><i aria-hidden="true" />Пропущена строка {line}</div>)}
               <a href="#/proxies">Узлы этого источника — в «Маршруты → Группы и узлы»</a></section>}

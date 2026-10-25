@@ -331,7 +331,7 @@ export type InstallState = {
   log: Array<{ time: string; level: string; text: string }>;
 };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+export async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     redirect: "manual",
@@ -509,7 +509,7 @@ export const DEFAULT_TEST_URL = "https://www.gstatic.com/generate_204";
 /* NPM-70: data of the redesigned VPN screens (GET /api/core/vpn/board) */
 export type BoardServer = { name: string; rate: number; ms: number; checks: number; stable: boolean; now: string; country?: string; selected?: string[]; hist?: string };
 export type BoardScan = { running: boolean; step: string; startedAt: string; endedAt: string; total: number; planned: number; rested: number; done: number; ok: number; fail: number; concurrency: number; probing?: string[] };
-export type BoardSource = { name: string; kind: "subscription" | "file" | "olcrtc" | "tailscale"; total: number; alive: number; updated_at?: string; adaptive?: boolean; depends_on?: string; skipped?: string[] };
+export type BoardSource = { name: string; title?: string; sublab?: boolean; error?: string; kind: "subscription" | "file" | "olcrtc" | "tailscale"; total: number; alive: number; updated_at?: string; adaptive?: boolean; depends_on?: string; skipped?: string[] };
 export type NodeGroup = { name: string; now: string; place: number; of: number; leads: boolean; via?: string };
 export type NodeDetail = {
   name: string; provider: string; now?: string; country?: string; mode?: string;
