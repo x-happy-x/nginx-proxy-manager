@@ -385,6 +385,12 @@ func (t *trafficCollector) boardHours(provider string, now time.Time, n int) []b
 // boardSources: where nodes come from — subscriptions and files, plus the
 // Tailscale nodes; the main subscription first.
 func boardSources(providers map[string]boardProvider, proxies map[string]proxySnapshot, main string) []response {
+	subscriptions := map[string]slManaged{}
+	if s, err := slLoad(); err == nil {
+		for _, p := range s.Managed {
+			subscriptions[p.Provider] = p
+		}
+	}
 	out := []response{}
 	names := []string{}
 	for name, p := range providers {
@@ -422,6 +428,9 @@ func boardSources(providers map[string]boardProvider, proxies map[string]proxySn
 			kind = "olcrtc"
 		}
 		item := response{"name": name, "kind": kind, "total": len(p.Proxies), "alive": alive, "updated_at": p.UpdatedAt, "adaptive": p.Adaptive != nil && p.Adaptive.DependsOn == ""}
+		if sub, ok := subscriptions[name]; ok {
+			item["title"], item["sublab"], item["error"], item["kind"] = sub.Title, true, sub.Error, "subscription"
+		}
 		if p.Adaptive != nil && p.Adaptive.DependsOn != "" {
 			item["depends_on"] = p.Adaptive.DependsOn
 		}
@@ -429,6 +438,12 @@ func boardSources(providers map[string]boardProvider, proxies map[string]proxySn
 			item["skipped"] = p.Skipped
 		}
 		out = append(out, item)
+	}
+	for _, name := range slSortedKeys(subscriptions) {
+		if _, ok := providers[name]; !ok {
+			sub := subscriptions[name]
+			out = append(out, response{"name": name, "title": sub.Title, "sublab": true, "kind": "subscription", "error": sub.Error, "total": 0, "alive": 0})
+		}
 	}
 	ts, tsAlive := 0, 0
 	for _, x := range proxies {

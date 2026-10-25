@@ -18,6 +18,7 @@ func main() {
 	a.startResources()
 	a.startNetwork()
 	a.startMihomoTraffic()
+	a.startSubLab()
 	a.startServiceChecks()
 	a.startOlcrtc()
 	a.startExits()

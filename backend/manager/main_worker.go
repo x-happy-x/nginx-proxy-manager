@@ -76,6 +76,7 @@ func main() {
 		a.startNetwork()
 	case "vpn":
 		a.startMihomoTraffic()
+		a.startSubLab()
 		a.startServiceChecks()
 		a.startOlcrtc()
 		a.startExits()

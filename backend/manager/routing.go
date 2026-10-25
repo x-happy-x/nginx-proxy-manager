@@ -844,6 +844,7 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 		seq.Content = append(seq.Content, orderedNode(g))
 	}
 	seq.Content[0].HeadComment = routingMarker
+	slKeepRoutingUses(oldGroups, seq, providers)
 	// proxies of groups in flow style, everything else block
 	for _, g := range seq.Content {
 		for i := 0; i+1 < len(g.Content); i += 2 {

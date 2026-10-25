@@ -593,6 +593,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/api/core/sublab":
+		a.handleSubLab(w, r)
 	case "/api/core/status":
 		a.writeJSON(w, http.StatusOK, response{"ok": true, "status": readCoreStatus()})
 	case "/api/core/devices":
@@ -676,6 +678,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case "/api/core/sublab/connect", "/api/core/sublab/refresh", "/api/core/sublab/sync", "/api/core/sublab/sync-now", "/api/core/sublab/create", "/api/core/sublab/import", "/api/core/sublab/pause":
+		a.handleSubLab(w, r)
 	case "/api/core/devices":
 		var req struct {
 			Labels map[string]string `json:"labels"`
