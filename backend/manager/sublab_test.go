@@ -110,6 +110,44 @@ func TestSubLabSplitPreservesParametersFiltersAndUnrelatedConfig(t *testing.T) {
 	}
 }
 
+func TestSubLabSyncPreservesHealthInterval(t *testing.T) {
+	_, s := subLabFixture(t)
+	if err := slCatalog(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	candidate, managed, err := slCandidate(context.Background(), *s, []byte(sampleCoreConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal(candidate, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	providers := cfg["proxy-providers"].(map[string]any)
+	health := providers[managed[0].Provider].(map[string]any)["health-check"].(map[string]any)
+	if health["interval"] != 600 {
+		t.Fatalf("new subscription interval: %v", health["interval"])
+	}
+	health["interval"] = 1800
+	custom, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Managed = managed
+	again, _, err := slCandidate(context.Background(), *s, custom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(again, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	providers = cfg["proxy-providers"].(map[string]any)
+	health = providers[managed[0].Provider].(map[string]any)["health-check"].(map[string]any)
+	if health["interval"] != 1800 {
+		t.Fatalf("subscription update reset the custom interval: %v", health["interval"])
+	}
+}
+
 func TestSubLabSyncFailurePreservesActiveDataAndSelection(t *testing.T) {
 	_, s := subLabFixture(t)
 	bad := func(mihomoSettings, string) error { return errors.New("validator rejected fixture") }

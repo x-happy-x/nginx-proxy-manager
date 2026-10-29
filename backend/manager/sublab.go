@@ -427,7 +427,7 @@ func slCandidate(ctx context.Context, s slState, original []byte) ([]byte, []slM
 			managed = append(managed, slManaged{Key: item.ID, Title: item.Title, Provider: name, Error: "Фильтр не выбрал серверы: источник пропущен"})
 			continue
 		}
-		providers[name] = map[string]any{"type": "file", "path": file, "health-check": adaptiveHealthCheck(), "override": map[string]any{"additional-prefix": item.Title + " · "}}
+		providers[name] = map[string]any{"type": "file", "path": file, "health-check": slHealthCheck(providers[name]), "override": map[string]any{"additional-prefix": item.Title + " · "}}
 		names = append(names, name)
 		managed = append(managed, slManaged{Key: item.ID, Title: item.Title, Provider: name, Path: file, Nodes: count, Expire: expiry})
 	}
@@ -483,6 +483,20 @@ func slCandidate(ctx context.Context, s slState, original []byte) ([]byte, []slM
 	g, _ := json.Marshal(groups)
 	candidate, err := buildCandidate(original, configEdit{Set: map[string]json.RawMessage{"proxy-providers": p, "proxy-groups": g}})
 	return candidate, managed, err
+}
+
+// Subscription updates must not reset the operator's probe interval.
+func slHealthCheck(previous any) map[string]any {
+	health := adaptiveHealthCheck()
+	health["interval"] = 600
+	if provider, ok := previous.(map[string]any); ok {
+		if old, ok := provider["health-check"].(map[string]any); ok {
+			if interval, ok := old["interval"].(int); ok && interval > 0 {
+				health["interval"] = interval
+			}
+		}
+	}
+	return health
 }
 
 func slSync(ctx context.Context, s *slState) error {
