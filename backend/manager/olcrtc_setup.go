@@ -935,11 +935,11 @@ func (o *olcState) runJob(j *olcJob, srv *olcServer, req olcSetupReq) {
 			timeout time.Duration
 			detail  string
 		}{
-			{"packages", `if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates openssl tar; elif command -v dnf >/dev/null; then dnf install -y -q git curl ca-certificates openssl tar; elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed git curl ca-certificates openssl tar; else echo "нет apt-get, dnf или pacman" >&2; exit 1; fi; git --version`, 10 * time.Minute, "git, curl, openssl установлены"},
+			{"packages", `if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates openssl tar patch; elif command -v dnf >/dev/null; then dnf install -y -q git curl ca-certificates openssl tar patch; elif command -v pacman >/dev/null; then pacman -Sy --noconfirm --needed git curl ca-certificates openssl tar patch; else echo "нет apt-get, dnf или pacman" >&2; exit 1; fi; git --version`, 10 * time.Minute, "git, curl, openssl установлены"},
 			{"go", fmt.Sprintf(`if /usr/local/go/bin/go version 2>/dev/null | grep -q 'go%[1]s'; then /usr/local/go/bin/go version; else curl -fsSL https://go.dev/dl/go%[1]s.linux-%[2]s.tar.gz -o /tmp/go.tgz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz && /usr/local/go/bin/go version; fi`, olcGoVersion, srv.Arch), 10 * time.Minute, "Go " + olcGoVersion},
 			{"source", fmt.Sprintf(`mkdir -p %[1]s/src && cd %[1]s/src && ([ -d .git ] || git init -q) && (git remote get-url origin >/dev/null 2>&1 || git remote add origin %[2]s) && git fetch -q --depth 1 origin %[3]s && git reset -q --hard FETCH_HEAD && git log -1 --format='%%h %%cs'`, olcDir, olcRepo, olcCommit), 5 * time.Minute, "исходники olcrtc той же версии, что в ядре роутера"},
 			// Go's module and build caches (~2 GB) are not kept: one build per version
-			{"build", fmt.Sprintf(`cd %[1]s/src && h=$(git rev-parse --short HEAD) && if [ -x %[1]s/olcrtc ] && [ "$(cat %[1]s/.built 2>/dev/null)" = "$h" ]; then echo "уже собран из этой версии $h"; else a=$(df -Pm / | awk 'NR==2{print $4}'); [ "$a" -ge 2500 ] || { echo "на диске $a МБ, для сборки нужно 2500" >&2; exit 1; }; CGO_ENABLED=0 GOFLAGS=-buildvcs=false /usr/local/go/bin/go build -trimpath -ldflags "-s -w" -o %[1]s/olcrtc.new ./cmd/olcrtc && mv %[1]s/olcrtc.new %[1]s/olcrtc && echo "$h" > %[1]s/.built && echo "собран $h"; fi; rc=$?; /usr/local/go/bin/go clean -cache -modcache >/dev/null 2>&1; exit $rc`, olcDir), 30 * time.Minute, "olcrtc"},
+			{"build", olcServerBuildScript(), 30 * time.Minute, "olcrtc с исправлением чтения Jitsi config.js"},
 		}
 		for _, st := range steps {
 			st := st
@@ -1883,7 +1883,7 @@ func olcInstalled(out string) bool {
 			built = strings.TrimSpace(l[2:])
 		}
 	}
-	return has("/opt/olcrtc/olcrtc") && has("/opt/olcrtc/olcrtc.key") && has("/etc/systemd/system/olcrtc@.service") && built != "" && strings.HasPrefix(olcCommit, built)
+	return has("/opt/olcrtc/olcrtc") && has("/opt/olcrtc/olcrtc.key") && has("/etc/systemd/system/olcrtc@.service") && built == olcBuildVersion
 }
 
 func parseOlcExisting(out string) ([]olcFound, []string) {
