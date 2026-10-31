@@ -1,0 +1,37 @@
+--- a/internal/xmpp/conn.go
++++ b/internal/xmpp/conn.go
+@@ -9,6 +9,7 @@
+ 	"encoding/xml"
+ 	"fmt"
+ 	"io"
++	"log"
+ 	"net/http"
+ 	"os"
+ 	"sort"
+@@ -223,14 +224,23 @@
+ 	if err != nil {
+ 		return cfg
+ 	}
++	// Some instances reject Go's HTTP/2 User-Agent and versioned browser
++	// identities for config.js, while accepting the generic browser token.
++	req.Header.Set("User-Agent", "Mozilla/5.0")
++	req.Header.Set("Accept", "*/*")
+ 	resp, err := client.Do(req)
+ 	if err != nil {
++		log.Printf("jitsi: config.js discovery failed for %s: %v", host, err)
+ 		return cfg
+ 	}
+ 	defer func() { _ = resp.Body.Close() }()
+-	buf := make([]byte, 64*1024)
+-	n, _ := resp.Body.Read(buf)
+-	body := string(buf[:n])
++	const maxConfigSize = 1024 * 1024
++	buf, err := io.ReadAll(io.LimitReader(resp.Body, maxConfigSize+1))
++	if err != nil || len(buf) > maxConfigSize || resp.StatusCode != http.StatusOK {
++		log.Printf("jitsi: config.js discovery failed for %s: status=%d bytes=%d error=%v", host, resp.StatusCode, len(buf), err)
++		return cfg
++	}
++	body := string(buf)
+ 	if v := extractStringField(body, "domain"); v != "" {
+ 		cfg.xmppDomain = v
+ 	}
