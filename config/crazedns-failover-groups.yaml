@@ -1,0 +1,15 @@
+# NPM-106. The supervisor chooses one route and resets only CrazyDNS sessions.
+proxy-groups:
+  - name: CrazyDNS OLCRTC
+    type: select
+    proxies: [OLCRTC, REJECT]
+    default-selected: OLCRTC
+    hidden: true
+  - name: CrazyDNS резерв
+    type: select
+    use: [SL-80ae5ecf61ef]
+    filter: '^PAUK · 🇪🇺 Автовыбор · node-06$'
+  - name: CrazyDNS
+    type: select
+    proxies: [DIRECT, CrazyDNS OLCRTC, CrazyDNS резерв]
+    default-selected: CrazyDNS OLCRTC
