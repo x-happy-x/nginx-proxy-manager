@@ -37,9 +37,13 @@
 - PC-X, кабинет: `192.168.1.10`, Ethernet `b0:82:e2:30:92:8d`;
 - PC-A, зал: `192.168.1.20`, Wi-Fi `ac:82:47:4b:eb:d7`.
 
-`scripts/configure-pc-power.py` сначала проверяет hostname по существующему
-SSH-ключу HomeCloud. Для текущего PC-X его SSH host key сверяется с локальным
-публичным ключом этого ПК; устаревший known_hosts пользователя не меняется.
+`scripts/configure-pc-power.py` проверяет hostname PC-A по существующему
+SSH-ключу HomeCloud. Для текущего PC-X агент устанавливается локально с
+правами администратора через `scripts/install-local-pc-power.ps1 -PublicKey ...`:
+файл ключей OpenSSH защищён от обычного пользователя. Затем configure
+проверяет статус и SHA256 установленного бинарника. SSH host key PC-X берётся
+из локального публичного ключа или от того же локального sshd через loopback;
+устаревший known_hosts пользователя не меняется.
 Установщик сохраняет старый агент и authorized_keys, оставляет прежние
 разрешения Docker/WSL, добавляет только разрешение питания. На роутере
 сохраняются hosts/known_hosts, добавляются PC-A и WoL, остальные машины
@@ -52,6 +56,8 @@ $env:GOFLAGS='-buildvcs=false'
 node scripts/build-modules.mjs amd64 1.0.105 --only=pve,pc
 node scripts/build-modules.mjs arm64 1.0.105 --only=pve,pc --reuse-ui
 ./pc-agent/build.ps1
+# На самом PC-X один раз запустить scripts/install-local-pc-power.ps1
+# в PowerShell администратора с публичным ключом интеграции HomeNet.
 python scripts/deploy-pc-power.py --apply
 python scripts/configure-pc-power.py --apply
 ```
