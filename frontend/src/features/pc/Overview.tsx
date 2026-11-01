@@ -6,6 +6,7 @@ import { Empty } from "../pve/parts";
 import { containersOf, outdated, type Computer, type History } from "./model";
 import { diskOf, matchesComputer, usePc, useSaved } from "./context";
 import { Chip, MachineHead, Meter, PcHeading, Ports, Ring, Spark, StatusDot, ViewSwitch } from "./parts";
+import { ComputerPower } from "./Power";
 
 type View = "tiles" | "table" | "scheme";
 type Filter = "all" | "windows" | "linux" | "vm" | "docker";
@@ -21,6 +22,7 @@ function ComputerCard({ h }: { h: Computer }) {
   const apps = new Set(containersOf([h]).flatMap(({ d, c }) => appsOf(h, d.context, c).map(a => a.key))).size;
   return <article className={`pc-computer${outdated(h) ? " outdated" : ""}`}>
     <MachineHead h={h} />
+    <ComputerPower h={h} />
     {outdated(h) ? <p className="pc-error">{h.error || "Нет свежих данных"}{s ? ` · снимок ${ago(s.ts)}` : ""}</p> : null}
     <div className="pc-gauges"><Ring value={s?.cpu.percent ?? null} label="CPU" detail={s?.cpu.model} /><Ring value={mem(h)} label={s ? `${bytes(s.memory.used, 0)} / ${bytes(s.memory.total, 0)}` : "Память"} detail="Память" /><Ring value={disk(h)} label={d ? `диск ${d.path}` : "Диск"} /></div>
     <Spark points={history.data[h.id]?.points || []} />

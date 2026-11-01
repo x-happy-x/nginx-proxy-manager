@@ -10,18 +10,18 @@ export type Snapshot = {
   disks: { path: string; total: number; used: number; free: number }[];
   network: { name: string; rx_bytes: number; tx_bytes: number; aggregate?: boolean }[];
   wsl: Distro[]; docker: DockerContext[];
-  capabilities: { docker_actions: string[]; wsl_actions: string[]; docker_logs?: boolean }; errors: string[];
+  capabilities: { docker_actions: string[]; wsl_actions: string[]; docker_logs?: boolean; power_actions?: string[] }; errors: string[];
   hardware?: Record<string, unknown>;
 };
-export type Computer = { id: string; name: string; address: string; online: boolean; error: string; checked_at?: string; last_ok?: string; latency_ms: number; current: Snapshot | null };
+export type Computer = { id: string; name: string; address: string; online: boolean; error: string; checked_at?: string; last_ok?: string; latency_ms: number; current: Snapshot | null; power?: {enabled: boolean;state: string;actions: string[];busy: boolean} };
 export type OverviewData = { hosts: Computer[]; configured: boolean; error?: string };
 export type History = { step: number; points: { t: number; cpu: number | null; mem_used: number; mem_total: number; net_rx_bps: number; net_tx_bps: number; network_valid?: boolean; disks?: { path: string; used: number; total: number }[] }[] };
-export type ConfigHost = { id: string; name: string; address: string; port: number; user: string; pinned?: boolean };
+export type ConfigHost = { id: string; name: string; address: string; port: number; user: string; pinned?: boolean; power_enabled?: boolean; mac?: string; broadcast?: string };
 export type Config = { hosts: ConfigHost[]; public_key: string; key_error?: string };
 export type Test = { ok: boolean; error?: string; agent?: string; host?: string; os?: string; latency_ms?: number; pinned?: boolean; fingerprint?: string };
-export type Action = "start" | "stop" | "restart" | "terminate";
+export type Action = "start" | "stop" | "restart" | "terminate" | "shutdown";
 export type ActionRequest = { host: string; target: "docker"; context: string; id: string; action: Action; confirm?: string } | { host: string; target: "wsl"; name: string; action: Action; confirm?: string };
-export type Task = { id: string; host: string; target: "docker" | "wsl"; context?: string; resource_id?: string; name?: string; action: Action; status: "running" | "done" | "error" | "unknown"; message?: string; created_at: string; updated_at: string };
+export type Task = { id: string; host: string; target: "docker" | "wsl" | "power"; context?: string; resource_id?: string; name?: string; action: Action; status: "running" | "done" | "error" | "unknown"; message?: string; created_at: string; updated_at: string };
 
 export function usePcPoll<T>(host: Host, path: string | null, seconds: number) {
   const [data, setData] = useState<T | null>(null);

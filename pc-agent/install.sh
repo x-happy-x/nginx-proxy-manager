@@ -10,6 +10,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --allow-docker-actions) FLAGS="$FLAGS --allow-docker-actions" ;;
     --allow-docker-logs) FLAGS="$FLAGS --allow-docker-logs" ;;
+    --allow-power-actions) FLAGS="$FLAGS --allow-power-actions" ;;
     --binary) shift; BINARY="${1:?missing binary path}" ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac

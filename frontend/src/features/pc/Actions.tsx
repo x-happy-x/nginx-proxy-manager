@@ -6,7 +6,7 @@ import { ago } from "../pve/model";
 import { Dot, Pill } from "../pve/parts";
 import { contextName, outdated, usePcPoll, type Action, type ActionRequest, type Computer, type Container, type Distro, type Task } from "./model";
 
-const labels: Record<Action, string> = { start: "Запустить", stop: "Остановить", restart: "Перезапустить", terminate: "Завершить WSL" };
+const labels: Record<Action, string> = { start: "Запустить", stop: "Остановить", restart: "Перезапустить", terminate: "Завершить WSL", shutdown: "Выключить компьютер" };
 type Target = { h: Computer; context: string; c: Container; w?: never } | { h: Computer; w: Distro; c?: never; context?: never };
 type Selection = Target & { action: Action };
 type Controls = { select: (selection: Selection) => void; pending: (target: Target) => boolean };

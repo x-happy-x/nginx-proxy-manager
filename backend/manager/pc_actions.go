@@ -60,13 +60,34 @@ func (m *pcMonitor) validateActionLocked(a pcAction) (*pcHost, string, int, erro
 	if h == nil {
 		return fail(404, "Компьютер не найден")
 	}
-	if !h.Online || h.Current == nil || h.Current.TS < time.Now().Unix()-120 || h.Current.TS > time.Now().Unix()+30 {
+	if a.Target != "power" && (!h.Online || h.Current == nil || h.Current.TS < time.Now().Unix()-120 || h.Current.TS > time.Now().Unix()+30) {
 		return fail(409, "Нет свежих данных компьютера; восстановите связь с агентом")
 	}
 	s := h.Current
 	name := ""
 	found := false
 	switch a.Target {
+	case "power":
+		if !h.Config.PowerEnabled {
+			return fail(403, "Управление питанием компьютера не включено в настройках")
+		}
+		if a.Context != "" || a.ID != "" || a.Name != "" || !pcIncludes([]string{"start", "shutdown"}, a.Action) {
+			return fail(400, "Некорректная команда питания компьютера")
+		}
+		if a.Action == "start" {
+			if _, err := pcMagicPacket(h.Config.MAC); err != nil {
+				return fail(409, "MAC компьютера для WoL не настроен")
+			}
+			if h.Online && s != nil && s.TS >= time.Now().Unix()-120 {
+				return fail(409, "Компьютер уже включён")
+			}
+		} else if !h.Online || s == nil || s.TS < time.Now().Unix()-120 || s.TS > time.Now().Unix()+30 {
+			return fail(409, "Для штатного выключения нужны свежие данные агента")
+		} else if !pcIncludes(s.Capabilities.PowerActions, "shutdown") {
+			return fail(403, "Агент не разрешает штатное выключение компьютера")
+		}
+		found = true
+		name = h.Config.Name
 	case "wsl":
 		if s.OS != "windows" || a.Context != "" || a.ID != "" || a.Name == "" || len(a.Name) > 256 || !pcIncludes([]string{"start", "terminate"}, a.Action) {
 			return fail(400, "Некорректная команда WSL")
@@ -127,7 +148,7 @@ func (m *pcMonitor) validateActionLocked(a pcAction) (*pcHost, string, int, erro
 		active := task.Status == "running" || (task.Status == "unknown" && time.Since(task.created) < 2*time.Minute)
 		same := task.Target == a.Target && (a.Target == "wsl" && task.Name == name || a.Target == "docker" && task.Context == a.Context && task.ResourceID == a.ID)
 		dependent := task.Target == "wsl" && a.Context == "wsl:"+task.Name || a.Target == "wsl" && task.Context == "wsl:"+name
-		if active && (same || dependent) {
+		if active && (same || dependent || task.Target == "power" || a.Target == "power") {
 			return fail(409, "Для этого ресурса уже отправлена команда; сначала проверьте результат")
 		}
 	}
@@ -177,6 +198,10 @@ func (m *pcMonitor) submitAction(a pcAction) (pcTask, int, error) {
 }
 
 func (m *pcMonitor) runTask(task *pcTask, command string) {
+	if task.Target == "power" && task.Action == "start" {
+		m.runWakeTask(task)
+		return
+	}
 	b, _, callErr := m.fetch(workerContext, task.config, command, false)
 	var result struct {
 		OK      bool   `json:"ok"`

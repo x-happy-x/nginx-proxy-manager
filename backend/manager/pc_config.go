@@ -25,6 +25,8 @@ func normalizePCHosts(hosts []pcHostConfig) {
 		h.Name = strings.TrimSpace(h.Name)
 		h.Address = strings.TrimSpace(h.Address)
 		h.User = strings.TrimSpace(h.User)
+		h.MAC = strings.TrimSpace(h.MAC)
+		h.Broadcast = strings.TrimSpace(h.Broadcast)
 		if h.Port == 0 {
 			h.Port = 22
 		}
@@ -52,6 +54,17 @@ func validatePCHosts(hosts []pcHostConfig) error {
 		}
 		if !pcUserRE.MatchString(h.User) {
 			return fmt.Errorf("Укажите локального SSH-пользователя (латиница, цифры, точка, дефис и подчёркивание)")
+		}
+		if h.MAC != "" {
+			if _, err := pcMagicPacket(h.MAC); err != nil {
+				return err
+			}
+		}
+		if h.Broadcast != "" && (net.ParseIP(h.Broadcast) == nil || net.ParseIP(h.Broadcast).To4() == nil) {
+			return fmt.Errorf("Адрес WoL должен быть IPv4")
+		}
+		if h.PowerEnabled && h.MAC == "" {
+			return fmt.Errorf("Для управления питанием укажите MAC компьютера")
 		}
 	}
 	return nil
@@ -158,7 +171,7 @@ func (a *app) handlePCConfig(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		hosts := []response{}
 		for _, h := range m.hosts {
-			hosts = append(hosts, response{"id": h.Config.ID, "name": h.Config.Name, "address": h.Config.Address, "port": h.Config.Port, "user": h.Config.User, "pinned": m.knownHost(h.Config)})
+			hosts = append(hosts, response{"id": h.Config.ID, "name": h.Config.Name, "address": h.Config.Address, "port": h.Config.Port, "user": h.Config.User, "pinned": m.knownHost(h.Config), "power_enabled": h.Config.PowerEnabled, "mac": h.Config.MAC, "broadcast": h.Config.Broadcast})
 		}
 		m.mu.Unlock()
 		out := response{"hosts": hosts, "public_key": key}
