@@ -314,7 +314,9 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	head = append(head,
 		leafGroup("Прямые EU", s.FastMS, m{"use": base, "filter": flagsRE(s.EU), "exclude-filter": or(bypass, junk)}),
 		leafGroup("Прямые мир", s.FastMS, m{"use": base, "exclude-filter": or(bypass, junk, flagsRE(s.Never), flagsRE(s.EU))}),
-		leafGroup("Обходы", 4000, m{"use": base, "filter": bypass, "exclude-filter": junk}),
+		// A node can survive the whitelist without advertising that in its name.
+		// Adaptive provider checks decide availability in the current uplink mode.
+		leafGroup("Обходы", 4000, m{"use": base, "exclude-filter": junk}),
 		leafGroup("RU", 3000, m{"use": base, "filter": flag("RU"), "exclude-filter": or(bypass, junk), "url": ruURL, "expected-status": "200-399"}),
 	)
 	if junk == "" {
@@ -344,7 +346,7 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 			}
 		}
 		direct := leafGroup("ИИ прямые", 5000, m{"use": base, "exclude-filter": or(bypass, junk), "exit-countries": countries})
-		viaBypass := leafGroup("ИИ обходы", 5000, m{"use": base, "filter": bypass, "exit-countries": countries})
+		viaBypass := leafGroup("ИИ обходы", 5000, m{"use": base, "exit-countries": countries})
 		if junk != "" {
 			viaBypass["exclude-filter"] = junk
 		}
@@ -352,7 +354,7 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	} else {
 		head = append(head,
 			leafGroup("ИИ прямые", 5000, m{"use": []any{routingAIProvider}, "exclude-filter": bypass}),
-			leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}, "filter": bypass}),
+			leafGroup("ИИ обходы", 5000, m{"use": []any{routingAIProvider}}),
 		)
 	}
 	extras := []any{}
@@ -411,12 +413,12 @@ func routingGroups(s routingSettings, reserve []string, ruURL string, between []
 	// reached the tailnet's servers), so the «Обходы» group's pick is no
 	// answer here (NPM-44). RU servers and AUTO share the entry points of the
 	// foreign ones and fall with them.
-	accessUse, accessFilter := []any{s.Base}, bypass
+	accessUse := []any{s.Base}
 	if s.Cascade {
-		accessUse, accessFilter = append(accessUse, routingChainProvider), bypass+"|⛓"
+		accessUse = append(accessUse, routingChainProvider)
 	}
 	for _, a := range s.Access {
-		g := pathGroup(a.Name, []any{"DIRECT"}, m{"use": accessUse, "filter": accessFilter, "url": a.URL, "expected-status": "200-399", "interval": 300})
+		g := pathGroup(a.Name, []any{"DIRECT"}, m{"use": accessUse, "url": a.URL, "expected-status": "200-399", "interval": 300})
 		if junk != "" {
 			g["exclude-filter"] = junk
 		}

@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"os"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -144,7 +144,7 @@ func TestBuildRouting(t *testing.T) {
 		}
 	}
 	// every bypass and cascade node is checked by the address itself
-	if g := groupByName(v, "Login"); g["interval"] != 300 || g["url"] != "https://login.example.org/health" || !equalAny(g["use"], "ROUTER", "CHAIN") || !strings.HasSuffix(g["filter"].(string), "|⛓") {
+	if g := groupByName(v, "Login"); g["interval"] != 300 || g["url"] != "https://login.example.org/health" || !equalAny(g["use"], "ROUTER", "CHAIN") || g["filter"] != nil {
 		t.Errorf("Login = %v", g)
 	}
 	// the RU check address configured before is kept
@@ -278,6 +278,29 @@ func TestBuildRoutingStage2(t *testing.T) {
 	for in, want := range map[string]bool{"v1.19.32-fork.7": true, "v1.19.32-fork.12-local": true, "v1.19.32-fork.6": false, "v1.19.32": false, "": false} {
 		if forkAtLeast(in, 7) != want {
 			t.Errorf("forkAtLeast(%q, 7) != %v", in, want)
+		}
+	}
+}
+
+// Labels are not evidence that a node works through the whitelist. An ordinary
+// European node must remain eligible; adaptive health decides whether to use it.
+func TestBypassCandidatesDoNotRequireNameLabels(t *testing.T) {
+	s := defaultRouting()
+	s.Access = []accessCheck{{Name: "Login", Host: "login.example.org", URL: "https://login.example.org/"}}
+	s.Junk = []string{"[FREE]", "только tg"}
+	head, tail := routingGroups(s, nil, "https://ya.ru", nil, true, false)
+	groups := append(head, tail...)
+	for _, name := range []string{"Обходы", "ИИ обходы", "Login"} {
+		for _, group := range groups {
+			if group["name"] != name {
+				continue
+			}
+			if _, ok := group["filter"]; ok {
+				t.Errorf("%s excludes unlabelled working nodes: %v", name, group["filter"])
+			}
+			if name != "ИИ обходы" && group["exclude-filter"] == "" {
+				t.Errorf("%s lost junk exclusions", name)
+			}
 		}
 	}
 }
