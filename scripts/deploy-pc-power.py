@@ -39,12 +39,17 @@ def main():
             if path.is_file():
                 files[target + '/' + path.relative_to(folder).as_posix()] = path
     assert files and all((source / name / VERSION / 'manifest.json').is_file() for name in ['pc', 'pve'])
-    # A version is immutable; never overwrite an already staged release.
+    # Resume an identical staged release after a readiness failure, without
+    # overwriting any existing version. All hashes are checked below.
+    present = []
     for relative in ['core/releases/' + VERSION, 'integrations/pc/' + VERSION, 'integrations/pve/' + VERSION]:
-        assert ssh('test ! -e ' + shlex.quote(destination + '/' + relative) + ' && echo absent').strip() == 'absent'
+        if ssh('if test -e ' + shlex.quote(destination + '/' + relative) + '; then echo present; else echo absent; fi').strip() == 'present':
+            present.append(relative + '/')
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode='w:gz') as tar:
         for name, path in files.items():
+            if any(name.startswith(prefix) for prefix in present):
+                continue
             info = tar.gettarinfo(str(path), arcname=name)
             info.mode = 0o755 if path.name in ['worker', 'core', 'platformctl'] or path.suffix == '.sh' else 0o644
             with path.open('rb') as stream:
@@ -58,6 +63,8 @@ import pathlib,subprocess,json,os,time,shutil,urllib.request
 root=pathlib.Path('/opt/share/homenet');state=pathlib.Path('/opt/etc/homenet/core')
 current=root/'core/current';old=current.resolve();new=root/'core/releases/VERSION'
 registry=json.loads((state/'registry.json').read_text())
+listen=json.loads((state/'config.json').read_text())['listen']
+ready_url='http://'+listen.replace('0.0.0.0:','127.0.0.1:')+'/health/ready'
 previous=[{'id':i['manifest']['id'],'action':'rollback','version':i['manifest']['version']} for i in registry['items'] if i['manifest']['id'] in ['pc','pve']]
 assert len(previous)==2
 for p in (state/'operations').glob('*.json'):
@@ -83,7 +90,7 @@ try:
  ready=False
  for i in range(30):
   try:
-   with urllib.request.urlopen('http://127.0.0.1:63412/health/ready',timeout=5) as r:ready=json.load(r).get('status')=='ready'
+   with urllib.request.urlopen(ready_url,timeout=5) as r:ready=json.load(r).get('status')=='ready'
   except Exception:pass
   if ready:break
   time.sleep(2)
