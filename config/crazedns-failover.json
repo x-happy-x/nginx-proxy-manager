@@ -3,13 +3,16 @@
   "group": "CrazyDNS",
   "candidates": ["DIRECT", "CrazyDNS OLCRTC", "CrazyDNS резерв"],
   "probe_urls": [
+    "http://5.35.2.42:8090/",
+    "http://31.135.14.238:8090/",
+    "http://95.213.212.50:8090/",
     "http://185.162.93.96:8090/",
     "http://178.250.154.58:8090/",
     "http://87.228.71.67:8090/"
   ],
   "cloud_ips": ["5.35.2.42", "31.135.14.238", "87.228.71.67", "95.213.212.50", "178.250.154.58", "185.162.93.96"],
-  "quorum": 2,
-  "timeout_ms": 4500,
+  "quorum": 6,
+  "timeout_ms": 8000,
   "interval_seconds": 30,
   "fail_after": 2,
   "recover_after": 3,
