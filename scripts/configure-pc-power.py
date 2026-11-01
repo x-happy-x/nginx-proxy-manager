@@ -30,7 +30,9 @@ def powershell(args, code):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--only', choices=['pc-x', 'pc-a'])
     args = parser.parse_args()
+    selected = [pc for pc in PCS if args.only is None or pc['id'] == args.only]
     if not args.apply:
         print(json.dumps({'computers': PCS, 'shutdown_test': False}))
         return
@@ -52,7 +54,7 @@ def main():
         public = ' '.join(next(line for line in scan.splitlines() if not line.startswith('#')).split()[1:3])
     known.write_text('192.168.1.10 ' + public + '\n')
     pinned = {}
-    for pc in PCS:
+    for pc in selected:
         identity = str(Path.home() / '.ssh/homecloud_remote_start_ed25519')
         opts = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-i', identity]
         if pc['id'] == 'pc-x':
@@ -88,7 +90,7 @@ if(!$done){throw 'Agent installation failed'}
         reply = json.loads(output.strip().splitlines()[-1])
         assert reply['ok'] and reply['agent'] == '1.3.0', reply
         print(json.dumps({'computer': pc['id'], 'agent': reply['agent'], 'installed': True}), flush=True)
-    payload = {'pcs': PCS, 'keys': pinned}
+    payload = {'pcs': selected, 'keys': pinned}
     code = '''import pathlib,json,secrets,shutil,time,os,urllib.request
 p=PAYLOAD
 root=pathlib.Path('/opt/etc/homenet/pc');hosts=root/'hosts.json'
