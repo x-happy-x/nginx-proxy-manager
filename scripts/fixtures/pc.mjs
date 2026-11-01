@@ -34,7 +34,7 @@ const eventData = () => ({ events, unread: events.filter(e => !e.read_at).length
 function overview() {
   return { configured: !!configs.length, hosts: configs.map((h, i) => {
     const online = h.id !== process.env.PREVIEW_PC_OFFLINE, ts = Math.floor(Date.now() / 1000) - (online ? 2 : 1800);
-    return { ...h, online, error: online ? '' : 'Нет ответа по SSH', latency_ms: 18, checked_at: new Date().toISOString(), last_ok: new Date(ts * 1000).toISOString(), current: {
+    return { ...h, online, power: {enabled:i===0,state:online?'on':'off',actions:online?['start','shutdown']:['start'],busy:false}, error: online ? '' : 'Нет ответа по SSH', latency_ms: 18, checked_at: new Date().toISOString(), last_ok: new Date(ts * 1000).toISOString(), current: {
       v: 1, ts, host: h.id, os: h.os, arch: 'amd64', agent: i ? '1.1.0' : '1.0.0', uptime: 345678,
       cpu: { percent: [2.5, 5, 18, 50][i], cores: i ? 2 : 32, model: i ? 'QEMU Virtual CPU' : 'Intel Core i9' }, memory: { total: (i ? 4 : 96) * GB, used: (i ? 2 : 53.7) * GB, available: (i ? 2 : 42.3) * GB },
       disks: [{ path: i ? '/' : 'C:', total: 512 * GB, used: (i ? 220 : 450) * GB, free: (i ? 292 : 62) * GB }],
@@ -60,6 +60,10 @@ export function fakePc(req, res) {
   if (url.pathname === '/api/pc/actions' && req.method === 'POST') {
     read(body => {
       const h = overview().hosts.find(h => h.id === body.host);
+      if (body.target === 'power') {
+        if (!h?.power.enabled || !h.power.actions.includes(body.action) || body.action === 'shutdown' && body.confirm !== h.name) { send({error:'Действие недоступно'},409);return; }
+        const task={id:`power-${tasks.length+1}`,host:h.id,target:'power',name:h.name,action:body.action,status:'done',message:'Операция только на стенде',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};tasks.unshift(task);send({ok:true,task},202);return;
+      }
       const resource = body.target === 'docker' ? h?.current.docker.find(d => d.context === body.context)?.containers.find(c => c.id === body.id) : h?.current.wsl.find(w => w.name === body.name);
       const permissions = h?.current.capabilities[body.target === 'docker' ? 'docker_actions' : 'wsl_actions'];
       if (!resource || !h?.online || !permissions?.includes(body.action)) { send({ error: 'Действие недоступно' }, 409); return; }

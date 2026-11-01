@@ -9,7 +9,7 @@ type Row = ConfigHost & { key: number; test?: Test & { busy?: boolean } };
 let sequence = 0;
 const createRow = (h?: ConfigHost): Row => ({ id: "", name: "", address: "", port: 22, user: "", ...h, key: ++sequence });
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
-const plain = (rows: Row[]) => rows.map(({ id, name, address, port, user }) => ({ id, name, address, port, user }));
+const plain = (rows: Row[]) => rows.map(({ id, name, address, port, user, power_enabled = false, mac = "", broadcast = "" }) => ({ id, name, address, port, user, power_enabled, mac, broadcast }));
 
 export function Settings({ host, onSaved }: { host: Host; onSaved: () => void }) {
   const [config, setConfig] = useState<Config | null>(null);
@@ -20,12 +20,13 @@ export function Settings({ host, onSaved }: { host: Host; onSaved: () => void })
   const [os, setOs] = useState("windows");
   const [docker, setDocker] = useState(false);
   const [wsl, setWsl] = useState(false);
+  const [power, setPower] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [copied, setCopied] = useState("");
   const load = async () => {
     try {
       const next = await (await host.api("/api/pc/config")).json() as Config;
-      setConfig(next); setRows(next.hosts.map(createRow)); setSaved(JSON.stringify(next.hosts.map(({ id, name, address, port, user }) => ({ id, name, address, port, user })))); setError("");
+      setConfig(next); setRows(next.hosts.map(createRow)); setSaved(JSON.stringify(next.hosts.map(({ id, name, address, port, user, power_enabled = false, mac = "", broadcast = "" }) => ({ id, name, address, port, user, power_enabled, mac, broadcast })))); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
   useEffect(() => { void load(); }, [host]);
@@ -48,8 +49,8 @@ export function Settings({ host, onSaved }: { host: Host; onSaved: () => void })
   const copy = async (value: string, id: string) => { try { await navigator.clipboard.writeText(value); setCopied(id); window.setTimeout(() => setCopied(""), 2000); } catch { setError("Не удалось скопировать. Выделите команду вручную."); } };
   const key = config?.public_key || "";
   const command = !key ? "" : os === "windows"
-    ? `powershell -NoProfile -File .\\install.ps1 -PublicKey '${key.replace(/'/g, "''")}'${docker ? " -AllowDockerActions" : ""}${wsl ? " -AllowWSLActions" : ""}${admin ? " -AdministratorKeyFile" : ""}`
-    : `sh ./install.sh '${key.replace(/'/g, "'\\''")}'${docker ? " --allow-docker-actions" : ""}`;
+    ? `powershell -NoProfile -File .\\install.ps1 -PublicKey '${key.replace(/'/g, "''")}'${docker ? " -AllowDockerActions" : ""}${wsl ? " -AllowWSLActions" : ""}${power ? " -AllowPowerActions" : ""}${admin ? " -AdministratorKeyFile" : ""}`
+    : `sh ./install.sh '${key.replace(/'/g, "'\\''")}'${docker ? " --allow-docker-actions" : ""}${power ? " --allow-power-actions" : ""}`;
   const dirty = !!config && JSON.stringify(plain(rows)) !== saved;
   const valid = rows.every((r) => r.id && r.name && r.address && r.user && r.port > 0 && r.port <= 65535) && new Set(rows.map((r) => r.id)).size === rows.length;
   if (!config) return error ? <Empty title="Настройки недоступны">{error}</Empty> : <div className="pve-skeleton" />;
@@ -61,6 +62,9 @@ export function Settings({ host, onSaved }: { host: Host; onSaved: () => void })
       <label><span>Адрес</span><input value={r.address} placeholder="192.168.1.100" onChange={(e) => update(r, { address: e.target.value.trim(), pinned: false })} /></label>
       <label><span>SSH-порт</span><input value={r.port} inputMode="numeric" onChange={(e) => update(r, { port: Number(e.target.value.replace(/\D/g, "")), pinned: false })} /></label>
       <label><span>Пользователь</span><input value={r.user} placeholder="Имя в системе" autoComplete="off" onChange={(e) => update(r, { user: e.target.value.trim() })} /></label>
+      <label><span>MAC для включения</span><input value={r.mac || ""} placeholder="AA:BB:CC:DD:EE:FF" onChange={(e) => update(r, { mac: e.target.value.trim() })} /></label>
+      <label><span>Адрес рассылки WoL</span><input value={r.broadcast || ""} placeholder="192.168.1.255" onChange={(e) => update(r, { broadcast: e.target.value.trim() })} /></label>
+      <Switch checked={!!r.power_enabled} onChange={(value) => update(r, { power_enabled: value })} label="Управление питанием компьютера" hint="WoL для включения, агент для штатного выключения" />
       <label><span>ID</span><input value={r.id} placeholder="home-pc" onChange={(e) => update(r, { id: slug(e.target.value) })} /></label>
     </div><div className="pve-cfg-status"><Dot tone={r.test?.busy ? "idle" : r.test ? r.test.ok ? "ok" : "bad" : r.pinned ? "ok" : "warn"} /><span className="pve-cfg-note">{r.test?.busy ? "Проверяю…" : r.test ? r.test.ok ? `${r.test.host || r.name} · агент ${r.test.agent || "подключён"}${r.test.os ? ` · ${r.test.os}` : ""} · ${r.test.latency_ms ?? "—"} мс` : r.test.error : r.pinned ? "Ключ компьютера закреплён" : "Первое подключение: проверьте адрес компьютера"}{r.test?.fingerprint ? <small className="pve-mono"> · {r.test.fingerprint}</small> : null}</span>
       <div className="pve-cfg-actions"><button type="button" className="pve-btn" onClick={() => void test(r)} disabled={!r.address || !r.user || !r.port || r.test?.busy}>{r.pinned ? "Проверить" : "Проверить и доверять"}</button><button type="button" className="pve-btn ghost danger" onClick={() => setRows((old) => old.filter((x) => x.key !== r.key))}>Удалить</button></div></div></div>) : <Empty title="Компьютеров нет">Установите агент по инструкции ниже и добавьте адрес компьютера.</Empty>}</div>
@@ -70,7 +74,7 @@ export function Settings({ host, onSaved }: { host: Host; onSaved: () => void })
     <div className="pc-setup card"><Segmented label="Операционная система" value={os} onChange={setOs} options={[{ value: "windows", label: "Windows" }, { value: "linux", label: "Linux" }]} />
       <ol><li><b>Подготовьте SSH.</b> {os === "windows" ? "Включите OpenSSH Server в дополнительных компонентах Windows и запустите службу sshd. Для WSL используйте пользователя, которому принадлежат дистрибутивы." : "Установите и запустите OpenSSH Server. Для Docker у пользователя должен быть доступ к Docker CLI и сокету демона."}</li>
         <li><b>Скопируйте агент.</b> Соберите его в репозитории HomeNet командой <code className="pve-mono">powershell -NoProfile -File pc-agent/build.ps1</code>. Скопируйте папку <code className="pve-mono">pc-agent/dist/{os}-amd64</code> на подключаемый компьютер; для ARM используйте папку <code className="pve-mono">{os}-arm64</code>.</li>
-        <li><b>Выберите разрешения.</b> Без них агент только читает состояние.<div className="pc-permissions"><Switch checked={docker} onChange={setDocker} label="Управлять контейнерами Docker" hint="Запуск, остановка и перезапуск" />{os === "windows" ? <><Switch checked={wsl} onChange={setWsl} label="Управлять дистрибутивами WSL" hint="Запуск и завершение всех процессов дистрибутива" /><Switch checked={admin} onChange={setAdmin} label="Пользователь состоит в группе администраторов" hint="Использовать общий файл ключей OpenSSH; установщик нужно запустить с повышенными правами" /></> : null}</div></li>
+        <li><b>Выберите разрешения.</b> Без них агент только читает состояние.<div className="pc-permissions"><Switch checked={power} onChange={setPower} label="Выключать компьютер" hint="Штатная команда операционной системы" /><Switch checked={docker} onChange={setDocker} label="Управлять контейнерами Docker" hint="Запуск, остановка и перезапуск" />{os === "windows" ? <><Switch checked={wsl} onChange={setWsl} label="Управлять дистрибутивами WSL" hint="Запуск и завершение всех процессов дистрибутива" /><Switch checked={admin} onChange={setAdmin} label="Пользователь состоит в группе администраторов" hint="Использовать общий файл ключей OpenSSH; установщик нужно запустить с повышенными правами" /></> : null}</div></li>
         <li><b>Запустите установщик</b> {os === "windows" ? "в PowerShell " : ""}из скопированной папки на подключаемом компьютере.<div className="pve-code"><code>{command || config.key_error || "Ключ пока недоступен"}</code>{command ? <button type="button" className="pve-btn ghost" onClick={() => void copy(command, "command")}>{copied === "command" ? "Скопировано" : "Копировать"}</button> : null}</div></li>
         <li><b>Добавьте компьютер</b> в список выше, проверьте подключение и сохраните настройки.</li>
       </ol>

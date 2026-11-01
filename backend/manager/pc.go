@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,11 +17,14 @@ import (
 )
 
 type pcHostConfig struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Port    int    `json:"port"`
-	User    string `json:"user"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Address      string `json:"address"`
+	Port         int    `json:"port"`
+	User         string `json:"user"`
+	PowerEnabled bool   `json:"power_enabled,omitempty"`
+	MAC          string `json:"mac,omitempty"`
+	Broadcast    string `json:"broadcast,omitempty"`
 }
 
 type pcSnapshot struct {
@@ -72,6 +76,7 @@ type pcSnapshot struct {
 		} `json:"containers"`
 	} `json:"docker"`
 	Capabilities struct {
+		PowerActions  []string `json:"power_actions"`
 		DockerActions []string `json:"docker_actions"`
 		DockerLogs    bool     `json:"docker_logs"` // agent 1.1.0+
 		WSLActions    []string `json:"wsl_actions"`
@@ -100,14 +105,15 @@ type pcDiskSample struct {
 }
 
 type pcHost struct {
-	Config    pcHostConfig
-	Online    bool
-	Error     string
-	Checked   time.Time
-	LastOK    time.Time
-	LatencyMS int64
-	Current   *pcSnapshot
-	History   []pcSample
+	Config         pcHostConfig
+	Online         bool
+	Error          string
+	Checked        time.Time
+	LastOK         time.Time
+	LatencyMS      int64
+	Current        *pcSnapshot
+	PowerReachable *bool
+	History        []pcSample
 }
 
 type pcMonitor struct {
@@ -121,6 +127,7 @@ type pcMonitor struct {
 	loadErr  string
 	journal  monitorJournal
 	request  func(context.Context, pcHostConfig, string, bool) ([]byte, string, error)
+	wake     func(pcHostConfig) error
 }
 
 var pcm *pcMonitor
@@ -235,6 +242,15 @@ func (m *pcMonitor) poll(h *pcHost) {
 			err = fmt.Errorf("Агент вернул несовместимые или устаревшие данные")
 		}
 	}
+	var reachable *bool
+	if err != nil && cfg.PowerEnabled && m.request == nil {
+		connection, probeErr := net.DialTimeout("tcp", net.JoinHostPort(cfg.Address, strconv.Itoa(cfg.Port)), 2*time.Second)
+		value := probeErr == nil
+		reachable = &value
+		if connection != nil {
+			connection.Close()
+		}
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// A response from an old address must not replace a newly configured host.
@@ -244,6 +260,7 @@ func (m *pcMonitor) poll(h *pcHost) {
 	h.Checked = time.Now()
 	h.LatencyMS = time.Since(start).Milliseconds()
 	h.Online = err == nil
+	h.PowerReachable = reachable
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -306,6 +323,10 @@ func (a *app) handlePC(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, 503, response{"ok": false, "error": "Интеграция не запущена"})
 		return
 	}
+	if r.URL.Path == "/api/pc/power" {
+		a.handlePCPower(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/pc/config") {
 		a.handlePCConfig(w, r)
 		return
@@ -358,7 +379,7 @@ func (m *pcMonitor) overview() response {
 	defer m.mu.Unlock()
 	hosts := []response{}
 	for _, h := range m.hosts {
-		item := response{"id": h.Config.ID, "name": h.Config.Name, "address": h.Config.Address, "online": h.Online, "error": h.Error, "current": h.Current, "latency_ms": h.LatencyMS}
+		item := response{"id": h.Config.ID, "name": h.Config.Name, "address": h.Config.Address, "online": h.Online, "error": h.Error, "current": h.Current, "latency_ms": h.LatencyMS, "power": m.powerInfoLocked(h)}
 		if !h.Checked.IsZero() {
 			item["checked_at"] = h.Checked.UTC().Format(time.RFC3339)
 		}

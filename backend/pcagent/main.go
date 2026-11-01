@@ -22,7 +22,7 @@ import (
 	"unicode/utf16"
 )
 
-const version = "1.2.0"
+const version = "1.3.0"
 
 type CPU struct {
 	Percent *float64 `json:"percent"`
@@ -66,6 +66,7 @@ type Docker struct {
 	Containers []Container `json:"containers"`
 }
 type Capabilities struct {
+	Power      []string `json:"power_actions"`
 	Docker     []string `json:"docker_actions"`
 	WSL        []string `json:"wsl_actions"`
 	DockerLogs bool     `json:"docker_logs"`
@@ -108,8 +109,9 @@ type agent struct {
 	dockerControl, wslControl bool
 	// runAll returns stdout and stderr together: `docker logs` writes the
 	// container's stderr to its own (NPM-86).
-	runAll     runner
-	dockerLogs bool
+	runAll       runner
+	dockerLogs   bool
+	powerControl bool
 }
 
 type cappedBuffer struct{ bytes.Buffer }
@@ -160,6 +162,9 @@ func decodeOutput(b []byte) string {
 }
 func (a agent) capabilities() Capabilities {
 	c := Capabilities{Docker: []string{}, WSL: []string{}}
+	if a.powerControl {
+		c.Power = []string{"shutdown"}
+	}
 	if a.dockerControl {
 		c.Docker = []string{"start", "stop", "restart"}
 	}
@@ -359,6 +364,20 @@ func (a agent) control(ctx context.Context, action Action) Reply {
 	fail := func(msg string) Reply { return Reply{Error: msg} }
 	var err error
 	switch action.Target {
+	case "power":
+		if !a.powerControl {
+			return fail("Computer power control is disabled for this SSH key")
+		}
+		if action.Action != "shutdown" || action.Name != "" || action.ID != "" || action.Context != "" {
+			return fail("invalid computer power action")
+		}
+		if a.platform == "windows" {
+			_, err = a.run(ctx, "shutdown.exe", "/s", "/t", "0")
+		} else if a.platform == "linux" {
+			_, err = a.run(ctx, "systemctl", "poweroff")
+		} else {
+			return fail("unsupported computer operating system")
+		}
 	case "docker":
 		if !a.dockerControl {
 			return fail("Docker control is disabled for this SSH key")
@@ -519,6 +538,8 @@ func serve(argv []string, request string, envRequest bool, out io.Writer) int {
 			a.wslControl = true
 		case "--allow-docker-logs":
 			a.dockerLogs = true
+		case "--allow-power-actions":
+			a.powerControl = true
 		default:
 			json.NewEncoder(out).Encode(Reply{Error: "unsupported serve option"})
 			return 2

@@ -55,6 +55,10 @@ func (a *app) setRoutesPath(path string) (string, error) {
 }
 
 func (a *app) handle(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/integrations/pc-power" {
+		a.handlePCPowerIntegration(w, r)
+		return
+	}
 	if r.URL.Path == "/health" && r.Method == http.MethodGet {
 		a.writeJSON(w, 200, response{"status": "ok"})
 		return

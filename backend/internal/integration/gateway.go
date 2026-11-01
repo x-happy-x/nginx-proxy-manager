@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-// Gateway must be mounted behind Core's Account authorization and write guard.
+// Gateway must be mounted behind Core's Account authorization/write guard or an
+// exact, separately authenticated scoped route that fixes the upstream API path.
 // Token is resolved server-side; browser cookies and identity headers never reach workers.
 type Gateway struct {
 	Registry  *Registry

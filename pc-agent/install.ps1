@@ -4,6 +4,7 @@ param(
     [string]$InstallDirectory,
     [switch]$AllowDockerActions,
     [switch]$AllowWSLActions,
+    [switch]$AllowPowerActions,
     [switch]$AdministratorKeyFile
 )
 $ErrorActionPreference = 'Stop'
@@ -32,6 +33,7 @@ if ($target -match '["%\r\n]') { throw 'Unsupported profile path for the forced 
 $flags = ''
 if ($AllowDockerActions) { $flags += ' --allow-docker-actions' }
 if ($AllowWSLActions) { $flags += ' --allow-wsl-actions' }
+if ($AllowPowerActions) { $flags += ' --allow-power-actions' }
 New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 Copy-Item -LiteralPath $Binary -Destination $target -Force
 $sshDirectory = Join-Path $env:USERPROFILE '.ssh'
