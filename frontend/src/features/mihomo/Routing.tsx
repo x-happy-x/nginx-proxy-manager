@@ -451,7 +451,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
               </Alert>
             ) : null}
             <WordsField
-              label="Какие узлы — обходы"
+              label="Названия узлов с ограниченным трафиком"
               value={s.bypass}
               onChange={(v) => set("bypass", v)}
               count={nodes.length ? `${bypassNodes.length} из ${nodes.length}` : ""}
@@ -469,7 +469,7 @@ export function Routing({ cfg, onApplied }: { cfg: CoreConfig; onApplied: () => 
                       </button>
                     ) : null}
                   </span>
-                  <span className="rt-hint">Слова через запятую, без учёта регистра. Жёлтым — что попало в обходы. На обходах лимит трафика: они берутся, только когда прямые не подходят.</span>
+                  <span className="rt-hint">Слова через запятую, без учёта регистра. Жёлтым — помеченные узлы: они исключаются из прямых групп и каскада. В «Обходах» доступны все подходящие узлы; работоспособность определяют проверки текущего режима сети.</span>
                 </>
               }
             />

@@ -1,0 +1,14 @@
+# NPM-106: test the requested schema, not a generic connectivity page.
+proxy-groups:
+  - name: Lognex тест
+    type: fallback
+    proxies: [DIRECT, OLCRTC, Обходы]
+    url: https://apps-api-apps-5.testms-test.lognex.ru/xml/ns/appstore/app/v2/application-v2.xsd
+    expected-status: '200'
+    interval: 60
+    timeout: 6000
+    lazy: false
+    max-failed-times: 2
+    passive-check: true
+rules:
+  - DOMAIN,apps-api-apps-5.testms-test.lognex.ru,Lognex тест
