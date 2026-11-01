@@ -43,7 +43,13 @@ def main():
     # user's known_hosts or accepting a changed host key from the network.
     runtime = ROOT / '.runtime'; runtime.mkdir(exist_ok=True)
     known = runtime / 'pc-x-known-hosts'
-    public = Path('C:/ProgramData/ssh/ssh_host_ed25519_key.pub').read_text().strip()
+    try:
+        public = Path('C:/ProgramData/ssh/ssh_host_ed25519_key.pub').read_text().strip()
+    except PermissionError:
+        # OpenSSH protects ProgramData on some Windows installations. Read the
+        # same local daemon's public key over loopback; never trust a remote scan.
+        scan = command(['ssh-keyscan', '-T', '5', '-t', 'ed25519', '127.0.0.1']).decode()
+        public = ' '.join(next(line for line in scan.splitlines() if not line.startswith('#')).split()[1:3])
     known.write_text('192.168.1.10 ' + public + '\n')
     pinned = {}
     for pc in PCS:
