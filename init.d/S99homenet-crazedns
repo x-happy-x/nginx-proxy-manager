@@ -1,0 +1,38 @@
+#!/bin/sh
+# Independent helper: never restarts Core, Mihomo or XKeen.
+SCRIPT=/opt/share/homenet/crazedns-failover/crazedns-failover.py
+CONFIG=/opt/etc/homenet/crazedns-failover.json
+PIDFILE=/opt/var/run/homenet-crazedns.pid
+LOGFILE=/opt/var/log/homenet-crazedns.log
+running() {
+ [ -f "$PIDFILE" ] || return 1
+ PID="$(cat "$PIDFILE")"
+ case "$PID" in ''|*[!0-9]*) return 1 ;; esac
+ [ -r "/proc/$PID/cmdline" ] || return 1
+ tr '\000' ' ' < "/proc/$PID/cmdline" | grep -Fq "$SCRIPT" && kill -0 "$PID" 2>/dev/null
+}
+start() {
+ running && return 0
+ [ -f "$SCRIPT" ] && [ -f "$CONFIG" ] || return 1
+ mkdir -p /opt/var/run /opt/var/log
+ nohup /opt/bin/python3 -u "$SCRIPT" --config "$CONFIG" >>"$LOGFILE" 2>&1 &
+ echo "$!" > "$PIDFILE"
+}
+stop() {
+ running || return 0
+ kill "$PID" || return 1
+ COUNT=0
+ while running; do
+  COUNT=$((COUNT+1))
+  [ "$COUNT" -lt 20 ] || return 1
+  sleep 1
+ done
+ rm -f "$PIDFILE"
+}
+case "$1" in
+ start) start ;;
+ stop) stop ;;
+ restart) stop && start ;;
+ status) running && echo running || exit 1 ;;
+ *) echo "Usage: $0 start|stop|restart|status" >&2; exit 2 ;;
+esac

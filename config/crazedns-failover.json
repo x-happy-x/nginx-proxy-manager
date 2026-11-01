@@ -1,0 +1,21 @@
+{
+  "controller": "http://127.0.0.1:9090",
+  "group": "CrazyDNS",
+  "candidates": ["DIRECT", "CrazyDNS OLCRTC", "CrazyDNS резерв"],
+  "probe_urls": [
+    "http://185.162.93.96:8090/",
+    "http://178.250.154.58:8090/",
+    "http://87.228.71.67:8090/"
+  ],
+  "cloud_ips": ["5.35.2.42", "31.135.14.238", "87.228.71.67", "95.213.212.50", "178.250.154.58", "185.162.93.96"],
+  "quorum": 2,
+  "timeout_ms": 4500,
+  "interval_seconds": 30,
+  "fail_after": 2,
+  "recover_after": 3,
+  "return_hold_seconds": 120,
+  "udp_grace_seconds": 60,
+  "udp_timeout_seconds": 75,
+  "udp_cooldown_seconds": 300,
+  "state_file": "/opt/var/lib/homenet/crazedns-failover/state.json"
+}
