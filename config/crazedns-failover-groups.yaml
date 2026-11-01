@@ -7,8 +7,8 @@ proxy-groups:
     hidden: true
   - name: CrazyDNS резерв
     type: select
-    use: [SL-80ae5ecf61ef]
-    filter: '^PAUK · 🇪🇺 Автовыбор · node-06$'
+    use: [SL-90ff2722f3cb]
+    filter: '^VPNUS · Германия 🇩🇪 · grp-43-3-s537fufjm8c$'
   - name: CrazyDNS
     type: select
     proxies: [DIRECT, CrazyDNS OLCRTC, CrazyDNS резерв]

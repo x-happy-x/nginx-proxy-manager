@@ -33,6 +33,17 @@ class FailoverTests(unittest.TestCase):
             self.assertEqual(module.decision(state, self.candidates,
                 dict.fromkeys(self.candidates, False), now), "OLC")
 
+    def test_partial_cloud_reachability_is_not_a_working_reserve(self):
+        controller = module.Controller({"candidates": self.candidates,
+            "probe_urls": [str(i) for i in range(6)], "quorum": 6})
+        def probe(item):
+            name, url = item
+            delay = None if name == "DIRECT" or (name == "backup" and url == "5") else 150
+            return name, url, delay
+        controller.probe = probe
+        healthy, _ = controller.health()
+        self.assertEqual(healthy, {"DIRECT": False, "OLC": True, "backup": False})
+
     def test_cleanup_is_limited_to_own_cloud_sessions(self):
         deleted = []
         def connection(ident, ip, port, network, chains):
