@@ -2,6 +2,8 @@
 import argparse
 import base64
 import json
+import hashlib
+import os
 from pathlib import Path
 import subprocess
 
@@ -55,6 +57,15 @@ def main():
     known.write_text('192.168.1.10 ' + public + '\n')
     pinned = {}
     for pc in selected:
+        if pc['id'] == 'pc-x' and os.environ.get('COMPUTERNAME', '').casefold() == 'pc-x':
+            status = json.loads((runtime / 'pcx-power-status.json').read_text(encoding='utf-8-sig'))
+            assert status.get('ok'), 'Complete the local administrator installation first'
+            installed = Path('C:/ProgramData/HomeNet/pc-agent.exe').read_bytes()
+            expected = (ROOT / 'pc-agent/dist/windows-amd64/homenet-pc-agent.exe').read_bytes()
+            assert hashlib.sha256(installed).digest() == hashlib.sha256(expected).digest(), 'Local agent differs from the reviewed build'
+            pinned[pc['address']] = public
+            print(json.dumps({'computer': pc['id'], 'agent': '1.3.0', 'local_installation_verified': True}), flush=True)
+            continue
         identity = str(Path.home() / '.ssh/homecloud_remote_start_ed25519')
         opts = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-i', identity]
         if pc['id'] == 'pc-x':
