@@ -1,14 +1,14 @@
-# NPM-106: test the requested schema, not a generic connectivity page.
+# NPM-107: app, CDN and API share one route, checked against the app itself.
 proxy-groups:
   - name: Lognex тест
     type: fallback
-    proxies: [DIRECT, OLCRTC, Обходы]
-    url: https://apps-api-apps-5.testms-test.lognex.ru/xml/ns/appstore/app/v2/application-v2.xsd
-    expected-status: '200'
+    proxies: [DIRECT, OLCRTC, CrazyDNS резерв, Обходы]
+    url: https://online-apps-5.testms-test.lognex.ru/app/
+    expected-status: '200-399'
     interval: 60
     timeout: 6000
     lazy: false
     max-failed-times: 2
     passive-check: true
 rules:
-  - DOMAIN,apps-api-apps-5.testms-test.lognex.ru,Lognex тест
+  - DOMAIN-SUFFIX,testms-test.lognex.ru,Lognex тест
