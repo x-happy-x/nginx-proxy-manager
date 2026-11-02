@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from common import without_tail, without_tail_state, provider_path
 
@@ -17,6 +18,16 @@ def manifest(bundle):
 
 
 class TransferTest(unittest.TestCase):
+    def test_source_router_is_refused_before_any_install(self):
+        with mock.patch.object(installer,'verify',return_value={'source':{'source_mac':'source'}}), \
+             mock.patch.object(installer,'discover_ip',return_value='192.0.2.1'), \
+             mock.patch.object(installer.os,'geteuid',return_value=0,create=True), \
+             mock.patch.object(installer.platform,'machine',return_value='aarch64'), \
+             mock.patch.object(Path,'read_text',return_value='source'), \
+             mock.patch.object(installer.sys,'argv',['install.py','--apply']), \
+             mock.patch.object(installer,'install') as apply:
+            with self.assertRaisesRegex(RuntimeError,'source router'):installer.main()
+            apply.assert_not_called()
     def test_tail_cascade_removed_and_original_untouched(self):
         original={'proxies':[{'name':'tail','type':'tailscale'},{'name':'OLC','type':'socks5'}],
           'proxy-groups':[{'name':'tail-group','proxies':['tail']},{'name':'mixed','proxies':['tail-group','OLC']}],
