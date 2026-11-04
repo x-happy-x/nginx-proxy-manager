@@ -39,11 +39,18 @@ backup.mkdir(parents=True,mode=0o700)
 shutil.copy2(hosts,backup/'hosts');(backup/'hosts').chmod(0o600)
 if init.exists():shutil.copy2(init,backup/'startup-hook')
 init.write_text('''#!/opt/bin/sh
+set -e
+umask 077
 # NPM-109: PostgreSQL local DNS; same record is visible in HomeNet DNS.
 # NPM-111: s1 addresses .10-.19; replace only the previous managed .37 line.
 case "$1" in
  start|restart|"")
-  sed -i '/^192\\.168\\.99\\.37[[:space:]][[:space:]]*pg-db\\.local[[:space:]]*$/d' /etc/hosts
+  # /etc is read-only on Keenetic; /etc/hosts itself is a writable bind mount.
+  # Write in place rather than attempting sed -i's rename inside /etc.
+  pg_hosts_tmp=$(mktemp /tmp/homenet-pg-hosts.XXXXXX)
+  sed '/^192\\.168\\.99\\.37[[:space:]][[:space:]]*pg-db\\.local[[:space:]]*$/d' /etc/hosts > "$pg_hosts_tmp"
+  cat "$pg_hosts_tmp" > /etc/hosts
+  rm -f "$pg_hosts_tmp"
   if ! awk '$1 == "192.168.99.14" {for(i=2;i<=NF;i++) if($i=="pg-db.local") found=1} END {exit !found}' /etc/hosts; then
    printf '\\n# NPM-111 PostgreSQL\\n192.168.99.14 pg-db.local\\n' >> /etc/hosts
   fi
