@@ -8,7 +8,7 @@ Default is read-only; --apply persists DNS and a system-hosts restore hook.
 import argparse
 import subprocess
 
-REMOTE = r'''
+REMOTE = r"""
 from pathlib import Path
 import datetime,re,shutil,socket,subprocess,sys
 apply=sys.argv[1]=='apply'
@@ -54,7 +54,7 @@ subprocess.run(['/opt/bin/sh',str(init),'start'],check=True)
 if not records:command('ip host '+name+' '+address)
 command('system configuration save')
 print('Saved; PostgreSQL port is 5432; no proxy/WAN publication')
-'''
+"""
 
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
