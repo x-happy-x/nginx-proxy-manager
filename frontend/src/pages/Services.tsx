@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RouteApp, RouteHost, RoutesDocument } from "../types";
 import { Icon } from "../components/ui/Icon";
 import { Modal } from "../components/ui/Modal";
@@ -7,6 +7,8 @@ import { Alert, EmptyState, Field, SearchInput, Segmented } from "../components/
 import { count, initials } from "../lib/format";
 import { getWebEndpoint } from "../features/servers/lib/utils";
 import { PageHeader } from "../navigation";
+import { PublicServers, loadPublicServers, type PublicServerItem } from "../features/servers/PublicServers";
+import { publicDomainDraft, vpsHost, type PublicDomainDraft } from "../features/servers/publication";
 
 type ServiceDraft = {
   id: string;
@@ -15,9 +17,8 @@ type ServiceDraft = {
   port: number;
   scheme: "http" | "https";
   local: string;
-  public: string;
+  publicDomains: PublicDomainDraft[];
   proxyIp: string;
-  externalPort: string;
 };
 
 type AccessFilter = "all" | "local" | "public";
@@ -30,21 +31,6 @@ function publicDomainLabel(host: string): string {
   return normalized.endsWith(PUBLIC_DOMAIN_ENDING)
     ? normalized.slice(0, -PUBLIC_DOMAIN_ENDING.length)
     : "";
-}
-
-function fullPublicDomain(label: string): string {
-  return label ? `${label}.${PUBLIC_DOMAIN_SUFFIX}` : "";
-}
-
-function normalizePublicDomainInput(value: string): string {
-  let normalized = value.trim().toLowerCase();
-  normalized = normalized.replace(/^https?:\/\//, "").split(/[/:?#]/, 1)[0];
-  if (normalized.endsWith(PUBLIC_DOMAIN_ENDING)) {
-    normalized = normalized.slice(0, -PUBLIC_DOMAIN_ENDING.length);
-  } else if (normalized === PUBLIC_DOMAIN_SUFFIX) {
-    normalized = "";
-  }
-  return normalized.replace(/^\.+|\.+$/g, "");
 }
 
 export function hostUrl(host: RouteHost): string {
@@ -113,6 +99,8 @@ export function Services({
   const [access, setAccess] = useState<AccessFilter>("all");
   const [draft, setDraft] = useState<ServiceDraft | null>(null);
   const [editing, setEditing] = useState(false);
+  const [publicServers, setPublicServers] = useState<PublicServerItem[]>([]);
+  useEffect(() => { if (draft) void loadPublicServers().then(v => setPublicServers(v.items)).catch(() => {}); }, [!!draft]);
   const [error, setError] = useState("");
   const [remove, setRemove] = useState<RouteApp | null>(null);
 
@@ -144,7 +132,6 @@ export function Services({
       (h) => h.kind === "public" && !!publicDomainLabel(h.host),
     );
     const dnsHost = external || hosts[0];
-    const ndns = external?.endpoints?.find((ep) => ep.behavior?.ndns_profile);
     setEditing(!!app);
     setError("");
     setDraft({
@@ -154,14 +141,13 @@ export function Services({
       port: app?.upstream.port || 80,
       scheme: app?.upstream.scheme || "http",
       local: hosts.find((h) => h.kind === "private")?.host || "",
-      public: external ? publicDomainLabel(external.host) : "",
+      publicDomains: hosts.filter(h => h.kind === "public").map(h => publicDomainDraft(h, PUBLIC_DOMAIN_SUFFIX)),
       proxyIp:
         dnsHost?.dns?.local_record_ip && dnsHost.dns.local_record_ip !== "auto"
           ? dnsHost.dns.local_record_ip
           : doc.globals.listen_ips.find(
               (ip) => ip !== "0.0.0.0" && ip !== "::",
             ) || "",
-      externalPort: String(ndns?.listen.port || "auto_random"),
     });
   };
 
@@ -172,11 +158,10 @@ export function Services({
       name: draft.name.trim(),
       address: draft.address.trim(),
       local: draft.local.trim().toLowerCase(),
-      public: normalizePublicDomainInput(draft.public),
+      publicDomains: draft.publicDomains.filter(p => p.host.trim()).map(p => ({ ...p, host: p.host.trim().toLowerCase().replace(/\.$/, "") })),
       proxyIp: draft.proxyIp.trim(),
     };
-    const publicDomain = fullPublicDomain(d.public);
-    const domains = [d.local, publicDomain].filter(Boolean);
+    const domains = [d.local, ...d.publicDomains.map(p => p.host)].filter(Boolean);
     if (
       !d.name ||
       !d.address ||
@@ -201,11 +186,13 @@ export function Services({
       );
       return;
     }
-    if (d.public && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(d.public)) {
-      setError(
-        `Укажите один поддомен: только латинские буквы, цифры и дефис. Зона ${PUBLIC_DOMAIN_SUFFIX} добавляется автоматически.`,
-      );
-      return;
+    for (const pub of d.publicDomains) {
+      if (!pub.serverId && !publicDomainLabel(pub.host)) {
+        setError(`Для KeenDNS укажите имя в зоне ${PUBLIC_DOMAIN_SUFFIX} или выберите VPS.`); return;
+      }
+      if (pub.serverId && pub.serverId !== "manual" && !publicServers.some(s => s.server.id === pub.serverId)) {
+        setError("Выберите подключённый публичный сервер."); return;
+      }
     }
     if (
       new Set(domains).size !== domains.length ||
@@ -217,22 +204,15 @@ export function Services({
       return;
     }
     if (
-      !d.proxyIp ||
+      (d.local || d.publicDomains.some(p => !p.serverId)) && (!d.proxyIp ||
       !/^(\d{1,3}\.){3}\d{1,3}$/.test(d.proxyIp) ||
-      d.proxyIp.split(".").some((part) => Number(part) > 255)
+      d.proxyIp.split(".").some((part) => Number(part) > 255))
     ) {
       setError("Укажите локальный IPv4-адрес прокси, например 192.168.1.2.");
       return;
     }
-    if (
-      d.public &&
-      d.externalPort !== "auto_random" &&
-      (!/^\d+$/.test(d.externalPort) ||
-        +d.externalPort < 1024 ||
-        +d.externalPort > 65535)
-    ) {
-      setError("Внешний вход: auto_random или порт от 1024 до 65535.");
-      return;
+    if (d.publicDomains.some(p => !p.serverId && p.externalPort !== "auto_random" && (!/^\d+$/.test(p.externalPort) || +p.externalPort < 1024 || +p.externalPort > 65535))) {
+      setError("Внешний вход: auto_random или порт от 1024 до 65535."); return;
     }
     const id = d.id || `service-${Date.now().toString(36)}`;
     const existing = doc.apps.find((app) => app.id === id);
@@ -242,15 +222,18 @@ export function Services({
       name: d.name,
       upstream: { address: d.address, port: d.port, scheme: d.scheme },
     };
-    // Keep all settings and additional host aliases on edit. Only the first local/public domain is managed here.
+    // Preserve access rules and advanced settings by hostname, including extra local aliases.
     const current = doc.hosts.filter((host) => host.app_id === id),
       managed = [
         current.find((h) => h.kind === "private"),
-        current.find((h) => h.kind === "public" && !!publicDomainLabel(h.host)),
+        ...current.filter((h) => h.kind === "public"),
       ].filter(Boolean) as RouteHost[];
-    const makeHost = (domain: string, kind: "private" | "public"): RouteHost => {
-      const original = managed.find((h) => h.kind === kind);
-      const endpoints = original?.endpoints?.map((ep) => ({
+    const makeHost = (domain: string, kind: "private" | "public", serverId = ""): RouteHost => {
+      const pub = d.publicDomains.find(p => p.host === domain);
+      const original = current.find(h => h.host === (pub?.originalHost || domain)) || (kind === "private" ? managed.find(h => h.kind === kind) : undefined);
+      if (serverId === "manual" && original) return original;
+      if (serverId) return vpsHost(original, domain, id, serverId);
+      const endpoints = (original?.publication ? undefined : original?.endpoints)?.map((ep) => ({
         ...ep,
         listen: { ...ep.listen },
         behavior: { ...ep.behavior },
@@ -281,7 +264,7 @@ export function Services({
         }
         ep.listen = {
           protocol: ep.listen.protocol || "http",
-          port: d.externalPort === "auto_random" ? "auto_random" : +d.externalPort,
+          port: pub?.externalPort && pub.externalPort !== "auto_random" ? +pub.externalPort : "auto_random",
         };
         ep.behavior = {
           ...ep.behavior,
@@ -299,6 +282,7 @@ export function Services({
       return {
         ...original,
         host: domain,
+        publication: undefined,
         app_id: id,
         kind,
         dns: {
@@ -306,7 +290,7 @@ export function Services({
           publish: Array.from(new Set([...(original?.dns?.publish || []), "local"])),
           local_record_ip: d.proxyIp,
         },
-        tls: original?.tls || {
+        tls: (!original?.publication && original?.tls) || {
           cert_policy: kind === "public" ? "keenetic" : "off",
           cert_ref: "auto",
           san: [],
@@ -322,7 +306,7 @@ export function Services({
       hosts: [
         ...doc.hosts.filter((h) => !managed.includes(h)),
         ...(d.local ? [makeHost(d.local, "private")] : []),
-        ...(publicDomain ? [makeHost(publicDomain, "public")] : []),
+        ...d.publicDomains.map(p => makeHost(p.host, "public", p.serverId)),
       ],
     });
     setDraft(null);
@@ -478,9 +462,7 @@ export function Services({
           </EmptyState>
         )}
         <div className="card-footer">
-          Внутри сети оба домена ведут на локальный прокси. Внешний доступ KeenDNS
-          использует отдельный порт, поэтому источник запроса виден в статистике и журнале.
-          Дополнительные домены, TLS и порты —{" "}
+          KeenDNS и VPS используют отдельные входы HomeNet. Источник внешних запросов виден в статистике и журнале. Дополнительные настройки TLS и портов —{" "}
           <button type="button" className="link-button" onClick={onAdvanced}>
             в маршрутизации
           </button>
@@ -488,7 +470,9 @@ export function Services({
         </div>
       </section>
 
+      <PublicServers />
       <ServiceWizard
+        servers={publicServers}
         draft={draft}
         editing={editing}
         error={error}
@@ -526,6 +510,7 @@ export function Services({
 }
 
 function ServiceWizard({
+  servers,
   draft,
   editing,
   error,
@@ -533,6 +518,7 @@ function ServiceWizard({
   onClose,
   onSubmit,
 }: {
+  servers: PublicServerItem[];
   draft: ServiceDraft | null;
   editing: boolean;
   error: string;
@@ -638,28 +624,25 @@ function ServiceWizard({
                   onChange={(e) => onDraft({ ...draft, local: e.target.value })}
                 />
               </Field>
-              <Field
-                label="Публичный домен"
-                hint="Введите только поддомен — зона KeenDNS закреплена."
-              >
-                <span className="input-group">
-                  <input
-                    aria-label="Поддомен публичного сервиса"
-                    className="mono"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    inputMode="url"
-                    maxLength={63}
-                    pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-                    placeholder="sub"
-                    value={draft.public}
-                    onChange={(e) =>
-                      onDraft({ ...draft, public: normalizePublicDomainInput(e.target.value) })
-                    }
-                  />
-                  <span className="input-addon">.{PUBLIC_DOMAIN_SUFFIX}</span>
-                </span>
-              </Field>
+              <div className="public-domain-list">
+                {draft.publicDomains.map((pub, i) => <div className="public-domain-row" key={i}>
+                  <Field label={`Публичный домен ${i + 1}`}>
+                    <input aria-label={`Публичный домен ${i + 1}`} className="mono" autoCapitalize="none" autoCorrect="off" placeholder="app.cdn6.ru" value={pub.host} onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p, n) => n === i ? { ...p, host: e.target.value } : p) })} />
+                  </Field>
+                  <Field label="Публиковать через">
+                    <select aria-label={`Сервер домена ${i + 1}`} value={pub.serverId} onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p, n) => n === i ? { ...p, serverId: e.target.value } : p) })}>
+                      <option value="">KeenDNS · {PUBLIC_DOMAIN_SUFFIX}</option>
+                      {servers.map(({ server }) => <option key={server.id} value={server.id}>{server.name} · {server.address}</option>)}
+                      {pub.serverId && pub.serverId !== "manual" && !servers.some(s => s.server.id === pub.serverId) && <option value={pub.serverId}>Недоступный сервер: {pub.serverId}</option>}
+                      {pub.serverId === "manual" && <option value="manual">Существующая настройка</option>}
+                    </select>
+                  </Field>
+                  {!pub.serverId && <Field label="Внешний порт"><input aria-label={`Внешний порт домена ${i + 1}`} value={pub.externalPort} placeholder="auto_random" onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p, n) => n === i ? { ...p, externalPort: e.target.value } : p) })} /></Field>}
+                  <button type="button" className="btn btn-icon" aria-label={`Удалить домен ${i + 1}`} onClick={() => onDraft({ ...draft, publicDomains: draft.publicDomains.filter((_, n) => n !== i) })}><Icon name="trash" /></button>
+                </div>)}
+                <button type="button" className="btn" onClick={() => onDraft({ ...draft, publicDomains: [...draft.publicDomains, { host: "", serverId: servers[0]?.server.id || "", externalPort: "auto_random" }] })}><Icon name="plus" />Добавить публичный домен</button>
+                <p className="field-hint">Для VPS укажите полное имя. DNS A/AAAA должен указывать на выбранный сервер; можно настроить wildcard всей зоны. Подключить сервер можно в разделе «Публичные серверы» под списком сервисов или в «Машины → Настройка».</p>
+              </div>
             </div>
           </section>
 
@@ -671,7 +654,7 @@ function ServiceWizard({
             <div className="form-grid">
               <Field label="Локальный IP прокси">
                 <input
-                  required
+                  required={!!draft.local || draft.publicDomains.some(p => !p.serverId)}
                   className="mono"
                   inputMode="decimal"
                   placeholder="192.168.1.2"
@@ -679,25 +662,10 @@ function ServiceWizard({
                   onChange={(e) => onDraft({ ...draft, proxyIp: e.target.value })}
                 />
               </Field>
-              {draft.public ? (
-                <Field
-                  label="Порт внешнего входа"
-                  hint="auto_random — назначить свободный порт при сохранении."
-                >
-                  <input
-                    className="mono"
-                    placeholder="auto_random"
-                    value={draft.externalPort}
-                    onChange={(e) => onDraft({ ...draft, externalPort: e.target.value })}
-                  />
-                </Field>
-              ) : null}
             </div>
             <RoutePreview draft={draft} />
             <p className="field-hint">
-              Локальный домен работает по HTTP. Публичный домен внутри сети — по HTTPS с
-              сертификатом Keenetic, внешний HTTPS обслуживает KeenDNS. Остальные настройки TLS —
-              в маршрутизации.
+              VPS обслуживает HTTPS и автоматически продлевает сертификаты. Домашний туннель восстанавливается после обрыва и перезапуска HomeNet. Настройка начинается после применения маршрутов; её состояние видно в карточке сервера.
             </p>
           </section>
 
@@ -714,7 +682,7 @@ function ServiceWizard({
 
 function RoutePreview({ draft }: { draft: ServiceDraft }) {
   const domain =
-    fullPublicDomain(normalizePublicDomainInput(draft.public)) || draft.local || "домен";
+    draft.publicDomains[0]?.host || draft.local || "домен";
   return (
     <div className="route-preview" aria-label="Схема маршрута">
       <div>
