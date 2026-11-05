@@ -44,6 +44,12 @@ func validPath(value string) bool {
 // ValidateRoutes is shared by the API and generator. Validate before normalizing:
 // defaults must not silently turn an invalid supplied port into a working route.
 func ValidateRoutes(r Routes) error {
+	for _, channel := range r.Globals.DisabledPublications {
+		parts := strings.SplitN(channel, ":", 2)
+		if len(parts) != 2 || !oneOf(parts[0], "vps", "keendns") || !identifierPattern.MatchString(parts[1]) {
+			return fmt.Errorf("invalid publication channel %q", channel)
+		}
+	}
 	if r.SchemaVersion != "2.1" {
 		return ErrSchemaVersion
 	}
@@ -130,9 +136,26 @@ func ValidateRoutes(r Routes) error {
 	ndnsNames := map[string]bool{}
 	for _, host := range r.Hosts {
 		if host.Publication != nil {
-			if !identifierPattern.MatchString(host.Publication.ServerID) || host.Kind != "public" || len(host.Endpoints) != 1 || host.Endpoints[0].Name != "vps" || host.Endpoints[0].Listen.Protocol != "http" || len(host.DNS.Publish) != 0 {
-				return fmt.Errorf("host %q: VPS publication requires a server, one HTTP vps endpoint and external DNS", host.Host)
+			vps, web := 0, 0
+			for _, ep := range host.Endpoints {
+				if ep.Name == "vps" && ep.Listen.Protocol == "http" {
+					vps++
+				} else if ep.Name == "web" && ep.Listen.Protocol == "https" {
+					web++
+				} else {
+					return fmt.Errorf("host %q: unsupported VPS endpoint", host.Host)
+				}
 			}
+			if !identifierPattern.MatchString(host.Publication.ServerID) || host.Kind != "public" || vps != 1 || web > 1 || (web == 1 && host.TLS.CertPolicy != "public_vps") || (web == 0 && len(host.DNS.Publish) != 0) {
+				return fmt.Errorf("host %q: VPS publication requires one HTTP vps endpoint and optional local HTTPS with public_vps certificate", host.Host)
+			}
+			for _, publish := range host.DNS.Publish {
+				if publish != "local" {
+					return fmt.Errorf("host %q: VPS public DNS is managed externally", host.Host)
+				}
+			}
+		} else if host.TLS.CertPolicy == "public_vps" {
+			return fmt.Errorf("host %q: public_vps certificate requires VPS publication", host.Host)
 		}
 		for _, path := range host.AccessPassthrough {
 			if !validPath(path) || path == "/" || strings.HasPrefix(path, "/_gate") {
@@ -167,7 +190,7 @@ func ValidateRoutes(r Routes) error {
 				return fmt.Errorf("host %q: invalid DNS publication %q", host.Host, publish)
 			}
 		}
-		if !oneOf(host.TLS.CertPolicy, "", "off", "self_signed", "auto_local_ca", "auto_acme", "custom_ref", "keenetic") {
+		if !oneOf(host.TLS.CertPolicy, "", "off", "self_signed", "auto_local_ca", "auto_acme", "custom_ref", "keenetic", "public_vps") {
 			return fmt.Errorf("host %q: invalid certificate policy", host.Host)
 		}
 		for _, san := range host.TLS.SAN {

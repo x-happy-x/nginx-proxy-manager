@@ -122,7 +122,7 @@ func managedRouteEntries(routes schema.Routes, fallbackIPs string) (map[string]n
 			}
 			break
 		}
-		if payload := hostNDNSPayload(host, ips); payload != nil {
+		if payload := hostNDNSPayload(schema.ActivePublicHost(routes.Globals, host), ips); payload != nil {
 			proxy, err := proxyFromPayload(payload)
 			if err != nil {
 				return nil, nil, err

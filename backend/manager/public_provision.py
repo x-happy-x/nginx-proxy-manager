@@ -50,7 +50,8 @@ def render(p, marker, require_tls=False):
             raise RuntimeError("Certificate missing: " + host)
         out += "server {\n listen 80;\n server_name " + host + ";\n location ^~ /.well-known/acme-challenge/ { root /var/lib/homenet-public/acme; }\n location / { return 308 https://" + host + "$request_uri; }\n}\n"
         if tls:
-            out += "server {\n listen 443 ssl;\n server_name " + host + ";\n ssl_certificate " + cert + "/fullchain.pem;\n ssl_certificate_key " + cert + "/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n client_max_body_size 0;\n location / {\n proxy_pass http://127.0.0.1:" + str(port) + ";\n proxy_http_version 1.1;\n proxy_set_header Host " + host + ";\n proxy_set_header X-Forwarded-Proto https;\n proxy_set_header X-Forwarded-For $remote_addr;\n proxy_set_header Upgrade $http_upgrade;\n proxy_set_header Connection \"upgrade\";\n proxy_read_timeout 3600s;\n proxy_buffering off;\n }\n}\n"
+            location = "return 403;" if f.get("disabled") else "proxy_pass http://127.0.0.1:" + str(port) + ";"
+            out += "server {\n listen 443 ssl;\n server_name " + host + ";\n ssl_certificate " + cert + "/fullchain.pem;\n ssl_certificate_key " + cert + "/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n client_max_body_size 0;\n location / {\n " + location + "\n proxy_http_version 1.1;\n proxy_set_header Host " + host + ";\n proxy_set_header X-Forwarded-Proto https;\n proxy_set_header X-Forwarded-For $remote_addr;\n proxy_set_header Upgrade $http_upgrade;\n proxy_set_header Connection \"upgrade\";\n proxy_read_timeout 3600s;\n proxy_buffering off;\n }\n}\n"
     return out
 
 
@@ -128,6 +129,8 @@ def configure(p):
     # Old SSH sessions are reaped by ClientAliveInterval/CountMax below; a
     # remaining listener is retried by the worker without changing nginx.
     for forward in p["forwards"]:
+        if forward.get("disabled"):
+            continue
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
@@ -180,15 +183,16 @@ def configure(p):
         atomic(conf, render(p, marker, require_tls=True), 0o644)
         run("nginx", "-t")
 
-        ports = " ".join("127.0.0.1:" + str(f["port"]) for f in p["forwards"])
+        active = [f for f in p["forwards"] if not f.get("disabled")]
+        ports = " ".join("127.0.0.1:" + str(f["port"]) for f in active) or "none"
         sshbody = marker + "Match User " + user + "\n AllowTcpForwarding remote\n GatewayPorts no\n PermitListen " + ports + "\n PermitTTY no\n X11Forwarding no\n AllowAgentForwarding no\n MaxSessions 0\n ClientAliveInterval 15\n ClientAliveCountMax 3\nMatch all\n"
         atomic(sshd, sshbody)
         run("/usr/sbin/sshd", "-t")
         effective = run("/usr/sbin/sshd", "-T", "-C", "user=" + user + ",host=localhost,addr=127.0.0.1")
         if "allowtcpforwarding remote\n" not in effective or "maxsessions 0\n" not in effective or "gatewayports no\n" not in effective:
             raise RuntimeError("sshd config.d is not effective")
-        options = "restrict,port-forwarding," + ",".join('permitlisten="127.0.0.1:' + str(f["port"]) + '"' for f in p["forwards"])
-        atomic(keys, options + " " + p["key"] + " homenet-public-tunnel\n")
+        options = "restrict,port-forwarding," + ",".join('permitlisten="127.0.0.1:' + str(f["port"]) + '"' for f in active)
+        atomic(keys, options + " " + p["key"] + " homenet-public-tunnel\n" if active else "")
         run("chown", "-R", user + ":" + user, str(sshdir))
         run("chmod", "700", str(sshdir))
         reload_ssh()
@@ -206,12 +210,72 @@ def configure(p):
         raise
 
 
+def prepare_certificates(p):
+    """Only HTTP-01 challenges; never publish a draft's application backend."""
+    sid = p["id"]
+    marker = "# Managed by HomeNet public servers: " + sid + "\n"
+    pending = Path("/etc/nginx/conf.d/homenet-acme-" + sid + ".conf")
+    if pending.exists():
+        if not pending.read_text().startswith(marker):
+            raise RuntimeError("Foreign ACME file")
+        pending.unlink()
+        run("nginx", "-t")
+        run("systemctl", "reload", "nginx")
+    missing = [f for f in p["forwards"] if not Path(certificate(sid, f["host"]) + "/fullchain.pem").exists()]
+    if not missing:
+        return
+    nginx = run("nginx", "-T")
+    # A missing certificate for a live route must be renewed in place, without
+    # creating a conflicting HTTP vhost. The normal vhost already serves ACME.
+    own = Path("/etc/nginx/conf.d/homenet-public-" + sid + ".conf")
+    if own.exists() and not own.read_text().startswith(marker):
+        raise RuntimeError("Foreign publication file")
+    check_domains(dict(p, forwards=missing), nginx, own)
+    existing = own.read_text() if own.exists() else ""
+    staged = [f for f in missing if not re.search(r"server_name\s+" + re.escape(f["host"]) + r"\s*;", existing)]
+    Path("/var/lib/homenet-public/acme").mkdir(parents=True, exist_ok=True)
+    if staged:
+        body = marker
+        for f in staged:
+            body += "server { listen 80; server_name " + f["host"] + "; location ^~ /.well-known/acme-challenge/ { root /var/lib/homenet-public/acme; } location / { return 503; } }\n"
+        atomic(pending, body, 0o644)
+    def interrupted(signum, frame):
+        raise RuntimeError("Certificate preparation interrupted")
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, interrupted)
+    try:
+        run("nginx", "-t")
+        run("systemctl", "reload", "nginx")
+        for f in missing:
+            args = ["certbot", "certonly", "--webroot", "-w", "/var/lib/homenet-public/acme", "--non-interactive", "--agree-tos", "--keep-until-expiring", "--cert-name", "homenet-public-" + sid + "-" + f["host"], "-d", f["host"]]
+            args += ["--email", p["email"]] if p["email"] else ["--register-unsafely-without-email"]
+            run(*args)
+    finally:
+        pending.unlink(missing_ok=True)
+        run("nginx", "-t")
+        run("systemctl", "reload", "nginx")
+
+
+def export_certificates(p):
+    items = []
+    for f in p["forwards"]:
+        cert = certificate(p["id"], f["host"])
+        items.append(dict(host=f["host"], certificate=Path(cert + "/fullchain.pem").read_text(), key=Path(cert + "/privkey.pem").read_text()))
+    print(json.dumps(items))
+
+
 def main(p):
     state = Path("/var/lib/homenet-public/servers") / p["id"]
     state.mkdir(parents=True, mode=0o700, exist_ok=True)
     with (state / "setup.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        configure(p)
+        if p.get("mode") == "certificates":
+            prepare_certificates(p)
+            export_certificates(p)
+        elif p.get("mode") == "export":
+            export_certificates(p)
+        else:
+            configure(p)
 
 
 if __name__ == "__main__":
