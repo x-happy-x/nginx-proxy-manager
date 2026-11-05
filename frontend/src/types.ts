@@ -53,7 +53,7 @@ export type RouteHost = {
     local_record_ip?: string;
   };
   tls?: {
-    cert_policy: "auto_local_ca" | "auto_acme" | "self_signed" | "keenetic" | "off";
+    cert_policy: "auto_local_ca" | "auto_acme" | "self_signed" | "keenetic" | "off" | "public_vps";
     cert_ref: string;
     san: string[];
   };
@@ -64,6 +64,7 @@ export type RouteHost = {
 export type RoutesDocument = {
   schema_version: 2.1;
   globals: {
+    disabled_publications?: string[];
     access_gateway?: boolean;
     ssl_mode: SslMode;
     listen_ips: string[];

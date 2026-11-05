@@ -18,6 +18,7 @@ import {
 type CertPolicy = NonNullable<RouteHost["tls"]>["cert_policy"];
 
 const TLS_LABELS: Record<CertPolicy, string> = {
+  public_vps: "Публичный сертификат с VPS",
   auto_local_ca: "Локальный CA",
   auto_acme: "ACME (Let's Encrypt)",
   self_signed: "Самоподписанный",
@@ -91,6 +92,7 @@ function ListInput({
 }
 
 const TLS_SHORT: Record<CertPolicy, string> = {
+  public_vps: "VPS · HTTPS в LAN",
   auto_local_ca: "Локальный CA",
   auto_acme: "ACME",
   self_signed: "Самоподписанный",

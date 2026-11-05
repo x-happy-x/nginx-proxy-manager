@@ -20,13 +20,14 @@ type Routes struct {
 }
 
 type Globals struct {
-	AccessGateway bool     `yaml:"access_gateway,omitempty" json:"access_gateway,omitempty"`
-	SSLMode       string   `yaml:"ssl_mode" json:"ssl_mode"`
-	ListenIPs     []string `yaml:"listen_ips" json:"listen_ips"`
-	Ports         Ports    `yaml:"ports" json:"ports"`
-	UI            UIBind   `yaml:"ui" json:"ui"`
-	Stub          Stub     `yaml:"stub" json:"stub"`
-	ACME          ACME     `yaml:"acme" json:"acme"`
+	DisabledPublications []string `yaml:"disabled_publications,omitempty" json:"disabled_publications,omitempty"`
+	AccessGateway        bool     `yaml:"access_gateway,omitempty" json:"access_gateway,omitempty"`
+	SSLMode              string   `yaml:"ssl_mode" json:"ssl_mode"`
+	ListenIPs            []string `yaml:"listen_ips" json:"listen_ips"`
+	Ports                Ports    `yaml:"ports" json:"ports"`
+	UI                   UIBind   `yaml:"ui" json:"ui"`
+	Stub                 Stub     `yaml:"stub" json:"stub"`
+	ACME                 ACME     `yaml:"acme" json:"acme"`
 }
 
 type Ports struct {
@@ -257,6 +258,7 @@ func DefaultRoutes() Routes {
 func NormalizeRoutes(in Routes) Routes {
 	out := DefaultRoutes()
 	out.Globals.AccessGateway = in.Globals.AccessGateway
+	out.Globals.DisabledPublications = append([]string{}, in.Globals.DisabledPublications...)
 	out.SchemaVersion = "2.1"
 	if in.Globals.SSLMode != "" {
 		out.Globals.SSLMode = in.Globals.SSLMode

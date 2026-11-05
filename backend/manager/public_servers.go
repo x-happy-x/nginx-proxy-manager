@@ -37,8 +37,10 @@ type publicServer struct {
 	Email       string `json:"email,omitempty"`
 }
 type publicForward struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Disabled bool   `json:"disabled,omitempty"`
+	Local    bool   `json:"local,omitempty"`
 }
 type publicServerStatus struct {
 	VPNGroup     string          `json:"vpn_group,omitempty"`
@@ -448,7 +450,7 @@ func publicForwards(routes schema.Routes, id string) []publicForward {
 		if h.Publication != nil && h.Publication.ServerID == id {
 			for _, ep := range h.Endpoints {
 				if ep.Name == "vps" {
-					out = append(out, publicForward{h.Host, schema.NormalizePort(ep.Listen.Port, 0)})
+					out = append(out, publicForward{Host: h.Host, Port: schema.NormalizePort(ep.Listen.Port, 0), Disabled: !schema.PublicationEnabled(routes.Globals, h, ep), Local: h.TLS.CertPolicy == "public_vps"})
 				}
 			}
 		}
@@ -602,7 +604,13 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 	}
 	var tc *ssh.Client
 	var tunnelDone chan error
-	if len(forwards) > 0 {
+	activeForwards := []publicForward{}
+	for _, f := range forwards {
+		if !f.Disabled {
+			activeForwards = append(activeForwards, f)
+		}
+	}
+	if len(activeForwards) > 0 {
 		ts := s
 		ts.User = "homenet-tunnel-" + s.ID
 		tc, _, err = dialPublicSSH(ctx, ts, []ssh.AuthMethod{ssh.PublicKeys(tunnel)}, false)
@@ -614,7 +622,7 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 		go func() { tunnelDone <- tc.Wait() }()
 		stopTunnel := context.AfterFunc(ctx, func() { _ = tc.Close() })
 		defer stopTunnel()
-		for _, f := range forwards {
+		for _, f := range activeForwards {
 			ln, e := tc.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(f.Port)))
 			if e != nil {
 				return fmt.Errorf("%s: reverse forward: %w", f.Host, e)
@@ -624,7 +632,16 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 		}
 	}
 	m.status(j, func(st *publicServerStatus) { st.State = "online"; st.Error = ""; st.ConnectedAt = time.Now() })
+	lastCertificates := time.Time{}
 	for ctx.Err() == nil {
+		if time.Since(lastCertificates) >= time.Hour {
+			if err := m.refreshPublicCertificates(ctx, c, s, forwards); err != nil {
+				m.status(j, func(st *publicServerStatus) { st.Error = "Локальный сертификат: " + err.Error() })
+			} else {
+				lastCertificates = time.Now()
+				m.status(j, func(st *publicServerStatus) { st.Error = "" })
+			}
+		}
 		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		body, e := publicSSHRun(probeCtx, c, publicMetricsScript)
 		cancel()
@@ -715,7 +732,11 @@ func publicProvisionScript(s publicServer, forwards []publicForward, key string)
 	if len(forwards) > 0 {
 		packages += " nginx certbot"
 	}
-	return "set -eu\nexport DEBIAN_FRONTEND=noninteractive\nfor tool in " + packages + "; do if ! command -v \"$tool\" >/dev/null; then\n command -v apt-get >/dev/null || { echo 'Поддерживаются Debian/Ubuntu с apt-get'; exit 1; }\n apt-get update -qq\n apt-get install -y -qq " + packages + "\n break\nfi; done\npython3 - " + shq(base64.StdEncoding.EncodeToString(payload)) + " <<'HOMENET_PUBLIC_PY'\n" + publicProvisionPython + "\nHOMENET_PUBLIC_PY\n"
+	return publicPythonScript(payload, packages)
+}
+
+func publicPythonScript(payload []byte, packages string) string {
+	return "set -eu\nexport DEBIAN_FRONTEND=noninteractive\nfor tool in " + packages + "; do if ! command -v \"$tool\" >/dev/null; then\n command -v apt-get >/dev/null || { echo 'Поддерживаются Debian/Ubuntu с apt-get'; exit 1; }\n apt-get update -qq >&2\n apt-get install -y -qq " + packages + " >&2\n break\nfi; done\npython3 - " + shq(base64.StdEncoding.EncodeToString(payload)) + " <<'HOMENET_PUBLIC_PY'\n" + publicProvisionPython + "\nHOMENET_PUBLIC_PY\n"
 }
 
 //go:embed public_provision.py

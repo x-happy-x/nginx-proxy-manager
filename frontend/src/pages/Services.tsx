@@ -3,12 +3,12 @@ import type { RouteApp, RouteHost, RoutesDocument } from "../types";
 import { Icon } from "../components/ui/Icon";
 import { Modal } from "../components/ui/Modal";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
-import { Alert, EmptyState, Field, SearchInput, Segmented } from "../components/ui/controls";
+import { Alert, EmptyState, Field, SearchInput, Segmented, Switch } from "../components/ui/controls";
 import { count, initials } from "../lib/format";
 import { getWebEndpoint } from "../features/servers/lib/utils";
 import { PageHeader } from "../navigation";
 import { PublicServers, loadPublicServers, type PublicServerItem } from "../features/servers/PublicServers";
-import { publicDomainDraft, vpsHost, type PublicDomainDraft } from "../features/servers/publication";
+import { publicDomainDraft, vpsHost, publicationChannels, setPublicationEnabled, hasPublicAccess, type PublicDomainDraft } from "../features/servers/publication";
 
 type ServiceDraft = {
   id: string;
@@ -60,8 +60,8 @@ export function DomainChips({ hosts }: { hosts: RouteHost[] }) {
   );
 }
 
-function AccessBadge({ hosts }: { hosts: RouteHost[] }) {
-  return hosts.some((h) => h.kind === "public") ? (
+function AccessBadge({ hosts, disabled }: { hosts: RouteHost[]; disabled?: string[] }) {
+  return hosts.some((h) => hasPublicAccess(h, disabled)) ? (
     <span className="badge badge-accent">
       <Icon name="globe" /> Локальный и внешний
     </span>
@@ -100,6 +100,7 @@ export function Services({
   const [draft, setDraft] = useState<ServiceDraft | null>(null);
   const [editing, setEditing] = useState(false);
   const [publicServers, setPublicServers] = useState<PublicServerItem[]>([]);
+  useEffect(() => { void loadPublicServers().then(v => setPublicServers(v.items)).catch(() => {}); }, []);
   useEffect(() => { if (draft) void loadPublicServers().then(v => setPublicServers(v.items)).catch(() => {}); }, [!!draft]);
   const [error, setError] = useState("");
   const [remove, setRemove] = useState<RouteApp | null>(null);
@@ -112,7 +113,7 @@ export function Services({
     return map;
   }, [doc.hosts]);
   const isPublic = (app: RouteApp) =>
-    (hostsByApp.get(app.id) || []).some((h) => h.kind === "public");
+    (hostsByApp.get(app.id) || []).some((h) => hasPublicAccess(h, doc.globals.disabled_publications));
   const publicCount = doc.apps.filter(isPublic).length;
   const needle = search.trim().toLowerCase();
   const rows = doc.apps.filter((app) => {
@@ -232,7 +233,11 @@ export function Services({
       const pub = d.publicDomains.find(p => p.host === domain);
       const original = current.find(h => h.host === (pub?.originalHost || domain)) || (kind === "private" ? managed.find(h => h.kind === kind) : undefined);
       if (serverId === "manual" && original) return original;
-      if (serverId) return vpsHost(original, domain, id, serverId);
+      if (serverId) {
+        const policy = current.find(h => h.kind === "public") || current[0];
+        const inherited = original || (policy ? { ...policy, publication: undefined, endpoints: [] } : undefined);
+        return vpsHost(inherited, domain, id, serverId);
+      }
       const endpoints = (original?.publication ? undefined : original?.endpoints)?.map((ep) => ({
         ...ep,
         listen: { ...ep.listen },
@@ -338,6 +343,10 @@ export function Services({
         {count(doc.hosts.length, ["домен", "домена", "доменов"])}. Приложения и их
         домены для доступа из дома и извне.
       </PageHeader>
+      <section className="card" aria-label="Публичный доступ">
+        <div className="card-header"><div><h2>Публичный доступ</h2><p className="muted">Отдельно для каждого канала. Локальный доступ сохраняется. Изменения вступят в силу после применения маршрутов.</p></div></div>
+        <div className="card-body stack">{publicationChannels(doc, publicServers.map(s => s.server)).map(channel => <Switch key={channel.id} checked={!doc.globals.disabled_publications?.includes(channel.id)} disabled={busy} label={channel.name} hint={`${channel.domains} доменов · ${channel.id.startsWith("vps:") ? "через VPS" : "через KeenDNS"}`} onChange={enabled => onChange(setPublicationEnabled(doc, channel.id, enabled))} />)}</div>
+      </section>
       <div className="toolbar">
         <SearchInput
           label="Поиск сервиса"
@@ -399,7 +408,7 @@ export function Services({
                         <DomainChips hosts={hosts} />
                       </td>
                       <td className="cell-aside col-access" data-label="Доступ">
-                        <AccessBadge hosts={hosts} />
+                        <AccessBadge hosts={hosts} disabled={doc.globals.disabled_publications} />
                       </td>
                       <td className="col-actions">
                         <div className="row-actions">

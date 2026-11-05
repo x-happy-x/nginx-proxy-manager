@@ -3,24 +3,25 @@ package main
 import "sync"
 
 type app struct {
-	baseDir          string
-	staticDir        string
-	reactIndexRel    string
-	nginxConfRoot    string
-	nginxListenIPs   string
-	routeAccessLog   string
-	localCACert      string
-	localCAKey       string
-	ndmcBin          string
-	ndmcRunner       func(string) (bool, string)
-	ipHostDeleteMode string
-	genRoutesPath    string
-	activeRoutesPath string
-	mu               sync.RWMutex
-	operationMu      sync.Mutex
-	telemetryMu      sync.Mutex
-	telemetry        *telemetryStore
-	publicServers    *publicServerManager
+	baseDir                 string
+	staticDir               string
+	reactIndexRel           string
+	nginxConfRoot           string
+	nginxListenIPs          string
+	routeAccessLog          string
+	localCACert             string
+	localCAKey              string
+	ndmcBin                 string
+	ndmcRunner              func(string) (bool, string)
+	ipHostDeleteMode        string
+	genRoutesPath           string
+	activeRoutesPath        string
+	mu                      sync.RWMutex
+	operationMu             sync.Mutex
+	telemetryMu             sync.Mutex
+	telemetry               *telemetryStore
+	publicServers           *publicServerManager
+	publicCertificatesDirty bool // protected by operationMu
 }
 
 type response map[string]any

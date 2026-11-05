@@ -89,6 +89,31 @@ class PublicProvisionTests(unittest.TestCase):
             provision.main(self.payload)
         self.assertEqual(self.conf.read_text(), "# Someone else's configuration\n")
 
+    def test_disabled_publication_has_no_backend_or_tunnel_key(self):
+        self.payload["forwards"][0]["disabled"] = True
+        provision.main(self.payload)
+        self.assertIn("return 403;", self.conf.read_text())
+        self.assertNotIn("proxy_pass", self.conf.read_text())
+        keys = self.root / "home/homenet-tunnel-vps/.ssh/authorized_keys"
+        self.assertEqual(keys.read_text(), "")
+        self.assertIn("PermitListen none", (self.root / "etc/ssh/sshd_config.d/homenet-public-vps.conf").read_text())
+
+    def test_certificate_preparation_does_not_publish_application(self):
+        provision.prepare_certificates(self.payload)
+        self.assertEqual(self.conf.read_text(), self.before)
+        self.assertFalse((self.root / "etc/nginx/conf.d/homenet-acme-vps.conf").exists())
+        self.assertFalse((self.root / "home/homenet-tunnel-vps/.ssh/authorized_keys").exists())
+        self.assertEqual(len([c for c in self.calls if c[0] == "certbot"]), 1)
+        provision.prepare_certificates(self.payload)
+        self.assertEqual(len([c for c in self.calls if c[0] == "certbot"]), 1, "existing certificate must not be issued twice")
+
+    def test_failed_preparation_removes_only_challenge_vhost(self):
+        self.fail_certificate = True
+        with self.assertRaises(subprocess.CalledProcessError):
+            provision.prepare_certificates(self.payload)
+        self.assertEqual(self.conf.read_text(), self.before)
+        self.assertFalse((self.root / "etc/nginx/conf.d/homenet-acme-vps.conf").exists())
+
     def test_pending_journal_is_recovered_before_new_setup(self):
         state = self.root / "var/lib/homenet-public/servers/vps"
         state.mkdir(parents=True)

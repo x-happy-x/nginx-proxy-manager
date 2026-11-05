@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/envfile"
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/publictls"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
@@ -207,7 +208,7 @@ func (g *generator) render(routes schema.Routes) (map[string]string, error) {
 		certs[id] = cert
 	}
 	for _, host := range routes.Hosts {
-		content, err := g.buildHostConf(host, apps[host.AppID], schema.NormalizePort(routes.Globals.Ports.HTTP, 80), ips, certs)
+		content, err := g.buildHostConf(schema.ActivePublicHost(routes.Globals, host), apps[host.AppID], schema.NormalizePort(routes.Globals.Ports.HTTP, 80), ips, certs)
 		if err != nil {
 			return nil, err
 		}
@@ -514,6 +515,14 @@ func (g *generator) buildStubConf(routes schema.Routes, ips []string) (string, e
 	return fmt.Sprintf("server {\n  %s\n  server_name _;\n  root %s;\n  index index.html;\n  location / { try_files $uri $uri/ =404; }\n}\nserver {\n  %s\n  server_name _;\n  ssl_certificate %s;\n  ssl_certificate_key %s;\n  ssl_protocols TLSv1.2 TLSv1.3;\n  root %s;\n  index index.html;\n  location / { try_files $uri $uri/ =404; }\n}\n", strings.Join(httpListen, "\n  "), quote(root), strings.Join(httpsListen, "\n  "), quote(crt), quote(key), quote(root)), nil
 }
 func (g *generator) resolveCertPaths(host string, cfg schema.Host, certs map[string]schema.Certificate) (string, string, error) {
+	if cfg.TLS.CertPolicy == "public_vps" && cfg.Publication != nil {
+		crt, key, err := publictls.Paths(g.confRoot, cfg.Publication.ServerID, host, time.Now())
+		if err != nil && g.preview {
+			base := filepath.Join(g.confRoot, "public-certs", cfg.Publication.ServerID, host, "pending")
+			return base + ".crt", base + ".key", nil
+		}
+		return crt, key, err
+	}
 	policy := cfg.TLS.CertPolicy
 	if policy == "keenetic" {
 		id, ok := g.keeneticCerts[host]

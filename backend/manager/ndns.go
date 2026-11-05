@@ -337,7 +337,7 @@ func (a *app) syncNDNSFromRoutes(routes schema.Routes) (bool, string) {
 	errorsOut := []string{}
 	applied := 0
 	for _, hostItem := range routes.Hosts {
-		item := hostNDNSPayload(hostItem, listenIPs)
+		item := hostNDNSPayload(schema.ActivePublicHost(routes.Globals, hostItem), listenIPs)
 		if item == nil {
 			continue
 		}

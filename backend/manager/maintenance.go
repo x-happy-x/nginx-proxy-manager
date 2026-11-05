@@ -52,7 +52,7 @@ func (a *app) preflightRouter(routes schema.Routes) error {
 	}
 	suffix := ""
 	for _, host := range routes.Hosts {
-		item := hostNDNSPayload(host, ips)
+		item := hostNDNSPayload(schema.ActivePublicHost(routes.Globals, host), ips)
 		if item == nil {
 			continue
 		}
@@ -159,6 +159,9 @@ func (a *app) applyManagedRoutes() (bool, string) {
 	}
 	if err = a.preflightRouter(routes); err != nil {
 		return false, "Preflight: " + err.Error()
+	}
+	if err = a.preparePublicCertificates(routes); err != nil {
+		return false, "Local HTTPS: " + err.Error()
 	}
 	rollbackPath := filepath.Join(filepath.Dir(a.appliedRoutesPath()), "rollback.yml")
 	if err := schema.SaveRoutes(rollbackPath, previous); err != nil {
