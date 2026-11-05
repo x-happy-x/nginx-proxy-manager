@@ -129,6 +129,11 @@ func ValidateRoutes(r Routes) error {
 	hosts := map[string]bool{}
 	ndnsNames := map[string]bool{}
 	for _, host := range r.Hosts {
+		if host.Publication != nil {
+			if !identifierPattern.MatchString(host.Publication.ServerID) || host.Kind != "public" || len(host.Endpoints) != 1 || host.Endpoints[0].Name != "vps" || host.Endpoints[0].Listen.Protocol != "http" || len(host.DNS.Publish) != 0 {
+				return fmt.Errorf("host %q: VPS publication requires a server, one HTTP vps endpoint and external DNS", host.Host)
+			}
+		}
 		for _, path := range host.AccessPassthrough {
 			if !validPath(path) || path == "/" || strings.HasPrefix(path, "/_gate") {
 				return fmt.Errorf("host %q: invalid access_passthrough", host.Host)
@@ -178,7 +183,10 @@ func ValidateRoutes(r Routes) error {
 				return fmt.Errorf("host %q: invalid endpoint name", host.Host)
 			}
 			endpointNames[ep.Name] = true
-			if ep.Name != "web" && ep.Name != "ndns" && ep.Behavior.NDNSProfile == "" {
+			if ep.Name == "vps" && (host.Publication == nil || ep.Behavior.NDNSProfile != "") {
+				return fmt.Errorf("host %q: vps endpoint requires a publication without KeenDNS", host.Host)
+			}
+			if ep.Name != "web" && ep.Name != "ndns" && ep.Name != "vps" && ep.Behavior.NDNSProfile == "" {
 				return fmt.Errorf("host %q: unsupported endpoint %q", host.Host, ep.Name)
 			}
 			if !oneOf(ep.Listen.Protocol, "", "http", "https") {
@@ -235,6 +243,12 @@ func ValidateRoutes(r Routes) error {
 				publicPorts[port] = host.Host
 			}
 			b := ep.Behavior
+			if ep.Name == "vps" {
+				if port != 0 && port < 1024 {
+					return fmt.Errorf("host %q: VPS port must be at least 1024", host.Host)
+				}
+				continue
+			}
 			if b.NDNSProfile != "" && !identifierPattern.MatchString(b.NDNSProfile) {
 				return fmt.Errorf("host %q: invalid NDNS profile", host.Host)
 			}

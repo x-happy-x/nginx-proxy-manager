@@ -25,6 +25,21 @@ func (a *app) preflightRouter(routes schema.Routes) error {
 	if err := schema.ValidateRoutes(routes); err != nil {
 		return err
 	}
+	for _, host := range routes.Hosts {
+		if host.Publication != nil {
+			found := false
+			if a.publicServers != nil {
+				a.publicServers.mu.Lock()
+				for _, server := range a.publicServers.servers {
+					found = found || server.ID == host.Publication.ServerID
+				}
+				a.publicServers.mu.Unlock()
+			}
+			if !found {
+				return fmt.Errorf("%s: подключите публичный сервер %s", host.Host, host.Publication.ServerID)
+			}
+		}
+	}
 	if _, err := a.previewMihomoDNS(routes); err != nil {
 		return err
 	}
@@ -69,19 +84,35 @@ func (a *app) checkNewListeners(routes schema.Routes) error {
 		known[net.JoinHostPort(listener.IP, strconv.Itoa(listener.Port))] = true
 	}
 	ports := map[int]bool{routes.Globals.Ports.HTTP: true, routes.Globals.Ports.HTTPS: true}
+	loopbackPorts := map[int]bool{}
 	for _, p := range append(routes.Globals.Ports.HTTPExtra, routes.Globals.Ports.HTTPSExtra...) {
 		ports[p] = true
 	}
 	for _, host := range routes.Hosts {
 		for _, ep := range host.Endpoints {
 			if p := schema.NormalizePort(ep.Listen.Port, 0); p > 0 {
-				ports[p] = true
+				if ep.Name == "vps" {
+					loopbackPorts[p] = true
+				} else {
+					ports[p] = true
+				}
 			}
 		}
 	}
 	ips := routes.Globals.ListenIPs
 	if len(ips) == 0 {
 		ips = schema.ParseListenIPs(a.nginxListenIPs)
+	}
+	for port := range loopbackPorts {
+		address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+		if known[address] {
+			continue
+		}
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			return fmt.Errorf("listener %s is unavailable: %w", address, err)
+		}
+		listener.Close()
 	}
 	for _, ip := range ips {
 		for port := range ports {

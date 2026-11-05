@@ -513,11 +513,17 @@ func mihomoResolve(host string) ([]string, string, error) {
 // ---------- SOCKS5 through mihomo ----------
 
 func socksDial(host string, port int, timeout time.Duration) (net.Conn, error) {
-	conn, err := net.DialTimeout("tcp", getenv("MIHOMO_SOCKS", "127.0.0.1:7891"), timeout)
+	return socksDialAt(context.Background(), getenv("MIHOMO_SOCKS", "127.0.0.1:7891"), host, port, timeout)
+}
+
+func socksDialAt(ctx context.Context, address, host string, port int, timeout time.Duration) (net.Conn, error) {
+	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("SOCKS-порт mihomo недоступен: %w", err)
 	}
 	_ = conn.SetDeadline(time.Now().Add(timeout))
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	fail := func(err error) (net.Conn, error) {
 		conn.Close()
 		return nil, err

@@ -836,7 +836,11 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 			}
 			pb += "\n" + proxyBlock(g, app, host, "^~ "+path, external, publicHTTPS)
 		}
-		blocks = append(blocks, fmt.Sprintf("server {\n  %s\n  server_name %s;\n  access_log %s %s;%s\n  %s\n}", strings.Join(listenLines(port, ips, extra), "\n  "), host.Host, quote(g.routeAccessLog), format, tls, pb))
+		endpointIPs := ips
+		if ep.Name == "vps" {
+			endpointIPs = []string{"127.0.0.1"}
+		}
+		blocks = append(blocks, fmt.Sprintf("server {\n  %s\n  server_name %s;\n  access_log %s %s;%s\n  %s\n}", strings.Join(listenLines(port, endpointIPs, extra), "\n  "), host.Host, quote(g.routeAccessLog), format, tls, pb))
 		if !external && proto == "https" && ep.Behavior.Redirect != "off" {
 			body := pb
 			if ep.Behavior.Redirect != "http" {
