@@ -106,6 +106,9 @@ func validatePublicServer(s publicServer) error {
 }
 
 func (a *app) startPublicServers() {
+	// A previous worker may have saved a renewed pair but stopped before nginx
+	// could load it. Reconcile the applied configuration once after startup too.
+	a.publicCertificatesDirty = true
 	m := &publicServerManager{dir: getenv("PUBLIC_SERVERS_DIR", filepath.Join(a.baseDir, ".runtime", "public-servers")), app: a, jobs: map[string]*publicServerJob{}}
 	b, err := os.ReadFile(filepath.Join(m.dir, "servers.json"))
 	if err == nil {
