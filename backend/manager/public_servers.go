@@ -153,6 +153,25 @@ func publicKeyFile(dir, id, purpose string) (ssh.Signer, error) {
 	return ssh.ParsePrivateKey(b)
 }
 
+func publicBootstrapAuth(managed ssh.Signer, privateKey, password string) ([]ssh.AuthMethod, error) {
+	signers := []ssh.Signer{managed}
+	if privateKey != "" {
+		key, err := ssh.ParsePrivateKey([]byte(privateKey))
+		if err != nil {
+			return nil, errors.New("Не удалось прочитать приватный SSH-ключ")
+		}
+		signers = append(signers, key)
+	}
+	// ssh uses only the first AuthMethod of each type. Supply all candidate
+	// keys through one publickey method so an unregistered managed key cannot
+	// hide the existing key used for the first connection.
+	auth := []ssh.AuthMethod{ssh.PublicKeys(signers...)}
+	if password != "" {
+		auth = append(auth, ssh.Password(password))
+	}
+	return auth, nil
+}
+
 func dialPublicSSH(ctx context.Context, s publicServer, auth []ssh.AuthMethod, inspect bool) (*ssh.Client, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -320,17 +339,10 @@ func (a *app) handlePublicServers(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, 500, response{"ok": false, "error": err.Error()})
 			return
 		}
-		auth := []ssh.AuthMethod{ssh.PublicKeys(signer)}
-		if req.PrivateKey != "" {
-			key, e := ssh.ParsePrivateKey([]byte(req.PrivateKey))
-			if e != nil {
-				a.writeJSON(w, 400, response{"ok": false, "error": "Не удалось прочитать приватный SSH-ключ"})
-				return
-			}
-			auth = append(auth, ssh.PublicKeys(key))
-		}
-		if req.Password != "" {
-			auth = append(auth, ssh.Password(req.Password))
+		auth, err := publicBootstrapAuth(signer, req.PrivateKey, req.Password)
+		if err != nil {
+			a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
+			return
 		}
 		c, _, err := dialPublicSSH(ctx, s, auth, false)
 		if err == nil {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ type publicSSHFixture struct {
 	signer      ssh.Signer
 	mu          sync.Mutex
 	connections []*ssh.ServerConn
+	allowedKey  ssh.PublicKey
 	forwards    chan net.Listener
 }
 
@@ -55,7 +58,14 @@ func newPublicSSHFixture(t *testing.T) *publicSSHFixture {
 	return f
 }
 func (f *publicSSHFixture) accept(raw net.Conn) {
-	cfg := &ssh.ServerConfig{PublicKeyCallback: func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error) { return nil, nil }}
+	cfg := &ssh.ServerConfig{PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.allowedKey != nil && string(key.Marshal()) != string(f.allowedKey.Marshal()) {
+			return nil, fmt.Errorf("key not authorized")
+		}
+		return nil, nil
+	}}
 	cfg.AddHostKey(f.signer)
 	c, chans, reqs, err := ssh.NewServerConn(raw, cfg)
 	if err != nil {
@@ -172,6 +182,38 @@ func TestPublicSSHRejectsChangedKeyAndInspectsWithoutTrust(t *testing.T) {
 	c, _, err := dialPublicSSH(context.Background(), s, []ssh.AuthMethod{ssh.PublicKeys(key)}, false)
 	if c != nil || err == nil || !strings.Contains(err.Error(), "изменился") {
 		t.Fatalf("changed key accepted: %v", err)
+	}
+}
+
+func TestPublicBootstrapUsesExistingKeyAfterUnregisteredManagedKey(t *testing.T) {
+	f := newPublicSSHFixture(t)
+	dir := t.TempDir()
+	managed, err := publicKeyFile(dir, "managed", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provided, err := publicKeyFile(dir, "provided", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.allowedKey = provided.PublicKey()
+	f.mu.Unlock()
+	body, err := os.ReadFile(filepath.Join(dir, "provided-admin.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := publicBootstrapAuth(managed, string(body), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _, err := dialPublicSSH(context.Background(), f.config(), auth, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if output, err := publicSSHRun(context.Background(), c, "test\n"); err != nil || output != "configured\n" {
+		t.Fatalf("bootstrap command: %q %v", output, err)
 	}
 }
 
