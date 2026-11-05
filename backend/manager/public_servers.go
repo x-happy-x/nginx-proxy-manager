@@ -26,6 +26,7 @@ import (
 )
 
 type publicServer struct {
+	AutoVPN     bool   `json:"auto_vpn,omitempty"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Address     string `json:"address"`
@@ -40,13 +41,17 @@ type publicForward struct {
 	Port int    `json:"port"`
 }
 type publicServerStatus struct {
-	State       string          `json:"state"`
-	Error       string          `json:"error,omitempty"`
-	ConnectedAt time.Time       `json:"connected_at,omitempty"`
-	CheckedAt   time.Time       `json:"checked_at,omitempty"`
-	Reconnects  int             `json:"reconnects"`
-	Domains     []publicForward `json:"domains"`
-	Metrics     json.RawMessage `json:"metrics,omitempty"`
+	VPNGroup     string          `json:"vpn_group,omitempty"`
+	VPNProxy     string          `json:"vpn_proxy,omitempty"`
+	NextProbeAt  time.Time       `json:"next_probe_at,omitempty"`
+	RecoveryNote string          `json:"recovery_note,omitempty"`
+	State        string          `json:"state"`
+	Error        string          `json:"error,omitempty"`
+	ConnectedAt  time.Time       `json:"connected_at,omitempty"`
+	CheckedAt    time.Time       `json:"checked_at,omitempty"`
+	Reconnects   int             `json:"reconnects"`
+	Domains      []publicForward `json:"domains"`
+	Metrics      json.RawMessage `json:"metrics,omitempty"`
 }
 type publicServerJob struct {
 	config string
@@ -60,9 +65,16 @@ type publicServerManager struct {
 	servers   []publicServer
 	jobs      map[string]*publicServerJob
 	loadError string
+	vpnRPC    func(string, any, any) error
 }
 
 func validatePublicServer(s publicServer) error {
+	if s.AutoVPN && s.SOCKS != "" {
+		h, _, err := net.SplitHostPort(s.SOCKS)
+		if err != nil || !net.ParseIP(h).IsLoopback() {
+			return errors.New("Автоподбор VPN работает с локальным mihomo; внешний SOCKS настраивается отдельно")
+		}
+	}
 	if !pvhIDRe.MatchString(s.ID) || len(s.ID) > 16 || s.Name == "" || len([]rune(s.Name)) > 80 {
 		return errors.New("Укажите ID латиницей до 16 символов и имя сервера")
 	}
@@ -226,7 +238,7 @@ func publicSSHRun(ctx context.Context, c *ssh.Client, script string) (string, er
 	defer stop()
 	err = s.Run("sh -s")
 	if err != nil {
-		return "", fmt.Errorf("SSH: %v: %.1200s", err, stderr.String()+stdout.String())
+		return "", fmt.Errorf("SSH: %w: %.1200s", err, stderr.String()+stdout.String())
 	}
 	return stdout.String(), nil
 }
@@ -305,9 +317,18 @@ func (a *app) handlePublicServers(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
+	dialServer := s
+	if s.AutoVPN && (r.URL.Path == "/api/routes/public/inspect" || r.URL.Path == "/api/routes/public/save") {
+		var route publicVPNStatus
+		if err := m.callPublicVPN("ensure", publicVPNRequest{ID: s.ID}, &route); err != nil {
+			a.writeJSON(w, 503, response{"ok": false, "error": err.Error()})
+			return
+		}
+		dialServer.SOCKS = route.SOCKS
+	}
 	switch r.URL.Path {
 	case "/api/routes/public/inspect":
-		_, fp, err := dialPublicSSH(ctx, s, nil, true)
+		_, fp, err := dialPublicSSH(ctx, dialServer, nil, true)
 		if fp != "" {
 			a.writeJSON(w, 200, response{"ok": true, "fingerprint": fp})
 			return
@@ -344,7 +365,7 @@ func (a *app) handlePublicServers(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, 400, response{"ok": false, "error": err.Error()})
 			return
 		}
-		c, _, err := dialPublicSSH(ctx, s, auth, false)
+		c, _, err := dialPublicSSH(ctx, dialServer, auth, false)
 		if err == nil {
 			pub := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))) + " homenet-public-admin-" + s.ID
 			_, err = publicSSHRun(ctx, c, "set -eu\n[ \"$(id -u)\" = 0 ]\nmkdir -p /root/.ssh\nchmod 700 /root/.ssh\ntouch /root/.ssh/authorized_keys\nchmod 600 /root/.ssh/authorized_keys\ngrep -qF "+shq(pub)+" /root/.ssh/authorized_keys || printf '%s\\n' "+shq(pub)+" >> /root/.ssh/authorized_keys\n")
@@ -369,9 +390,15 @@ func (a *app) handlePublicServers(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, 500, response{"ok": false, "error": err.Error()})
 			return
 		}
+		_ = m.clearRecoveryBlockLocked(s)
 		a.writeJSON(w, 200, response{"ok": true})
 	case "/api/routes/public/reconnect":
 		m.mu.Lock()
+		for _, old := range m.servers {
+			if old.ID == s.ID {
+				_ = m.clearRecoveryBlockLocked(old)
+			}
+		}
 		if j := m.jobs[s.ID]; j != nil {
 			j.cancel()
 			delete(m.jobs, s.ID)
@@ -466,9 +493,45 @@ func (m *publicServerManager) status(j *publicServerJob, fn func(*publicServerSt
 func (m *publicServerManager) run(ctx context.Context, s publicServer, forwards []publicForward, j *publicServerJob) {
 	delay := 5 * time.Second
 	for ctx.Err() == nil {
+		if s.AutoVPN {
+			wait, err := m.reservePublicRecovery(s, time.Now())
+			if err != nil {
+				m.status(j, func(st *publicServerStatus) { st.State = "blocked"; st.Error = err.Error() })
+				<-ctx.Done()
+				return
+			}
+			if wait > 0 {
+				m.status(j, func(st *publicServerStatus) {
+					st.State = "cooldown"
+					st.NextProbeAt = time.Now().Add(wait)
+					st.RecoveryNote = "Щадящая проверка: не чаще раза в минуту, до 6 попыток за 30 минут"
+				})
+				t := time.NewTimer(wait)
+				select {
+				case <-ctx.Done():
+					t.Stop()
+					return
+				case <-t.C:
+				}
+				continue
+			}
+		}
 		err := m.serve(ctx, s, forwards, j)
 		if ctx.Err() != nil {
 			return
+		}
+		if s.AutoVPN && publicSSHSecurityError(err) {
+			m.blockPublicRecovery(s, err.Error())
+			m.status(j, func(st *publicServerStatus) {
+				st.State = "blocked"
+				st.Error = "SSH-доступ отклонён или ключ сервера изменился. Автопроверки остановлены; проверьте ключи и нажмите «Переподключить»."
+			})
+			<-ctx.Done()
+			return
+		}
+		var pathError publicTransportError
+		if s.AutoVPN && errors.As(err, &pathError) {
+			m.tryPublicVPN(ctx, s, j)
 		}
 		m.status(j, func(st *publicServerStatus) {
 			st.State = "reconnecting"
@@ -476,6 +539,9 @@ func (m *publicServerManager) run(ctx context.Context, s publicServer, forwards 
 			st.Reconnects++
 			st.CheckedAt = time.Now()
 		})
+		if s.AutoVPN {
+			delay = time.Minute
+		}
 		t := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
@@ -493,13 +559,26 @@ func (m *publicServerManager) run(ctx context.Context, s publicServer, forwards 
 }
 
 func (m *publicServerManager) serve(ctx context.Context, s publicServer, forwards []publicForward, j *publicServerJob) error {
+	if s.AutoVPN {
+		var route publicVPNStatus
+		if err := m.callPublicVPN("ensure", publicVPNRequest{ID: s.ID}, &route); err != nil {
+			return err
+		}
+		s.SOCKS = route.SOCKS
+		m.status(j, func(st *publicServerStatus) {
+			st.VPNGroup = route.Group
+			st.VPNProxy = route.Selected
+			st.NextProbeAt = time.Time{}
+			st.RecoveryNote = "Отдельная группа VPN; активных проверок при работающем туннеле нет"
+		})
+	}
 	admin, err := publicKeyFile(m.dir, s.ID, "admin")
 	if err != nil {
 		return err
 	}
 	c, _, err := dialPublicSSH(ctx, s, []ssh.AuthMethod{ssh.PublicKeys(admin)}, false)
 	if err != nil {
-		return err
+		return publicTransportError{err}
 	}
 	defer c.Close()
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
@@ -514,6 +593,10 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 		_, err = publicSSHRun(setupCtx, c, publicProvisionScript(s, forwards, string(ssh.MarshalAuthorizedKey(tunnel.PublicKey()))))
 		cancel()
 		if err != nil {
+			var exit *ssh.ExitError
+			if !errors.As(err, &exit) {
+				return publicTransportError{err}
+			}
 			return err
 		}
 	}
@@ -524,7 +607,7 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 		ts.User = "homenet-tunnel-" + s.ID
 		tc, _, err = dialPublicSSH(ctx, ts, []ssh.AuthMethod{ssh.PublicKeys(tunnel)}, false)
 		if err != nil {
-			return err
+			return publicTransportError{err}
 		}
 		defer tc.Close()
 		tunnelDone = make(chan error, 1)
@@ -546,7 +629,11 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 		body, e := publicSSHRun(probeCtx, c, publicMetricsScript)
 		cancel()
 		if e != nil {
-			return e
+			var exit *ssh.ExitError
+			if errors.As(e, &exit) {
+				return e
+			}
+			return publicTransportError{e}
 		}
 		if !json.Valid([]byte(body)) {
 			return errors.New("Сервер вернул некорректные метрики")
@@ -560,10 +647,10 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 				return ctx.Err()
 			case e := <-done:
 				if e != nil {
-					return e
+					return publicTransportError{e}
 				}
 			case <-time.After(10 * time.Second):
-				return errors.New("Туннель не отвечает на keepalive")
+				return publicTransportError{errors.New("Туннель не отвечает на keepalive")}
 			}
 		}
 		t := time.NewTimer(15 * time.Second)
@@ -576,7 +663,7 @@ func (m *publicServerManager) serve(ctx context.Context, s publicServer, forward
 			if err == nil {
 				err = errors.New("SSH-туннель закрыт сервером")
 			}
-			return err
+			return publicTransportError{err}
 		case <-t.C:
 		}
 	}

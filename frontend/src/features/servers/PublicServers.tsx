@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { request } from "../../platform/sdk";
 import { Icon } from "../../components/ui/Icon";
-import { Alert, Field } from "../../components/ui/controls";
+import { Alert, Field, Switch } from "../../components/ui/controls";
 import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import "./public-servers.css";
 
-export type PublicServer = { id: string; name: string; address: string; port: number; user: string; fingerprint: string; socks?: string; email?: string };
-export type PublicServerItem = { server: PublicServer; status: { state: string; error?: string; checked_at?: string; connected_at?: string; reconnects: number; domains: { host: string; port: number }[]; metrics?: { host: string; load1: number; cores: number; memory_total: number; memory_used: number; disk_total: number; disk_used: number; uptime: number } } };
+export type PublicServer = { id: string; name: string; address: string; port: number; user: string; fingerprint: string; socks?: string; email?: string; auto_vpn?: boolean };
+export type PublicServerItem = { server: PublicServer; status: { state: string; error?: string; checked_at?: string; connected_at?: string; reconnects: number; vpn_group?: string; vpn_proxy?: string; next_probe_at?: string; recovery_note?: string; domains: { host: string; port: number }[]; metrics?: { host: string; load1: number; cores: number; memory_total: number; memory_used: number; disk_total: number; disk_used: number; uptime: number } } };
 const endpoint = "/api/routes/public/";
 export async function publicServerRequest<T>(path: string, body?: unknown): Promise<T> {
   const res = await request(endpoint + path, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -16,8 +16,8 @@ export async function publicServerRequest<T>(path: string, body?: unknown): Prom
   return value;
 }
 export const loadPublicServers = () => publicServerRequest<{ items: PublicServerItem[]; error?: string }>("servers");
-const fresh = (): PublicServer => ({ id: "", name: "", address: "", port: 22, user: "root", fingerprint: "", socks: "", email: "" });
-const stateLabel: Record<string, string> = { waiting: "Ожидание", connecting: "Подключение", configuring: "Настройка HTTPS", online: "На связи", reconnecting: "Переподключение" };
+const fresh = (): PublicServer => ({ id: "", name: "", address: "", port: 22, user: "root", fingerprint: "", socks: "", email: "", auto_vpn: true });
+const stateLabel: Record<string, string> = { waiting: "Ожидание", connecting: "Подключение", configuring: "Настройка HTTPS", online: "На связи", reconnecting: "Переподключение", probing: "Проверка VPN", cooldown: "Защитная пауза", blocked: "Нужна проверка SSH" };
 const gb = (n: number) => `${(n / 1073741824).toLocaleString("ru", { maximumFractionDigits: 1 })} ГБ`;
 
 export function PublicServers({ settings = false }: { settings?: boolean }) {
@@ -42,9 +42,10 @@ export function PublicServers({ settings = false }: { settings?: boolean }) {
     <div className="section-heading"><div><h2>Публичные серверы</h2><p className="muted">Linux и VPS по SSH · HTTPS и туннели для доменов</p></div><button type="button" className="btn" onClick={() => open()}><Icon name="plus" size={16} />Добавить VPS</button></div>
     {error && <Alert tone="danger">{error}</Alert>}{message && <Alert>{message}</Alert>}
     {!items.length && !error && <div className="card public-server-empty">Подключите VPS, чтобы публиковать домашние сервисы под своими доменами. Существующий доступ через KeenDNS продолжит работать.</div>}
-    <div className="public-server-grid">{items.map(({ server: s, status: st }) => { const m = st.metrics, stale = !st.checked_at || Date.now() - Date.parse(st.checked_at) > 60000; return <article className="card public-server-card" key={s.id}>
+    <div className="public-server-grid">{items.map(({ server: s, status: st }) => { const m = st.metrics, stale = st.state !== "online" || !st.checked_at || Date.now() - Date.parse(st.checked_at) > 60000; return <article className="card public-server-card" key={s.id}>
       <div className="public-server-head"><Icon name="servers" size={22} /><div><h3>{s.name}</h3><span className="mono muted">{s.address}:{s.port}</span></div><span className={`badge ${st.state === "online" && !stale ? "badge-accent" : ""}`}>{stateLabel[st.state] || st.state}</span></div>
-      <p className="muted">{s.socks ? `Через mihomo · ${s.socks}` : "Прямое SSH-подключение"} · переподключений: {st.reconnects}</p>
+      <p className="muted">{s.auto_vpn ? `${st.vpn_group || "Отдельная группа VPN"}${st.vpn_proxy ? ` · ${st.vpn_proxy}` : ""}` : s.socks ? `Через mihomo · ${s.socks}` : "Прямое SSH-подключение"} · переподключений: {st.reconnects}</p>
+      {st.recovery_note && <p className="field-hint">{st.recovery_note}{st.state === "cooldown" && st.next_probe_at ? ` · следующая попытка ${new Date(st.next_probe_at).toLocaleTimeString("ru")}` : ""}</p>}
       {m && <dl className="public-server-metrics"><div><dt>Нагрузка / ядра</dt><dd>{m.load1.toFixed(2)} / {m.cores}</dd></div><div><dt>Память</dt><dd>{gb(m.memory_used)} / {gb(m.memory_total)}</dd></div><div><dt>Диск</dt><dd>{gb(m.disk_used)} / {gb(m.disk_total)}</dd></div><div><dt>Работает</dt><dd>{Math.floor(m.uptime / 86400)} д. {Math.floor(m.uptime % 86400 / 3600)} ч.</dd></div></dl>}
       {m && stale && <p className="field-hint">Последние данные устарели. {st.checked_at && new Date(st.checked_at).toLocaleString("ru")}</p>}
       <div className="chip-list">{st.domains.map(d => <a className="chip" href={`https://${d.host}/`} rel="noreferrer" target="_blank" key={d.host}><Icon name="globe" size={13} />{d.host}</a>)}</div>
@@ -57,9 +58,9 @@ export function PublicServers({ settings = false }: { settings?: boolean }) {
         <Field label="ID"><input value={draft.id} disabled={items.some(i => i.server.id === draft.id)} maxLength={16} onChange={e => update({ id: e.target.value })} /></Field>
         <Field label="Адрес VPS"><input value={draft.address} autoComplete="off" placeholder="213.155.28.79" onChange={e => update({ address: e.target.value.trim() }, true)} /></Field>
         <Field label="SSH-порт"><input type="number" min={1} max={65535} value={draft.port} onChange={e => update({ port: Number(e.target.value) }, true)} /></Field>
-        <Field label="SOCKS mihomo" hint="Пусто — напрямую. Для ограниченного интернета укажите SOCKS и направьте адрес VPS через рабочую группу mihomo."><input value={draft.socks || ""} placeholder="127.0.0.1:7891" onChange={e => update({ socks: e.target.value.trim() }, true)} /></Field>
+        <Field label="SOCKS mihomo" hint={draft.auto_vpn ? "HomeNet создаст отдельный loopback SOCKS и группу для этого VPS." : "Пусто — напрямую. Укажите SOCKS для ограниченного интернета."}><input disabled={!!draft.auto_vpn} value={draft.socks || ""} placeholder="127.0.0.1:7891" onChange={e => update({ socks: e.target.value.trim() }, true)} /></Field>
         <Field label="Email для сертификатов"><input type="email" value={draft.email || ""} placeholder="Необязательно" onChange={e => update({ email: e.target.value.trim() })} /></Field>
-      </div><Field label="Приватный SSH-ключ для первого входа" hint="Нужен root-доступ. Ключ используется однократно для установки отдельного ключа HomeNet; поле очищается после подключения."><textarea className="mono" rows={4} value={privateKey} autoComplete="off" spellCheck={false} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" onChange={e => setPrivateKey(e.target.value)} /></Field>
+      </div><Switch checked={!!draft.auto_vpn} onChange={value => update({ auto_vpn: value })} label="Подбирать VPN при недоступном туннеле" hint="Отдельная группа для VPS. Одна проверка SSH-баннера в минуту, до 6 попыток за 30 минут; без перебора логинов и ключей. При работающем туннеле проверок нет." /><Field label="Приватный SSH-ключ для первого входа" hint="Нужен root-доступ. Ключ используется однократно для установки отдельного ключа HomeNet; поле очищается после подключения."><textarea className="mono" rows={4} value={privateKey} autoComplete="off" spellCheck={false} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" onChange={e => setPrivateKey(e.target.value)} /></Field>
         <Field label="Или пароль root для первого входа"><input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></Field>
         {draft.fingerprint && <Alert><b>Ключ SSH сервера</b><p className="mono public-fingerprint">{draft.fingerprint}</p>Сверьте отпечаток с вашим сервером. Подключение закрепит этот ключ; при его изменении HomeNet остановит соединение.</Alert>}
         <p className="field-hint">Автоматическая настройка рассчитана на Debian/Ubuntu с systemd. При публикации HomeNet установит nginx и certbot, выпустит сертификаты и создаст отдельного пользователя туннеля. Существующие домены на VPS проверяются на конфликт.</p>

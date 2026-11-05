@@ -102,6 +102,10 @@ func main() {
 			a.handleVPNDNSTransaction(w, r)
 			return
 		}
+		if workerID == "vpn" && strings.HasPrefix(r.URL.Path, "/internal/public-vpn/") {
+			a.handlePublicVPN(w, r)
+			return
+		}
 		if r.URL.Path == "/internal/connection" && r.Method == "GET" {
 			a.writeJSON(w, 200, response{"connection": a.moduleConnection()})
 			return

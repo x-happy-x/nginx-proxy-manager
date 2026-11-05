@@ -807,10 +807,14 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 			if routingManaged[name] || accessNames[name] {
 				continue
 			}
-			g.HeadComment = ""
+			publicVPN := strings.HasPrefix(name, "HomeNet VPS ") &&
+				strings.TrimSpace(strings.TrimPrefix(g.HeadComment, "#")) == publicVPNMarker(strings.TrimPrefix(name, "HomeNet VPS "))
+			if !publicVPN {
+				g.HeadComment = ""
+			}
 			kept = append(kept, g)
 			keptNames[name] = true
-			if u := mapGet(g, "use"); u != nil {
+			if u := mapGet(g, "use"); u != nil && !publicVPN {
 				for _, x := range u.Content {
 					usedProviders[x.Value] = true
 				}
