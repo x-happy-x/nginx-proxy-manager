@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
+import { fakePublicProxy } from './fixtures/public-proxy.mjs';
 import { fakePve, pvePortalFixture } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await mkdir(path.join(root,'.local'),{recursive:true});
@@ -117,6 +118,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
       };
     }
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
+    if (item.id === 'proxy' && process.env.PREVIEW_PUBLIC_PROXY === 'fake' && fakePublicProxy(req, res)) return;
     if (item.id === 'pc' && process.env.PREVIEW_PC === 'fake' && fakePc(req, res)) return;
     if (item.id === 'pve' && process.env.PREVIEW_PVE === 'fake' && fakePve(req, res)) return;
     if (item.id === 'pve' && pveHosts.length) {
@@ -142,14 +144,15 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     if (req.url === '/api/core/status') { res.end(JSON.stringify({ok:true,status:{installed:true,running:!!vpnBoard,controller_ok:!!vpnBoard}})); return; }
     res.writeHead(503); res.end(JSON.stringify({ok:false,error:'Изолированная проверка интерфейса: устройство не подключено'}));
   });
-  const manifest = JSON.parse(await readFile(path.join(root, '.runtime/modules/linux-amd64', item.id, '1.0.0/manifest.json'), 'utf8'));
+  const previewVersion = process.env.PREVIEW_MODULE_VERSION || '1.0.0';
+  const manifest = JSON.parse(await readFile(path.join(root, '.runtime/modules/linux-amd64', item.id, previewVersion, 'manifest.json'), 'utf8'));
   manifest.arch = 'amd64'; manifest.backend.endpoint = item.id === 'ha' ? `http://127.0.0.1:${await freePort()}` : endpoint;
   // a custom widget the VPN entry does not export: shows the «не отрисовался» path
   if (item.id === 'vpn' && manifest.ui.widgets) manifest.ui.widgets.push({ id: 'preview-custom', title: 'Свой виджет (проверка ошибки)', kind: 'custom', sizes: ['m'], modes: ['pro'], default: { pro: 99 } });
   items.push({ manifest, enabled:!disabled.has(item.id), connection:'unconfigured' });
   await writeFile(path.join(state, 'credentials', `${item.id}.token`), 'local-preview-only-credential-not-for-deployment');
-  const destination=path.join(state,'packages',item.id,'1.0.0');
-  await cp(path.join(root,'.runtime/modules/linux-amd64',item.id,'1.0.0'),destination,{recursive:true});
+  const destination=path.join(state,'packages',item.id,previewVersion);
+  await cp(path.join(root,'.runtime/modules/linux-amd64',item.id,previewVersion),destination,{recursive:true});
   await writeFile(path.join(destination,'manifest.json'),JSON.stringify(manifest));
   if (item.id === 'ha') await startHAWorker(item, path.join(destination, 'manifest.json'), path.join(state, 'credentials', 'ha.token'));
 }

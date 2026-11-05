@@ -120,6 +120,10 @@ func (a *app) handle(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/routes/public/") {
+		a.handlePublicServers(w, r)
+		return
+	}
 	if strings.HasPrefix(path, "/api/core/") {
 		a.handleCoreGet(w, r)
 		return
@@ -295,6 +299,10 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/routes/public/") {
+		a.handlePublicServers(w, r)
+		return
+	}
 	path := r.URL.Path
 	if strings.HasPrefix(path, "/api/core/") {
 		a.handleCorePost(w, r)

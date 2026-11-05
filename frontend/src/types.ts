@@ -36,6 +36,7 @@ export type HostEndpoint = {
 };
 
 export type RouteHost = {
+	publication?: { server_id: string };
   host: string;
   kind: "private" | "public";
   app_id: string;

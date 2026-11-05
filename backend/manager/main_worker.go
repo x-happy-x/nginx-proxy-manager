@@ -69,6 +69,7 @@ func main() {
 	defer listener.Close()
 	switch workerID {
 	case "proxy":
+		a.startPublicServers()
 		a.startTelemetry()
 		a.startMaintenance()
 	case "network":

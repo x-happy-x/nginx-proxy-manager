@@ -71,18 +71,25 @@ type WSProxy struct {
 }
 
 type Host struct {
-	AccessIPPort      int        `yaml:"access_ip_port,omitempty" json:"access_ip_port,omitempty"`
-	AccessApp         string     `yaml:"access_app,omitempty" json:"access_app,omitempty"`
-	AccessPassthrough []string   `yaml:"access_passthrough,omitempty" json:"access_passthrough,omitempty"`
-	AccessPublic      bool       `yaml:"access_public,omitempty" json:"access_public,omitempty"` // proxy without the Account gateway
-	Host              string     `yaml:"host" json:"host"`
-	Kind              string     `yaml:"kind" json:"kind"`
-	AppID             string     `yaml:"app_id" json:"app_id"`
-	VerifyUpstreamSSL bool       `yaml:"verify_upstream_ssl" json:"verify_upstream_ssl"`
-	WSProxy           WSProxy    `yaml:"ws_proxy" json:"ws_proxy"`
-	DNS               DNSConfig  `yaml:"dns" json:"dns"`
-	TLS               TLSConfig  `yaml:"tls" json:"tls"`
-	Endpoints         []Endpoint `yaml:"endpoints" json:"endpoints"`
+	Publication       *Publication `yaml:"publication,omitempty" json:"publication,omitempty"`
+	AccessIPPort      int          `yaml:"access_ip_port,omitempty" json:"access_ip_port,omitempty"`
+	AccessApp         string       `yaml:"access_app,omitempty" json:"access_app,omitempty"`
+	AccessPassthrough []string     `yaml:"access_passthrough,omitempty" json:"access_passthrough,omitempty"`
+	AccessPublic      bool         `yaml:"access_public,omitempty" json:"access_public,omitempty"` // proxy without the Account gateway
+	Host              string       `yaml:"host" json:"host"`
+	Kind              string       `yaml:"kind" json:"kind"`
+	AppID             string       `yaml:"app_id" json:"app_id"`
+	VerifyUpstreamSSL bool         `yaml:"verify_upstream_ssl" json:"verify_upstream_ssl"`
+	WSProxy           WSProxy      `yaml:"ws_proxy" json:"ws_proxy"`
+	DNS               DNSConfig    `yaml:"dns" json:"dns"`
+	TLS               TLSConfig    `yaml:"tls" json:"tls"`
+	Endpoints         []Endpoint   `yaml:"endpoints" json:"endpoints"`
+}
+
+// Publication terminates HTTPS on a connected server; its dedicated HTTP
+// endpoint is reachable only through the loopback SSH reverse forward.
+type Publication struct {
+	ServerID string `yaml:"server_id" json:"server_id"`
 }
 
 type DNSConfig struct {

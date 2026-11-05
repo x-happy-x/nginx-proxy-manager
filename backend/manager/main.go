@@ -25,6 +25,7 @@ func main() {
 	a.startTorrents()
 
 	a.startMaintenance()
+	a.startPublicServers()
 	host, port := a.readUIBind()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", a.handle)

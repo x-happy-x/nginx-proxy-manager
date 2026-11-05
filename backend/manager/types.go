@@ -20,6 +20,7 @@ type app struct {
 	operationMu      sync.Mutex
 	telemetryMu      sync.Mutex
 	telemetry        *telemetryStore
+	publicServers    *publicServerManager
 }
 
 type response map[string]any
