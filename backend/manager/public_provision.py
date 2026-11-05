@@ -129,6 +129,7 @@ def configure(p):
     # remaining listener is retried by the worker without changing nginx.
     for forward in p["forwards"]:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 probe.bind(("127.0.0.1", forward["port"]))
             except OSError as exc:

@@ -71,13 +71,15 @@ func TestCoreAuthorizationAndCSRF(t *testing.T) {
 
 func TestAccountAdminCannotCallPrivateWorkerContract(t *testing.T) {
 	s := testServer(t, "admin", 204)
-	r := httptest.NewRequest("POST", "http://example.com/internal/proxy/vpn-dns/prepare", strings.NewReader(`{}`))
-	r.Header.Set("Origin", "http://example.com")
-	r.Header.Set("X-HomeNet-UI", "1")
-	w := httptest.NewRecorder()
-	s.ServeHTTP(w, r)
-	if w.Code != 401 {
-		t.Fatalf("browser accessed private contract: %d", w.Code)
+	for _, path := range []string{"vpn-dns/prepare", "public-vpn/ensure", "public-vpn/status", "public-vpn/select"} {
+		r := httptest.NewRequest("POST", "http://example.com/internal/proxy/"+path, strings.NewReader(`{}`))
+		r.Header.Set("Origin", "http://example.com")
+		r.Header.Set("X-HomeNet-UI", "1")
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		if w.Code != 401 {
+			t.Fatalf("browser accessed private contract: %d", w.Code)
+		}
 	}
 }
 func TestPortalFiltersIndependentCatalog(t *testing.T) {

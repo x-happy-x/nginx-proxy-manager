@@ -50,8 +50,15 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request) {
 			jsonReply(w, 200, map[string]bool{"ok": true})
 			return
 		}
+		contract := "vpn-dns"
 		action := strings.TrimPrefix(r.URL.Path, "/internal/proxy/vpn-dns/")
-		if action != "preview" && action != "prepare" && action != "apply" && action != "commit" && action != "rollback" {
+		valid := action == "preview" || action == "prepare" || action == "apply" || action == "commit" || action == "rollback"
+		if strings.HasPrefix(r.URL.Path, "/internal/proxy/public-vpn/") {
+			contract = "public-vpn"
+			action = strings.TrimPrefix(r.URL.Path, "/internal/proxy/public-vpn/")
+			valid = action == "ensure" || action == "status" || action == "select"
+		}
+		if !valid {
 			http.NotFound(w, r)
 			return
 		}
@@ -64,7 +71,7 @@ func (s *Server) internal(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "VPN credentials unavailable", 503)
 				return
 			}
-			q, err := http.NewRequestWithContext(r.Context(), "POST", i.Manifest.Backend.Endpoint+"/internal/vpn-dns/"+action, http.MaxBytesReader(w, r.Body, 2<<20))
+			q, err := http.NewRequestWithContext(r.Context(), "POST", i.Manifest.Backend.Endpoint+"/internal/"+contract+"/"+action, http.MaxBytesReader(w, r.Body, 2<<20))
 			if err != nil {
 				http.Error(w, "Invalid request", 400)
 				return
