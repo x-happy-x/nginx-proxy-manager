@@ -43,7 +43,7 @@ def main():
     if result.returncode:
         raise RuntimeError('Source export failed: '+result.stderr.decode(errors='replace')[-1000:])
     modes=extract(raw,bundle);raw.unlink()
-    for name in ('install.py','install.sh','README-install.md'):shutil.copy2(here/name,bundle/name)
+    for name in ('install.py','common.py','install.sh','README-install.md'):shutil.copy2(here/name,bundle/name)
     envfile=bundle/'payload/opt/etc/homenet/nginx/config/runtime.env'
     envfile.parent.mkdir(parents=True,exist_ok=True);envfile.write_text(portable_runtime_env(),encoding='utf-8')
     routes=envfile.parent.parent/'routes.yml'

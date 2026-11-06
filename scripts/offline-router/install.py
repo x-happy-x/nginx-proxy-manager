@@ -18,16 +18,19 @@ import subprocess
 import sys
 import time
 import urllib.request
+from common import runtime_script
 
 ROOTS = ['opt/etc/mihomo', 'opt/etc/xkeen', 'opt/sbin/mihomo', 'opt/sbin/yq', 'opt/sbin/xkeen', 'opt/sbin/.xkeen',
-         'opt/etc/init.d/S05xkeen', 'opt/etc/init.d/S99homenet-offline',
+         'opt/etc/init.d/S04homenet-clock', 'opt/etc/init.d/S05xkeen', 'opt/etc/init.d/S99homenet-offline',
          'opt/etc/ndm/netfilter.d/proxy.sh', 'opt/etc/ndm/netfilter.d/01-mihomo-dns1053.sh',
          'opt/etc/ndm/schedule.d/00-xkeen-hotspot-sync.sh',
          'opt/share/homenet/core', 'opt/share/homenet/integrations/vpn',
          'opt/share/homenet/offline-runtime', 'opt/share/homenet/offline',
          'opt/etc/homenet/core', 'opt/etc/homenet/mihomo', 'opt/etc/homenet/offline',
          'opt/etc/homenet/nginx/config/runtime.env', 'opt/etc/homenet/nginx/routes.yml',
-         'opt/etc/homenet/access.json', 'opt/root/.ssh']
+         'opt/etc/homenet/access.json', 'opt/root/.ssh',
+         'opt/etc/nginx/sites-enabled/zashboard.local.conf']
+LEGACY_SERVICE_PATTERN = r'S\d+[^/]*(?:mihomo|xkeen|zashboard|clash|nginx-manager-lite)[^/]*'
 DASHBOARDS = {'opt/share/zashboard','opt/share/mihomo/ui','opt/etc/mihomo/ui',
               'opt/etc/mihomo/dashboard','opt/etc/mihomo/zashboard','opt/share/mihomo/dashboard'}
 
@@ -191,11 +194,37 @@ def configure(target, source, lan, port):
     return 'https://'+host+'/'
 
 
+def prepare_boot(target):
+    """Prepare a detached disk for its first boot without donor policy marks."""
+    service=target/'opt/etc/init.d/S05xkeen'
+    service.write_bytes(runtime_script(service.read_bytes()));service.chmod(0o755)
+    for rel in ('opt/etc/ndm/netfilter.d/proxy.sh','opt/etc/ndm/schedule.d/00-xkeen-hotspot-sync.sh'):
+        remove(target/rel)
+    run=target/'opt/var/run'
+    if run.is_dir() and run.resolve().is_relative_to(target.resolve()):
+        for pid in run.glob('*.pid'):
+            if pid.is_file() or pid.is_symlink():pid.unlink()
+    # A stale router clock prevents HTTPS DNS/VPN from bootstrapping. This is
+    # only a lower bound; the router's native NTP remains authoritative.
+    clock=target/'opt/etc/init.d/S04homenet-clock'
+    clock.write_text('''#!/bin/sh
+case "$1" in start|restart) ;; *) exit 0;; esac
+HOMENET_RUNTIME=/opt/share/homenet/offline-runtime
+export HOMENET_RUNTIME
+now=$("$HOMENET_RUNTIME/bin/date" +%s) || exit 1
+case "$now" in ''|*[!0-9]*) exit 1;; esac
+if [ "$now" -lt MINIMUM_EPOCH ]; then
+ "$HOMENET_RUNTIME/bin/date" -u -s '@MINIMUM_EPOCH' >/dev/null || exit 1
+fi
+'''.replace('MINIMUM_EPOCH',str(int(time.time()))),encoding='utf-8')
+    clock.chmod(0o755)
+
+
 def restore(target, backup, runtime=None):
     record=json.loads((backup/'backup.json').read_text())
     if record.get('schema')!=1:raise RuntimeError('Unknown backup format')
     for rel in record.get('service_roots',[])+record.get('old_services',[]):
-        if not re.fullmatch(r'opt/etc/init.d/S\d+[^/]*(?:mihomo|xkeen|zashboard|clash)[^/]*',rel,re.I):
+        if not re.fullmatch('opt/etc/init.d/'+LEGACY_SERVICE_PATTERN,rel,re.I):
             raise RuntimeError('Unsafe backup service')
     for rel in record['roots']:
         if not allowed(rel,ROOTS+list(DASHBOARDS)+record.get('service_roots',[])):
@@ -244,9 +273,32 @@ def preflight(bundle, lan, port):
     if shutil.disk_usage('/opt').free<required+old+100*1024*1024:raise RuntimeError('Not enough /opt space for installation and backup')
 
 
-def install(bundle, target, lan, port, sandbox=False):
+def wait_for_mihomo(secret, timeout=120):
+    """S05xkeen start launches a background cold start; Core readiness is earlier."""
+    deadline=time.monotonic()+timeout
+    while True:
+        request=urllib.request.Request('http://127.0.0.1:9090/version',headers={'Authorization':'Bearer '+secret})
+        try:
+            with urllib.request.urlopen(request,timeout=3) as response:
+                if response.status==200:return
+        except (OSError,ValueError):pass
+        if time.monotonic()>=deadline:raise RuntimeError('Mihomo controller did not become ready after XKeen cold start')
+        time.sleep(1)
+
+
+def install(bundle, target, lan, port, sandbox=False, offline=False):
     meta=verify(bundle)['source'];runtime=bundle/'payload/opt/share/homenet/offline-runtime'
-    if not sandbox:
+    detached=sandbox or offline
+    if offline:
+        target=target.resolve()
+        if target==Path('/') or not os.path.ismount(target/'opt'):
+            raise RuntimeError('Offline preparation requires a separate mounted target/opt')
+        binary=target/'opt/sbin/mihomo'
+        if binary.exists():
+            header=binary.read_bytes()[:20]
+            if header[:6]!=b'\x7fELF\x02\x01' or int.from_bytes(header[18:20],'little')!=183:
+                raise RuntimeError('Target Mihomo does not identify an ARM64 router')
+    if not detached:
         if os.geteuid()!=0 or platform.machine() not in ('aarch64','arm64'):raise RuntimeError('Root on ARM64 is required')
         if Path('/sys/class/net/br0/address').read_text().strip()==meta['source_mac']:
             raise RuntimeError('This is the source router; refusing to install its own export')
@@ -255,7 +307,7 @@ def install(bundle, target, lan, port, sandbox=False):
     init=target/'opt/etc/init.d'
     if init.exists():
         for f in init.iterdir():
-            if f.is_file() and re.fullmatch(r'S\d+[^/]*(?:mihomo|xkeen|zashboard|clash)[^/]*',f.name,re.I) and not any(x in f.name for x in ('.bak','.old','~')):
+            if f.is_file() and re.fullmatch(LEGACY_SERVICE_PATTERN,f.name,re.I) and not any(x in f.name for x in ('.bak','.old','~')):
                 rel=f.relative_to(target).as_posix();services.append(rel)
                 if rel not in roots:roots.append(rel)
     # Only known dashboard asset locations are moved; never guess arbitrary paths.
@@ -264,13 +316,13 @@ def install(bundle, target, lan, port, sandbox=False):
     backup=target/'opt/var/backups'/('homenet-transfer-'+time.strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(3))
     backup.mkdir(parents=True);backup.chmod(0o700)
     record={'schema':1,'roots':roots,'old_services':services,'service_roots':[s for s in services if s not in ROOTS]}
-    if not sandbox:record['dns_rules']=dns_rules(runtime)
+    if not detached:record['dns_rules']=dns_rules(runtime)
     write_json(backup/'backup.json',record)
     for rel in roots:
         if path_exists(target/rel):copy(target/rel,backup/'files'/rel)
     log=(backup/'install.log').open('wb');os.chmod(backup/'install.log',0o600)
     try:
-        if not sandbox:
+        if not detached:
             for rel in services:command([target/rel,'stop'],runtime,log,timeout=200)
             # A standalone Mihomo service may have no init script. Do not replace a live binary.
             active=subprocess.run(['pidof','mihomo'],env=environment(runtime),capture_output=True).stdout.strip()
@@ -287,8 +339,9 @@ def install(bundle, target, lan, port, sandbox=False):
             copy(src,dest)
         copy(bundle/'meta/registry.json',target/'opt/etc/homenet/core/registry.json')
         url=configure(target,meta,lan,port)
+        if offline:prepare_boot(target)
         installed=target/'opt/share/homenet/offline-runtime'
-        if not sandbox:
+        if not detached:
             command([target/'opt/share/homenet/offline/front','-init-cert',lan,
                      '-cert',target/'opt/etc/homenet/offline/cert.pem','-key',target/'opt/etc/homenet/offline/key.pem'],installed,log)
             command([target/'opt/sbin/mihomo','-t','-d','/opt/etc/mihomo','-f','/opt/etc/mihomo/config.yaml'],installed,log)
@@ -310,17 +363,15 @@ def install(bundle, target, lan, port, sandbox=False):
                 if response.status!=200 or b'password' not in page or '/_gate/emergency' not in response.url:
                     raise RuntimeError('Local HTTPS login flow failed')
             secret=json.loads((target/'opt/etc/mihomo/config.yaml').read_text())['secret']
-            request=urllib.request.Request('http://127.0.0.1:9090/version',headers={'Authorization':'Bearer '+secret})
-            with urllib.request.urlopen(request,timeout=5) as response:
-                if response.status!=200:raise RuntimeError('Mihomo controller failed')
+            wait_for_mihomo(secret)
             hook=target/'opt/etc/ndm/netfilter.d/01-mihomo-dns1053.sh'
             if hook.exists():command([hook],installed,log)
-        write_json(backup/'result.json',{'installed':True,'url':url,'source':meta,'time':time.time()})
-        print('HomeNet installed: '+url+'\nBackup: '+str(backup))
+        write_json(backup/'result.json',{'installed':not offline,'prepared_offline':offline,'url':url,'source':meta,'time':time.time()})
+        print(('HomeNet prepared offline: ' if offline else 'HomeNet installed: ')+url+'\nBackup: '+str(backup))
         return backup
     except BaseException:
         log.close()
-        restore(target,backup,None if sandbox else runtime)
+        restore(target,backup,None if detached else runtime)
         raise
     finally:
         if not log.closed:log.close()
@@ -331,8 +382,17 @@ def main():
     actions=p.add_mutually_exclusive_group(required=True)
     actions.add_argument('--check',action='store_true');actions.add_argument('--apply',action='store_true')
     actions.add_argument('--rollback',type=Path)
+    actions.add_argument('--prepare-offline',type=Path,metavar='ROOT')
+    p.add_argument('--bundle',type=Path,help='Verified extracted bundle (offline preparation only)')
     p.add_argument('--lan-ip');p.add_argument('--ui-port',type=int,default=63412)
     args=p.parse_args();bundle=Path(__file__).resolve().parent;target=Path('/')
+    if args.prepare_offline:
+        if not args.lan_ip or not 1024<=args.ui_port<=65535:raise RuntimeError('Offline preparation requires --lan-ip and a valid UI port')
+        if os.geteuid()!=0:raise RuntimeError('Offline preparation requires root to preserve owner and permissions')
+        install(args.bundle.resolve() if args.bundle else bundle,args.prepare_offline,
+                validate_ip(args.lan_ip),args.ui_port,offline=True)
+        return
+    if args.bundle:raise RuntimeError('--bundle is for --prepare-offline only')
     runtime=bundle/'payload/opt/share/homenet/offline-runtime'
     if args.rollback:
         backup=args.rollback.resolve()

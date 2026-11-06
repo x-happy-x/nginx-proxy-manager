@@ -92,11 +92,14 @@ def runtime_script(data):
     text = data.decode('utf-8')
     prefix = 'HOMENET_RUNTIME=/opt/share/homenet/offline-runtime\nexport HOMENET_RUNTIME\nPATH="$HOMENET_RUNTIME/bin:/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin"\nexport PATH\n'
     lines = text.splitlines(keepends=True)
-    if lines and lines[0].startswith('#!'):
+    if lines and lines[0].startswith('#!') and not (len(lines)>1 and lines[1].startswith('HOMENET_RUNTIME=')):
         lines.insert(1, prefix)
-    else:
+    elif not lines or not lines[0].startswith('#!'):
         lines.insert(0, prefix)
     # XKeen's service explicitly resets PATH; retain its private offline tools.
     text = ''.join(lines)
+    # XKeen emits fresh NDM hooks from quoted shell heredocs at each start.
+    # Give those generated scripts the same private utilities as the parent.
+    text = re.sub(r'(?m)^(#!/bin/sh\n)(?!HOMENET_RUNTIME=)',lambda m:m[1]+prefix,text)
     text = re.sub(r'^PATH="/opt/bin:', 'PATH="$HOMENET_RUNTIME/bin:/opt/bin:', text, flags=re.M)
     return text.encode()
