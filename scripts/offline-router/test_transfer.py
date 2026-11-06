@@ -1,12 +1,14 @@
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
 
-from common import without_tail, without_tail_state, provider_path
+from common import without_tail, without_tail_state, provider_path, runtime_script
 
 spec=importlib.util.spec_from_file_location('installer',Path(__file__).with_name('install.py'))
 installer=importlib.util.module_from_spec(spec);spec.loader.exec_module(installer)
@@ -18,6 +20,41 @@ def manifest(bundle):
 
 
 class TransferTest(unittest.TestCase):
+    def test_controller_check_waits_for_xkeen_background_start(self):
+        response=mock.MagicMock();response.__enter__.return_value.status=200
+        with mock.patch.object(installer.urllib.request,'urlopen',side_effect=[OSError('not listening yet'),response]) as opened, \
+             mock.patch.object(installer.time,'sleep') as sleep:
+            installer.wait_for_mihomo('test-secret')
+            self.assertEqual(opened.call_count,2);sleep.assert_called_once_with(1)
+
+    def test_controller_failure_times_out(self):
+        with mock.patch.object(installer.urllib.request,'urlopen',side_effect=OSError('not listening')), \
+             mock.patch.object(installer.time,'monotonic',side_effect=[0,121]):
+            with self.assertRaisesRegex(RuntimeError,'cold start'):installer.wait_for_mihomo('test-secret')
+    def test_generated_xkeen_hooks_keep_private_tools_and_patch_is_idempotent(self):
+        original=b'#!/bin/sh\ncat > hook <<\'EOF\'\n#!/bin/sh\nPATH="/opt/bin:/bin"\nEOF\n'
+        patched=runtime_script(original)
+        self.assertEqual(patched.count(b'HOMENET_RUNTIME=/opt/share/homenet/offline-runtime'),2)
+        self.assertEqual(runtime_script(patched),patched)
+
+    @unittest.skipUnless(os.name=='posix','POSIX boot shell verification')
+    def test_clock_floor_updates_only_a_stale_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);service=root/'opt/etc/init.d/S05xkeen';service.parent.mkdir(parents=True);service.write_text('#!/bin/sh\n')
+            installer.prepare_boot(root)
+            runtime=root/'runtime';(runtime/'bin').mkdir(parents=True)
+            marker=root/'date-set';date=runtime/'bin/date'
+            date.write_text('#!/bin/sh\nif [ "$1" = +%s ]; then echo "$FAKE_NOW"; else echo "$*" >> "$DATE_MARKER"; fi\n');date.chmod(0o755)
+            clock=root/'opt/etc/init.d/S04homenet-clock'
+            clock.write_text(clock.read_text().replace('/opt/share/homenet/offline-runtime',str(runtime)))
+            env=os.environ.copy();env.update(FAKE_NOW='9999999999',DATE_MARKER=str(marker))
+            subprocess.run(['sh',str(clock),'start'],env=env,check=True);self.assertFalse(marker.exists())
+            env['FAKE_NOW']='0';subprocess.run(['sh',str(clock),'start'],env=env,check=True)
+            self.assertIn('-u -s @',marker.read_text())
+
+    def test_offline_prepare_refuses_host_root(self):
+        with mock.patch.object(installer,'verify',return_value={'source':{}}):
+            with self.assertRaisesRegex(RuntimeError,'separate mounted'):installer.install(Path('.'),Path('/'),'192.168.2.1',63412,offline=True)
     def test_source_router_is_refused_before_any_install(self):
         with mock.patch.object(installer,'verify',return_value={'source':{'source_mac':'source'}}), \
              mock.patch.object(installer,'discover_ip',return_value='192.0.2.1'), \
@@ -63,6 +100,7 @@ class TransferTest(unittest.TestCase):
             put(target,'opt/etc/mihomo/config.yaml','oldconfig')
             put(target,'opt/share/zashboard/index.html','old dashboard')
             put(target,'opt/etc/init.d/S50mihomo','old service')
+            put(target,'opt/etc/init.d/S99nginx-manager-lite','legacy manager')
             put(target,'opt/root/.ssh/authorized_keys','target-key\n')
             put(bundle,'payload/opt/root/.ssh/authorized_keys','source-key\n')
             put(bundle,'payload/opt/etc/mihomo/config.yaml','{}')
@@ -71,11 +109,13 @@ class TransferTest(unittest.TestCase):
             put(bundle,'meta/registry.json','{"schema":1,"items":[]}');manifest(bundle)
             backup=installer.install(bundle,target,'192.0.2.1',63412,sandbox=True)
             self.assertFalse((target/'opt/share/zashboard').exists())
+            self.assertFalse((target/'opt/etc/init.d/S99nginx-manager-lite').exists())
             self.assertEqual((target/'opt/root/.ssh/authorized_keys').read_text(),'target-key\nsource-key\n')
             installer.restore(target,backup)
             self.assertEqual((target/'opt/etc/mihomo/config.yaml').read_text(),'oldconfig')
             self.assertEqual((target/'opt/root/.ssh/authorized_keys').read_text(),'target-key\n')
             self.assertEqual((target/'opt/share/zashboard/index.html').read_text(),'old dashboard')
+            self.assertEqual((target/'opt/etc/init.d/S99nginx-manager-lite').read_text(),'legacy manager')
 
 
 if __name__=='__main__':unittest.main()
