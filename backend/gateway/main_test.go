@@ -200,6 +200,9 @@ func TestEmergencyFlowCSRFAndOneTimeCallback(t *testing.T) {
 	}
 	originCookie := start.Result().Cookies()[0]
 	form := request(g, "/_gate/emergency?state="+state, "account.test", "https")
+	if policy := form.Header().Get("Referrer-Policy"); policy != "same-origin" {
+		t.Fatalf("native browser form POST must retain its Origin; policy=%q", policy)
+	}
 	csrf := form.Result().Cookies()[0]
 	send := func(origin string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "/_gate/emergency", strings.NewReader(url.Values{"state": {state}, "password": {"correct"}}.Encode()))
@@ -213,8 +216,10 @@ func TestEmergencyFlowCSRFAndOneTimeCallback(t *testing.T) {
 		g.ServeHTTP(w, r)
 		return w
 	}
-	if w := send("https://evil.test"); w.Code != 403 {
-		t.Fatal("CSRF accepted")
+	for _, origin := range []string{"https://evil.test", "null", ""} {
+		if w := send(origin); w.Code != 403 {
+			t.Fatalf("CSRF accepted for Origin %q", origin)
+		}
 	}
 	w := send("https://account.test")
 	if w.Code != 303 {
