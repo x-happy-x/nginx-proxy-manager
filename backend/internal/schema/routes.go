@@ -52,10 +52,11 @@ type ACME struct {
 }
 
 type App struct {
-	ID       string      `yaml:"id" json:"id"`
-	Name     string      `yaml:"name" json:"name"`
-	Upstream UpstreamApp `yaml:"upstream" json:"upstream"`
-	WSProxy  WSProxy     `yaml:"ws_proxy" json:"ws_proxy"`
+	AccountKey string      `yaml:"account_key,omitempty" json:"account_key,omitempty"`
+	ID         string      `yaml:"id" json:"id"`
+	Name       string      `yaml:"name" json:"name"`
+	Upstream   UpstreamApp `yaml:"upstream" json:"upstream"`
+	WSProxy    WSProxy     `yaml:"ws_proxy" json:"ws_proxy"`
 }
 
 type UpstreamApp struct {
@@ -90,7 +91,9 @@ type Host struct {
 // Publication terminates HTTPS on a connected server; its dedicated HTTP
 // endpoint is reachable only through the loopback SSH reverse forward.
 type Publication struct {
-	ServerID string `yaml:"server_id" json:"server_id"`
+	ServerID  string `yaml:"server_id" json:"server_id"`
+	HTTPPort  int    `yaml:"http_port,omitempty" json:"http_port,omitempty"`
+	HTTPSPort int    `yaml:"https_port,omitempty" json:"https_port,omitempty"`
 }
 
 type DNSConfig struct {

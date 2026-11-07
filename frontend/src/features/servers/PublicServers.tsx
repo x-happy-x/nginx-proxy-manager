@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import "./public-servers.css";
 
 export type PublicServer = { id: string; name: string; address: string; port: number; user: string; fingerprint: string; socks?: string; email?: string; auto_vpn?: boolean };
-export type PublicServerItem = { server: PublicServer; status: { state: string; error?: string; checked_at?: string; connected_at?: string; reconnects: number; vpn_group?: string; vpn_proxy?: string; next_probe_at?: string; recovery_note?: string; domains: { host: string; port: number }[]; metrics?: { host: string; load1: number; cores: number; memory_total: number; memory_used: number; disk_total: number; disk_used: number; uptime: number } } };
+export type PublicServerItem = { server: PublicServer; status: { state: string; error?: string; checked_at?: string; connected_at?: string; reconnects: number; vpn_group?: string; vpn_proxy?: string; next_probe_at?: string; recovery_note?: string; domains: { host: string; port: number; http_port?: number; https_port?: number }[]; metrics?: { host: string; load1: number; cores: number; memory_total: number; memory_used: number; disk_total: number; disk_used: number; uptime: number } } };
 const endpoint = "/api/routes/public/";
 export async function publicServerRequest<T>(path: string, body?: unknown): Promise<T> {
   const res = await request(endpoint + path, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -48,7 +48,7 @@ export function PublicServers({ settings = false }: { settings?: boolean }) {
       {st.recovery_note && <p className="field-hint">{st.recovery_note}{st.state === "cooldown" && st.next_probe_at ? ` · следующая попытка ${new Date(st.next_probe_at).toLocaleTimeString("ru")}` : ""}</p>}
       {m && <dl className="public-server-metrics"><div><dt>Нагрузка / ядра</dt><dd>{m.load1.toFixed(2)} / {m.cores}</dd></div><div><dt>Память</dt><dd>{gb(m.memory_used)} / {gb(m.memory_total)}</dd></div><div><dt>Диск</dt><dd>{gb(m.disk_used)} / {gb(m.disk_total)}</dd></div><div><dt>Работает</dt><dd>{Math.floor(m.uptime / 86400)} д. {Math.floor(m.uptime % 86400 / 3600)} ч.</dd></div></dl>}
       {m && stale && <p className="field-hint">Последние данные устарели. {st.checked_at && new Date(st.checked_at).toLocaleString("ru")}</p>}
-      <div className="chip-list">{st.domains.map(d => <a className="chip" href={`https://${d.host}/`} rel="noreferrer" target="_blank" key={d.host}><Icon name="globe" size={13} />{d.host}</a>)}</div>
+      <div className="chip-list">{st.domains.map(d => <a className="chip" href={`https://${d.host}${d.https_port && d.https_port !== 443 ? `:${d.https_port}` : ""}/`} rel="noreferrer" target="_blank" key={d.host}><Icon name="globe" size={13} />{d.host}{d.https_port && d.https_port !== 443 ? `:${d.https_port}` : ""}</a>)}</div>
       {st.error && <Alert tone="danger">{st.error}</Alert>}
       <div className="public-server-actions"><button type="button" className="btn" disabled={busy} onClick={() => open(s)}>Настроить</button><button type="button" className="btn" disabled={busy} onClick={() => void act("reconnect", s)}><Icon name="refresh" size={14} />Переподключить</button>{settings && <button type="button" className="btn" disabled={busy || !!st.domains.length} onClick={() => setRemove(s)}>Отключить</button>}</div>
     </article>; })}</div>

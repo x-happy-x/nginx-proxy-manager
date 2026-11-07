@@ -21,15 +21,15 @@ export function hasPublicAccess(host: RouteHost, disabled: string[] = []): boole
   return (host.endpoints || []).some(ep => ep.name !== "web" && !disabled.includes(host.publication ? `vps:${host.publication.server_id}` : `keendns:${ep.behavior.ndns_profile || "ndns_proxy"}`));
 }
 
-export type PublicDomainDraft = { host: string; serverId: string; externalPort: string; originalHost?: string };
+export type PublicDomainDraft = { host: string; serverId: string; externalPort: string; originalHost?: string; httpPort?: number; httpsPort?: number };
 
-export function vpsHost(original: RouteHost | undefined, host: string, appId: string, serverId: string): RouteHost {
+export function vpsHost(original: RouteHost | undefined, host: string, appId: string, serverId: string, httpPort = original?.publication?.http_port || 80, httpsPort = original?.publication?.https_port || 443): RouteHost {
   const prior = original?.endpoints?.find(e => e.name === "vps");
   return {
-    ...original, host, app_id: appId, kind: "public", publication: { server_id: serverId },
+    ...original, host, app_id: appId, kind: "public", publication: { server_id: serverId, http_port: httpPort, https_port: httpsPort },
     dns: { publish: ["local"], local_record_ip: original?.dns?.local_record_ip || "auto" }, tls: { cert_policy: "public_vps", cert_ref: "auto", san: [] },
     endpoints: [
-      { name: "web", listen: { protocol: "https", port: 443 }, behavior: { redirect: "https" } },
+      { name: "web", listen: { protocol: "https", port: httpsPort }, behavior: { redirect: "https" } },
       { name: "vps", listen: { protocol: "http", port: prior?.listen.port || "auto_random" }, behavior: { redirect: "off" } },
     ],
   };
@@ -38,6 +38,7 @@ export function vpsHost(original: RouteHost | undefined, host: string, appId: st
 export function publicDomainDraft(host: RouteHost, suffix: string): PublicDomainDraft {
   return {
     host: host.host, originalHost: host.host,
+    httpPort: host.publication?.http_port || 80, httpsPort: host.publication?.https_port || 443,
     serverId: host.publication?.server_id || (host.host.endsWith(`.${suffix}`) ? "" : "manual"),
     externalPort: String(host.endpoints?.find(e => e.behavior.ndns_profile || e.name === "ndns")?.listen.port || "auto_random"),
   };

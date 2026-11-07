@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -14,6 +16,46 @@ import (
 	"testing"
 	"time"
 )
+
+func TestForgejoAssertionAndAccountAuthority(t *testing.T) {
+	health, check := 200, 200
+	g := fixture(t, &health, &check)
+	g.cfg.Hosts["git.cdn6.ru:8443"] = hostPolicy{App: "forgejo", AccountOrigin: "https://account.cdn6.ru"}
+	r := httptest.NewRequest("GET", "http://gateway/_gate/check", nil)
+	r.RemoteAddr = "127.0.0.1:5000"
+	r.Header.Set("X-Gate-Host", "git.cdn6.ru:8443")
+	r.Header.Set("X-Gate-Proto", "https")
+	r.Header.Set("X-Gate-URI", "/owner/repo?tab=code")
+	r.AddCookie(&http.Cookie{Name: "kartoteka_session", Value: "existing-token"})
+	w := httptest.NewRecorder()
+	g.ServeHTTP(w, r)
+	if w.Code != 204 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	parts := strings.Split(w.Header().Get("X-Gate-Assertion"), ".")
+	if len(parts) != 2 {
+		t.Fatal("Missing assertion")
+	}
+	derived := hmac.New(sha256.New, []byte(g.cfg.Secret))
+	derived.Write([]byte("homenet-forgejo-v1"))
+	mac := hmac.New(sha256.New, derived.Sum(nil))
+	mac.Write([]byte(parts[0]))
+	signature, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		t.Fatal("Wrong signature")
+	}
+	body, _ := base64.RawURLEncoding.DecodeString(parts[0])
+	var payload map[string]any
+	json.Unmarshal(body, &payload)
+	if payload["host"] != "git.cdn6.ru:8443" || payload["uri"] != "/owner/repo?tab=code" || payload["login"] != "alice" {
+		t.Fatal("Lost identity binding", payload)
+	}
+	w = request(g, "/_gate/login", "git.cdn6.ru:8443", "https")
+	location, _ := url.Parse(w.Header().Get("Location"))
+	if location.Host != "account.cdn6.ru" || location.Query().Get("redirect_uri") != "https://git.cdn6.ru:8443/_gate/callback" {
+		t.Fatal("Wrong Account authority", w.Header())
+	}
+}
 
 func TestMobileBasicScopeAndRole(t *testing.T) {
 	status, role, calls := 200, "admin", 0

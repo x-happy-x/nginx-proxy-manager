@@ -72,6 +72,16 @@ class PublicProvisionTests(unittest.TestCase):
         self.assertFalse((self.root / "var/lib/homenet-public/servers/vps/transaction.json").exists())
         self.assertIn(("systemctl", "reload", "nginx"), self.calls)
 
+    def test_custom_incoming_ports_preserve_acme_and_browser_authority(self):
+        self.payload["forwards"][0].update(http_port=8080, https_port=8443)
+        provision.main(self.payload)
+        result = self.conf.read_text()
+        self.assertIn("listen 80;", result)
+        self.assertIn("listen 8080;", result)
+        self.assertIn("listen 8443 ssl;", result)
+        self.assertIn("return 308 https://app.example:8443$request_uri;", result)
+        self.assertIn("proxy_set_header Host app.example:8443;", result)
+
     def test_success_installs_restricted_tunnel_and_removes_owned_routes(self):
         provision.main(self.payload)
         self.assertIn("proxy_pass http://127.0.0.1:0;", self.conf.read_text())

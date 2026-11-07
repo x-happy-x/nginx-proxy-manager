@@ -37,6 +37,7 @@ for (const item of catalog) {
   await mkdir(destination, { recursive: true });
   run('go', ['build', '-trimpath', '-tags=integration_worker', `-ldflags=-s -w -X main.workerID=${item.id}`, '-o', path.join(destination, 'worker'), './manager'], path.join(root, 'backend'), goEnv);
   if(item.id==='proxy')run('go',['build','-trimpath','-ldflags=-s -w','-o',path.join(destination,'nginx'),'./nginx'],path.join(root,'backend'),goEnv);
+  if(item.id==='proxy')run('go',['build','-trimpath','-ldflags=-s -w','-o',path.join(destination,'gateway'),'./gateway'],path.join(root,'backend'),goEnv);
   if(!reuseUI){
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'vite.integration.config.ts', '--mode', item.id, '--logLevel', 'warn'], frontend);
   }

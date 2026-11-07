@@ -37,10 +37,12 @@ type publicServer struct {
 	Email       string `json:"email,omitempty"`
 }
 type publicForward struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Disabled bool   `json:"disabled,omitempty"`
-	Local    bool   `json:"local,omitempty"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Disabled  bool   `json:"disabled,omitempty"`
+	Local     bool   `json:"local,omitempty"`
+	HTTPPort  int    `json:"http_port,omitempty"`
+	HTTPSPort int    `json:"https_port,omitempty"`
 }
 type publicServerStatus struct {
 	VPNGroup     string          `json:"vpn_group,omitempty"`
@@ -453,7 +455,7 @@ func publicForwards(routes schema.Routes, id string) []publicForward {
 		if h.Publication != nil && h.Publication.ServerID == id {
 			for _, ep := range h.Endpoints {
 				if ep.Name == "vps" {
-					out = append(out, publicForward{Host: h.Host, Port: schema.NormalizePort(ep.Listen.Port, 0), Disabled: !schema.PublicationEnabled(routes.Globals, h, ep), Local: h.TLS.CertPolicy == "public_vps"})
+					out = append(out, publicForward{Host: h.Host, Port: schema.NormalizePort(ep.Listen.Port, 0), Disabled: !schema.PublicationEnabled(routes.Globals, h, ep), Local: h.TLS.CertPolicy == "public_vps", HTTPPort: schema.VPSHTTPPort(h), HTTPSPort: schema.VPSHTTPSPort(h)})
 				}
 			}
 		}
@@ -495,7 +497,33 @@ func (m *publicServerManager) status(j *publicServerJob, fn func(*publicServerSt
 	fn(&j.status)
 }
 
+func validatePublicPorts(s publicServer, forwards []publicForward) error {
+	for _, f := range forwards {
+		if s.Port == 80 || f.HTTPPort == s.Port || f.HTTPSPort == s.Port || f.Port == s.Port {
+			return errors.New("Входящий порт домена пересекается с SSH-портом VPS")
+		}
+	}
+	return nil
+}
+func (a *app) validatePublicPorts(routes schema.Routes) error {
+	if a.publicServers == nil {
+		return nil
+	}
+	m := a.publicServers
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.servers {
+		if err := validatePublicPorts(s, publicForwards(routes, s.ID)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (m *publicServerManager) run(ctx context.Context, s publicServer, forwards []publicForward, j *publicServerJob) {
+	if err := validatePublicPorts(s, forwards); err != nil {
+		m.status(j, func(st *publicServerStatus) { st.State = "blocked"; st.Error = err.Error() })
+		return
+	}
 	delay := 5 * time.Second
 	for ctx.Err() == nil {
 		if s.AutoVPN {

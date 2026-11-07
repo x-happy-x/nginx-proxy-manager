@@ -76,6 +76,9 @@ func ValidateRoutes(r Routes) error {
 	}
 	apps := map[string]bool{}
 	for _, app := range r.Apps {
+		if app.AccountKey != "" && !identifierPattern.MatchString(app.AccountKey) {
+			return fmt.Errorf("app %q: invalid Account key", app.ID)
+		}
 		if !identifierPattern.MatchString(app.ID) || apps[app.ID] {
 			return fmt.Errorf("invalid or duplicate app id %q", app.ID)
 		}
@@ -132,15 +135,45 @@ func ValidateRoutes(r Routes) error {
 		}
 	}
 	publicPorts := map[int]string{}
+	vpsPorts := map[string]map[int]string{}
+	addVPS := func(server string, port int, protocol string) error {
+		if vpsPorts[server] == nil {
+			vpsPorts[server] = map[int]string{}
+		}
+		if old, ok := vpsPorts[server][port]; ok && (old != protocol || protocol == "tunnel") {
+			return fmt.Errorf("VPS %q: port %d conflicts with %s", server, port, old)
+		}
+		vpsPorts[server][port] = protocol
+		return nil
+	}
 	hosts := map[string]bool{}
 	ndnsNames := map[string]bool{}
 	for _, host := range r.Hosts {
 		if host.Publication != nil {
+			for _, port := range []int{host.Publication.HTTPPort, host.Publication.HTTPSPort} {
+				if port != 0 && NormalizePort(port, 0) == 0 {
+					return fmt.Errorf("host %q: invalid incoming VPS port", host.Host)
+				}
+			}
+			if VPSHTTPSPort(host) == VPSHTTPPort(host) || VPSHTTPSPort(host) == 80 {
+				return fmt.Errorf("host %q: VPS HTTPS port conflicts with HTTP/ACME", host.Host)
+			}
+			for _, item := range []struct {
+				port     int
+				protocol string
+			}{{80, "http"}, {VPSHTTPPort(host), "http"}, {VPSHTTPSPort(host), "https"}} {
+				if err := addVPS(host.Publication.ServerID, item.port, item.protocol); err != nil {
+					return err
+				}
+			}
 			vps, web := 0, 0
 			for _, ep := range host.Endpoints {
 				if ep.Name == "vps" && ep.Listen.Protocol == "http" {
 					vps++
 				} else if ep.Name == "web" && ep.Listen.Protocol == "https" {
+					if NormalizePort(ep.Listen.Port, 443) != VPSHTTPSPort(host) {
+						return fmt.Errorf("host %q: LAN HTTPS port must match incoming VPS HTTPS port", host.Host)
+					}
 					web++
 				} else {
 					return fmt.Errorf("host %q: unsupported VPS endpoint", host.Host)
@@ -267,6 +300,11 @@ func ValidateRoutes(r Routes) error {
 			}
 			b := ep.Behavior
 			if ep.Name == "vps" {
+				if port != 0 {
+					if err := addVPS(host.Publication.ServerID, port, "tunnel"); err != nil {
+						return err
+					}
+				}
 				if port != 0 && port < 1024 {
 					return fmt.Errorf("host %q: VPS port must be at least 1024", host.Host)
 				}
@@ -319,6 +357,11 @@ func ResolveAutoPorts(routes *Routes) error {
 		used[port] = true
 	}
 	for _, host := range routes.Hosts {
+		if host.Publication != nil {
+			used[VPSHTTPPort(host)] = true
+			used[VPSHTTPSPort(host)] = true
+			used[80] = true
+		}
 		for _, ep := range host.Endpoints {
 			used[NormalizePort(ep.Listen.Port, 0)] = true
 		}

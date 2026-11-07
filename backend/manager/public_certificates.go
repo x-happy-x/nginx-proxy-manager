@@ -72,6 +72,9 @@ func (m *publicServerManager) savePublicCertificates(s publicServer, forwards []
 // Called only by Apply, after router/DNS preflight and before activating local
 // DNS. Draft preparation exposes HTTP-01 plus a 503, never the application.
 func (a *app) preparePublicCertificates(routes schema.Routes) error {
+	if err := a.validatePublicPorts(routes); err != nil {
+		return err
+	}
 	m := a.publicServers
 	if m == nil {
 		for _, h := range routes.Hosts {

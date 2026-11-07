@@ -20,6 +20,11 @@ assert.deepEqual(migrated.dns.publish, ['local'], 'LAN must resolve the public d
 assert.equal(migrated.tls.cert_policy, 'public_vps');
 assert.equal(migrated.endpoints.length, 2);
 assert.equal(migrated.endpoints[0].name, 'web');
+const custom = vpsHost(migrated, 'app.cdn6.ru', 'app', 'cdn6', 8080, 8443);
+assert.equal(custom.endpoints[0].listen.port, 8443);
+assert.equal(publicDomainDraft(custom,'crubs.crazedns.ru').httpsPort,8443);
+assert.equal(publicDomainDraft(custom,'crubs.crazedns.ru').httpPort,8080);
+assert.equal(vpsHost(custom,'renamed.cdn6.ru','app','cdn6').publication.https_port,8443);
 const assigned = { ...migrated, endpoints: [{ ...migrated.endpoints[1], listen: { protocol: 'http', port: 24555 } }] };
 assert.equal(vpsHost(assigned, 'renamed.cdn6.ru', 'app', 'second-vps').endpoints.find(e=>e.name==='vps').listen.port, 24555);
 const doc = { globals: {}, hosts };

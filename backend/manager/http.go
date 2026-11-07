@@ -331,6 +331,10 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": err.Error()})
 			return
 		}
+		if err := a.validatePublicPorts(routes); err != nil {
+			a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": err.Error()})
+			return
+		}
 		if err := schema.SaveRoutes(a.routesPath(), routes); err != nil {
 			a.writeJSON(w, http.StatusInternalServerError, response{"ok": false, "error": err.Error()})
 			return
@@ -363,6 +367,11 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": output})
 	case "/api/apply":
 		ok, output := a.applyManagedRoutes()
+		if ok {
+			if err := a.syncAddressCatalog(); err != nil {
+				output += "\nAddress catalog pending: " + err.Error()
+			}
+		}
 		a.writeJSON(w, http.StatusOK, response{"ok": ok, "output": output})
 	case "/api/stub/apply":
 		a.writeJSON(w, http.StatusBadRequest, response{"ok": false, "error": "Save stub settings in routes, then use Apply to validate and activate safely"})
@@ -562,14 +571,23 @@ func (a *app) writeJSON(w http.ResponseWriter, status int, payload any) {
 // itself and hosts marked access_public, which check logins on their own.
 func applyAccessDefaults(routes *schema.Routes, previous schema.Routes) {
 	routes.Globals.AccessGateway = true
+	forgejo := map[string]bool{}
+	for _, app := range routes.Apps {
+		if app.ID == "forgejo" || app.AccountKey == "forgejo" {
+			forgejo[app.ID] = true
+		}
+	}
 	for i := range routes.Hosts {
 		h := &routes.Hosts[i]
 		if h.AccessPublic {
 			h.AccessApp = ""
-		} else if h.AppID != "account" {
+		} else if h.AppID != "account" && h.AccessApp == "" {
 			h.AccessApp = "homenet"
 			if h.AppID == "lms-client" {
 				h.AccessApp = "lms_node"
+			}
+			if forgejo[h.AppID] {
+				h.AccessApp = "forgejo"
 			}
 		}
 		for _, old := range previous.Hosts {

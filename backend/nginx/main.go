@@ -741,17 +741,18 @@ func proxyBlock(g *generator, app schema.App, host schema.Host, path string, ext
 	if scheme == "" {
 		scheme = "http"
 	}
-	hostHeader := "$host"
-	if external {
-		hostHeader = host.Host
-	}
+	hostHeader := host.Host
 	forwardedProto := "$scheme"
 	if external && publicHTTPS {
 		forwardedProto = "https"
 	}
 	lines := []string{fmt.Sprintf("location %s {", path), fmt.Sprintf("  proxy_pass %s://%s;", scheme, net.JoinHostPort(app.Upstream.Address, strconv.Itoa(app.Upstream.Port))), "  include " + quote(g.proxySnippet) + ";", "  proxy_set_header Host " + hostHeader + ";", "  proxy_set_header X-Forwarded-Proto " + forwardedProto + ";"}
+	lines = append(lines, "  proxy_set_header X-Forwarded-Host "+hostHeader+";", "  proxy_set_header X-Forwarded-Port \"\";")
 	if g.gatewayEnabled && host.AccessApp != "" {
 		lines = append(lines, "  auth_request /_gate/check;", "  proxy_set_header X-Auth-User \"\";", "  proxy_set_header X-Auth-Role \"\";")
+		if host.AccessApp == "forgejo" {
+			lines = append(lines, "  auth_request_set $forgejo_assertion $upstream_http_x_gate_assertion;", "  proxy_set_header X-HomeNet-Assertion $forgejo_assertion;")
+		}
 		if host.AccessApp == "lms_node" && path == "^~ /api/ui/" {
 			lines = append(lines, "  auth_request_set $lms_auth_error $upstream_http_x_gate_error;")
 			lines = append(lines, "  error_page 401 = @lms_api_401;", "  error_page 403 = @lms_api_403;", "  error_page 500 = @lms_api_503;", "  proxy_set_header Authorization \"\";")
@@ -811,11 +812,16 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 			}
 		}
 		publicHTTPS := ep.Behavior.NDNSSSLRedirect == nil || *ep.Behavior.NDNSSSLRedirect
-		pb := g.unavailableDirectives(host.Host, external) + "\n  " + proxyBlock(g, app, host, "/", external, publicHTTPS)
+		browserHost := host
+		browserHost.Host = schema.HostAuthority(host, ep)
+		if ep.Name != "web" && ep.Name != "vps" {
+			browserHost.Host = host.Host
+		}
+		pb := g.unavailableDirectives(host.Host, external) + "\n  " + proxyBlock(g, app, browserHost, "/", external, publicHTTPS)
 		if g.gatewayEnabled {
-			pb += "\n" + gatewayLocations(host.Host, external && publicHTTPS)
+			pb += "\n" + gatewayLocations(browserHost.Host, external && publicHTTPS)
 			if host.AccessApp == "lms_node" {
-				pb += "\n" + proxyBlock(g, app, host, "^~ /api/ui/", external, publicHTTPS)
+				pb += "\n" + proxyBlock(g, app, browserHost, "^~ /api/ui/", external, publicHTTPS)
 				for _, code := range []int{401, 403, 503} {
 					message := map[int]string{401: "Account login and password required", 403: "Account access denied or too many login attempts", 503: "Account unavailable"}[code]
 					if code == 401 {
@@ -825,7 +831,7 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 				}
 			}
 			for _, path := range host.AccessPassthrough {
-				bypass := host
+				bypass := browserHost
 				bypass.AccessApp = ""
 				location := "= " + path
 				if strings.HasSuffix(path, "/") {
@@ -843,7 +849,7 @@ func (g *generator) buildHostConf(host schema.Host, app schema.App, httpPort int
 			if path == "" {
 				path = "/connections"
 			}
-			pb += "\n" + proxyBlock(g, app, host, "^~ "+path, external, publicHTTPS)
+			pb += "\n" + proxyBlock(g, app, browserHost, "^~ "+path, external, publicHTTPS)
 		}
 		endpointIPs := ips
 		if ep.Name == "vps" {
