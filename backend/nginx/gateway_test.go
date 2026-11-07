@@ -46,6 +46,33 @@ func TestGatewayProtectsRoutesAndWebSockets(t *testing.T) {
 	}
 }
 
+func TestVPSIncomingPortIsUsedByProxyAndGateway(t *testing.T) {
+	r := testRoutes()
+	r.Globals.AccessGateway = true
+	h := schema.Host{Host: "git.cdn6.ru", AppID: "sublab", Kind: "public", AccessApp: "forgejo", Publication: &schema.Publication{ServerID: "vps", HTTPPort: 8080, HTTPSPort: 8443}, TLS: schema.TLSConfig{CertPolicy: "public_vps"}, Endpoints: []schema.Endpoint{{Name: "web", Listen: schema.EndpointListen{Protocol: "https", Port: 8443}}, {Name: "vps", Listen: schema.EndpointListen{Protocol: "http", Port: 24500}}}}
+	r.Hosts = []schema.Host{h}
+	g := testGenerator(t)
+	g.preview = true
+	files, err := g.render(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := ""
+	for p, b := range files {
+		if strings.HasSuffix(p, "git.cdn6.ru.conf") {
+			site = b
+		}
+	}
+	for _, expected := range []string{"server_name git.cdn6.ru;", "proxy_set_header Host git.cdn6.ru:8443;", "proxy_set_header X-Forwarded-Host git.cdn6.ru:8443;", "proxy_set_header X-Gate-Host git.cdn6.ru:8443;", "proxy_set_header X-HomeNet-Assertion $forgejo_assertion;"} {
+		if !strings.Contains(site, expected) {
+			t.Fatal("Missing "+expected, site)
+		}
+	}
+	if strings.Contains(site, "server_name git.cdn6.ru:8443") {
+		t.Fatal("Authority used as nginx server_name")
+	}
+}
+
 func TestLMSAPIKeepsAuthWithoutBrowserRedirect(t *testing.T) {
 	r := testRoutes()
 	r.Globals.AccessGateway = true

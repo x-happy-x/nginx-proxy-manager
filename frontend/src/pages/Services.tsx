@@ -36,7 +36,8 @@ function publicDomainLabel(host: string): string {
 export function hostUrl(host: RouteHost): string {
   const web = getWebEndpoint(host);
   const secure = host.kind === "public" || web?.listen.protocol === "https";
-  return `${secure ? "https" : "http"}://${host.host}/`;
+  const port = host.publication ? host.publication.https_port || 443 : host.kind === "public" ? undefined : web?.listen.port === "auto_random" ? undefined : web?.listen.port;
+  return `${secure ? "https" : "http"}://${host.host}${port && port !== (secure ? 443 : 80) ? `:${port}` : ""}/`;
 }
 
 export function DomainChips({ hosts }: { hosts: RouteHost[] }) {
@@ -188,6 +189,7 @@ export function Services({
       return;
     }
     for (const pub of d.publicDomains) {
+      if(pub.serverId&&pub.serverId!=="manual"&&([pub.httpPort??80,pub.httpsPort??443].some(p=>!Number.isInteger(p)||p<1||p>65535)||(pub.httpPort??80)===(pub.httpsPort??443)||(pub.httpsPort??443)===80)) {setError("Укажите разные HTTP- и HTTPS-порты VPS от 1 до 65535; порт 80 нужен HTTP-01.");return;}
       if (!pub.serverId && !publicDomainLabel(pub.host)) {
         setError(`Для KeenDNS укажите имя в зоне ${PUBLIC_DOMAIN_SUFFIX} или выберите VPS.`); return;
       }
@@ -236,7 +238,7 @@ export function Services({
       if (serverId) {
         const policy = current.find(h => h.kind === "public") || current[0];
         const inherited = original || (policy ? { ...policy, publication: undefined, endpoints: [] } : undefined);
-        return vpsHost(inherited, domain, id, serverId);
+        return vpsHost(inherited, domain, id, serverId, pub?.httpPort || 80, pub?.httpsPort || 443);
       }
       const endpoints = (original?.publication ? undefined : original?.endpoints)?.map((ep) => ({
         ...ep,
@@ -647,6 +649,7 @@ function ServiceWizard({
                     </select>
                   </Field>
                   {!pub.serverId && <Field label="Внешний порт"><input aria-label={`Внешний порт домена ${i + 1}`} value={pub.externalPort} placeholder="auto_random" onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p, n) => n === i ? { ...p, externalPort: e.target.value } : p) })} /></Field>}
+                  {pub.serverId && pub.serverId !== "manual" && <><Field label="HTTP на VPS" hint="Порт 80 также остаётся для выдачи сертификата"><input type="number" min={1} max={65535} value={pub.httpPort ?? 80} onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p,n) => n===i ? {...p,httpPort:Number(e.target.value)} : p) })} /></Field><Field label="HTTPS на VPS и в LAN"><input type="number" min={1} max={65535} value={pub.httpsPort ?? 443} onChange={e => onDraft({ ...draft, publicDomains: draft.publicDomains.map((p,n) => n===i ? {...p,httpsPort:Number(e.target.value)} : p) })} /></Field></>}
                   <button type="button" className="btn btn-icon" aria-label={`Удалить домен ${i + 1}`} onClick={() => onDraft({ ...draft, publicDomains: draft.publicDomains.filter((_, n) => n !== i) })}><Icon name="trash" /></button>
                 </div>)}
                 <button type="button" className="btn" onClick={() => onDraft({ ...draft, publicDomains: [...draft.publicDomains, { host: "", serverId: servers[0]?.server.id || "", externalPort: "auto_random" }] })}><Icon name="plus" />Добавить публичный домен</button>

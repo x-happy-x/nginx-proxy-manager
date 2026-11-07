@@ -310,6 +310,9 @@ func (a *app) startMaintenance() {
 					continue
 				}
 				if _, err := os.Stat(a.appliedRoutesPath()); err == nil {
+					if err := a.syncAddressCatalog(); err != nil {
+						log.Printf("address catalog: %v", err)
+					}
 					if routes, err := schema.LoadRoutes(a.appliedRoutesPath()); err == nil {
 						if ok, msg := a.syncMihomoDNS(routes); !ok {
 							log.Printf("system hosts maintenance: %s", msg)

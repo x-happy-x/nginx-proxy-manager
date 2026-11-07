@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/addresses"
 	"github.com/amagomedsharipov/nginx-proxy-manager/backend/internal/schema"
 )
 
@@ -34,19 +35,34 @@ func gatewayLocations(host string, externalHTTPS bool) string {
 // It carries no secret; gateway.json entries still take precedence.
 func gatewayHostsFile(routes schema.Routes, ips []string) (string, error) {
 	type policy struct {
-		App      string `json:"app"`
-		Resource string `json:"resource,omitempty"`
+		App           string `json:"app"`
+		Resource      string `json:"resource,omitempty"`
+		AccountOrigin string `json:"account_origin,omitempty"`
 	}
 	out := struct {
 		Managed string            `json:"managed"`
 		Hosts   map[string]policy `json:"hosts"`
 	}{Managed: strings.TrimSpace(strings.TrimPrefix(managedHeader, "#")), Hosts: map[string]policy{}}
+	catalog := addresses.Build(routes)
 	for _, host := range routes.Hosts {
 		if host.AccessApp == "" {
 			continue
 		}
 		p := policy{App: host.AccessApp, Resource: host.AppID}
 		out.Hosts[host.Host] = p
+		for _, ep := range host.Endpoints {
+			proto := ep.Listen.Protocol
+			if ep.Name == "vps" || ep.Name != "web" && (ep.Behavior.NDNSSSLRedirect == nil || *ep.Behavior.NDNSSSLRedirect) {
+				proto = "https"
+			}
+			authority := schema.HostAuthority(host, ep)
+			if ep.Name != "web" && ep.Name != "vps" {
+				authority = host.Host
+			}
+			item := p
+			item.AccountOrigin = catalog.AccountFor(proto + "://" + authority)
+			out.Hosts[authority] = item
+		}
 		if host.AccessIPPort > 0 {
 			for _, ip := range ips {
 				out.Hosts[net.JoinHostPort(ip, strconv.Itoa(host.AccessIPPort))] = p

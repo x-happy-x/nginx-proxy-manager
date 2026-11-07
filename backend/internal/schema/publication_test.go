@@ -41,6 +41,35 @@ func TestPublicationPortsAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestIncomingVPSPortsAreDistinctFromProtocolsAndTunnel(t *testing.T) {
+	r := publicationRoutes()
+	r.Hosts[0].Publication.HTTPPort = 8080
+	r.Hosts[0].Publication.HTTPSPort = 8443
+	if err := ResolveAutoPorts(&r); err != nil {
+		t.Fatal(err)
+	}
+	if HostAuthority(r.Hosts[0], r.Hosts[0].Endpoints[0]) != "sub.cdn6.ru:8443" {
+		t.Fatal("Missing incoming port")
+	}
+	r.Hosts[1].Publication.HTTPPort = 8443
+	if ValidateRoutes(r) == nil {
+		t.Fatal("Mixed protocols on VPS allowed")
+	}
+	r.Hosts[1].Publication.HTTPPort = 80
+	r.Hosts[0].Publication.HTTPSPort = 20000
+	r.Hosts[0].Endpoints[0].Listen.Port = "auto_random"
+	if err := ResolveAutoPorts(&r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Hosts[0].Endpoints[0].Listen.Port == 20000 {
+		t.Fatal("Tunnel overlaps incoming TLS")
+	}
+	r.Hosts[0].Endpoints[0].Listen.Port = 20000
+	if ValidateRoutes(r) == nil {
+		t.Fatal("Incoming TLS overlaps tunnel")
+	}
+}
+
 func TestPublicationRejectsUnsafeEndpoints(t *testing.T) {
 	for name, change := range map[string]func(*Host){
 		"no server":       func(h *Host) { h.Publication.ServerID = "" },

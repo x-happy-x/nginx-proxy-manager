@@ -3,9 +3,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -25,9 +27,10 @@ import (
 )
 
 type hostPolicy struct {
-	Resource string `json:"resource,omitempty"`
-	App      string `json:"app"`
-	MinRole  string `json:"min_role"`
+	AccountOrigin string `json:"account_origin,omitempty"`
+	Resource      string `json:"resource,omitempty"`
+	App           string `json:"app"`
+	MinRole       string `json:"min_role"`
 }
 type configuration struct {
 	AccountIPURL string                `json:"account_ip_url,omitempty"`
@@ -106,6 +109,9 @@ func main() {
 // hosts the nginx generator derived from protected routes.
 func (g *gateway) policy(host string) (hostPolicy, bool) {
 	if p, ok := g.cfg.Hosts[host]; ok {
+		if generated, exists := g.generatedHosts()[host]; exists && p.AccountOrigin == "" {
+			p.AccountOrigin = generated.AccountOrigin
+		}
 		return p, true
 	}
 	p, ok := g.generatedHosts()[host]
@@ -302,6 +308,15 @@ func (g *gateway) check(w http.ResponseWriter, r *http.Request, host, scheme str
 		}
 		w.Header().Set("X-Gate-Login", login)
 		w.Header().Set("X-Gate-Role", role)
+		if p.App == "forgejo" && login != "" {
+			key := hmac.New(sha256.New, []byte(g.cfg.Secret))
+			key.Write([]byte("homenet-forgejo-v1"))
+			payload, _ := json.Marshal(map[string]any{"login": login, "role": role, "host": host, "uri": r.Header.Get("X-Gate-URI"), "expires": time.Now().Add(30 * time.Second).Unix(), "nonce": random()})
+			encoded := base64.RawURLEncoding.EncodeToString(payload)
+			mac := hmac.New(sha256.New, key.Sum(nil))
+			mac.Write([]byte(encoded))
+			w.Header().Set("X-Gate-Assertion", encoded+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
+		}
 		w.WriteHeader(204)
 		return true
 	}
@@ -416,6 +431,9 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request, host, scheme str
 	setCookie(w, "homenet_flow", state, scheme, 300)
 	callback := scheme + "://" + host + "/_gate/callback"
 	accountURL := g.cfg.AccountURL
+	if p.AccountOrigin != "" {
+		accountURL = p.AccountOrigin
+	}
 	name := host
 	if h, _, e := net.SplitHostPort(host); e == nil {
 		name = h

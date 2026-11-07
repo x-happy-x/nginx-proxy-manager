@@ -44,14 +44,17 @@ def render(p, marker, require_tls=False):
     out = marker
     for f in p["forwards"]:
         host, port = f["host"], f["port"]
+        http_port, https_port = f.get("http_port", 80), f.get("https_port", 443)
+        authority = host if https_port == 443 else host + ":" + str(https_port)
         cert = certificate(p["id"], host)
         tls = Path(cert + "/fullchain.pem").exists() and Path(cert + "/privkey.pem").exists()
         if require_tls and not tls:
             raise RuntimeError("Certificate missing: " + host)
-        out += "server {\n listen 80;\n server_name " + host + ";\n location ^~ /.well-known/acme-challenge/ { root /var/lib/homenet-public/acme; }\n location / { return 308 https://" + host + "$request_uri; }\n}\n"
+        listens = "\n".join(" listen " + str(n) + ";" for n in sorted({80, http_port}))
+        out += "server {\n" + listens + "\n server_name " + host + ";\n location ^~ /.well-known/acme-challenge/ { root /var/lib/homenet-public/acme; }\n location / { return 308 https://" + authority + "$request_uri; }\n}\n"
         if tls:
             location = "return 403;" if f.get("disabled") else "proxy_pass http://127.0.0.1:" + str(port) + ";"
-            out += "server {\n listen 443 ssl;\n server_name " + host + ";\n ssl_certificate " + cert + "/fullchain.pem;\n ssl_certificate_key " + cert + "/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n client_max_body_size 0;\n location / {\n " + location + "\n proxy_http_version 1.1;\n proxy_set_header Host " + host + ";\n proxy_set_header X-Forwarded-Proto https;\n proxy_set_header X-Forwarded-For $remote_addr;\n proxy_set_header Upgrade $http_upgrade;\n proxy_set_header Connection \"upgrade\";\n proxy_read_timeout 3600s;\n proxy_buffering off;\n }\n}\n"
+            out += "server {\n listen " + str(https_port) + " ssl;\n server_name " + host + ";\n ssl_certificate " + cert + "/fullchain.pem;\n ssl_certificate_key " + cert + "/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n client_max_body_size 0;\n location / {\n " + location + "\n proxy_http_version 1.1;\n proxy_set_header Host " + authority + ";\n proxy_set_header X-Forwarded-Proto https;\n proxy_set_header X-Forwarded-For $remote_addr;\n proxy_set_header Upgrade $http_upgrade;\n proxy_set_header Connection \"upgrade\";\n proxy_read_timeout 3600s;\n proxy_buffering off;\n }\n}\n"
     return out
 
 
