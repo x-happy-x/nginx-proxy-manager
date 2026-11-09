@@ -17,6 +17,7 @@ type Plan = { simple: string[]; pro: Group[] };
 // First-party modules get the order of the mockups; any other module lists its
 // manifest pages as they are.
 const PLANS: Record<string, Plan> = {
+  hostings: { simple: ["hostings", "hostings-settings"], pro: [{ pages: ["hostings", "hostings-settings"] }] },
   // NPM-71: seven sections; their blocks (subs, checks, proxies…) live in the section
   vpn: {
     simple: ["vpn", "vpnsvc", "vstats"],

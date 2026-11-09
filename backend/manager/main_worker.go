@@ -28,7 +28,7 @@ func main() {
 	manifestFile := flags.String("manifest", "", "Installed integration manifest")
 	tokenFile := flags.String("token-file", "", "Server-only Core credential")
 	flags.Parse()
-	if workerID != "proxy" && workerID != "network" && workerID != "vpn" && workerID != "pve" && workerID != "ha" && workerID != "pc" {
+	if workerID != "proxy" && workerID != "network" && workerID != "vpn" && workerID != "pve" && workerID != "ha" && workerID != "pc" && workerID != "hostings" {
 		log.Fatal("worker identity not set at build time")
 	}
 	var manifest integration.Manifest
@@ -88,6 +88,8 @@ func main() {
 		a.startHA()
 	case "pc":
 		a.startPC()
+	case "hostings":
+		a.startHostings()
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
@@ -119,6 +121,10 @@ func main() {
 				http.Error(w, err.Error(), 409)
 				return
 			}
+		}
+		if workerID == "hostings" {
+			a.handleHostings(w, r)
+			return
 		}
 		if workerID == "pve" {
 			a.handlePVE(w, r)

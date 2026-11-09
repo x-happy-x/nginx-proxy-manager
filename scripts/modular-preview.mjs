@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
+import { fakeHostings } from './fixtures/hostings.mjs';
 import { fakePublicProxy } from './fixtures/public-proxy.mjs';
 import { fakePve, pvePortalFixture } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -119,6 +120,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
     }
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
     if (item.id === 'proxy' && process.env.PREVIEW_PUBLIC_PROXY === 'fake' && fakePublicProxy(req, res)) return;
+    if (item.id === 'hostings' && fakeHostings(req, res)) return;
     if (item.id === 'pc' && process.env.PREVIEW_PC === 'fake' && fakePc(req, res)) return;
     if (item.id === 'pve' && process.env.PREVIEW_PVE === 'fake' && fakePve(req, res)) return;
     if (item.id === 'pve' && pveHosts.length) {
