@@ -71,5 +71,25 @@
       {"id": "hosts", "title": "Компьютеры", "kind": "status", "sizes": ["s", "m"], "data": "/api/pc/widgets/hosts", "refresh": 30, "modes": ["simple", "pro"], "default": {"pro": 48}, "page": "pc"}
     ],
     "summary": {"attention": "/api/pc/summary/attention"}
+  },
+  {
+    "id": "hostings",
+    "name": "Хостинги",
+    "description": "Аккаунты хостинг-провайдеров, VPS, параметры и состояние серверов",
+    "port": 63507,
+    "pages": [
+      "hostings",
+      "hostings-settings"
+    ],
+    "titles": {
+      "hostings": "Серверы",
+      "hostings-settings": "Подключения"
+    },
+    "paths": [
+      "/api/hostings/"
+    ],
+    "data": [
+      "/opt/etc/homenet/hostings"
+    ]
   }
 ]

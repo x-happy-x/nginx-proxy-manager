@@ -7,6 +7,24 @@ import (
 
 func (a *app) moduleConnection() string {
 	switch moduleKind {
+	case "hostings":
+		if hostings == nil {
+			return "unconfigured"
+		}
+		hostings.mu.Lock()
+		defer hostings.mu.Unlock()
+		if hostings.loadErr != "" {
+			return "unavailable"
+		}
+		if len(hostings.accounts) == 0 {
+			return "unconfigured"
+		}
+		for _, v := range hostings.views {
+			if v.Error == "" && v.LastOK >= time.Now().Unix()-600 {
+				return "connected"
+			}
+		}
+		return "unavailable"
 	case "proxy":
 		if _, err := os.Stat(a.routesPath()); os.IsNotExist(err) {
 			return "unconfigured"

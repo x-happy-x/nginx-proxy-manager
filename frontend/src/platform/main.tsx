@@ -1,3 +1,4 @@
+import { Icon } from "../components/ui/Icon";
 import { ReleaseSet } from "./ReleaseSet";
 import { System } from "./System";
 import PortalBase from "../PortalBase";
@@ -38,6 +39,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 };
 
 const catalog = [
+  { id: "hostings", name: "Хостинги", icon: <Icon name="servers" size={24}/>, description: "Аккаунты хостингов и состояние VPS.", detail: "is*hosting: подключения по API, параметры серверов и доступность панели." },
   { id: "pve", name: "Машины", icon: "▣", description: "Серверы Proxmox, компьютеры, VM, WSL и контейнеры.", detail: "Единый интерфейс устройств, ресурсов, железа и копий. Данные компьютеров доступны с интеграцией «Компьютеры»." },
   { id: "proxy", name: "Прокси и домены", icon: "↗", description: "Сервисы на своих доменах, HTTPS, сертификаты и DNS.", detail: "Управление nginx с сохранением существующих маршрутов и сертификатов." },
   { id: "network", name: "Мониторинг связи", icon: "⌁", description: "Доступность интернета, LTE и состояние устройств.", detail: "История связи, диагностика, сканер и ресурсы роутеров и Proxmox." },
