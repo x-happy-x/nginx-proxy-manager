@@ -127,3 +127,24 @@ func TestHostingsRejectsProviderRedirectAndUnsafeID(t *testing.T) {
 		t.Fatal("Unsafe provider identifier used")
 	}
 }
+
+func TestHostingsCurlBoundary(t *testing.T) {
+	for _, url := range []string{"https://other.example/vps/list", "http://api.ishosting.com/vps/list", "https://user@api.ishosting.com/vps/list"} {
+		r, _ := http.NewRequest("GET", url, nil)
+		if _, err := (hostingCurlTransport{}).RoundTrip(r); err == nil {
+			t.Fatal("Unsafe curl destination accepted")
+		}
+	}
+	r, _ := http.NewRequest("GET", "https://api.ishosting.com/vps/list", nil)
+	r.Header.Set("X-Api-Token", "bad\nheader")
+	if _, err := (hostingCurlTransport{}).RoundTrip(r); err == nil {
+		t.Fatal("Header injection accepted")
+	}
+	var output hostingBuffer
+	if _, err := io.Copy(&output, io.LimitReader(strings.NewReader(strings.Repeat("x", (4<<20)+1)), (4<<20)+1)); err == nil {
+		t.Fatal("Provider output limit bypassed")
+	}
+	if output.buffer.Len() > 4<<20 {
+		t.Fatal("Provider output exceeded memory limit")
+	}
+}
