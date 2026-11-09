@@ -128,7 +128,7 @@ if fresh:
  assert candidates,'No valid TLS1.3/h2 REALITY target'
  name=min(candidates)[1]
  keys={k.strip().lower().replace(' ',''):v.strip() for k,v in (line.split(':',1) for line in run([str(release/'xray'),'x25519']).splitlines() if ':' in line)}
- private=keys.get('privatekey');public=keys.get('publickey') or keys.get('password');assert private and public
+ private=keys.get('privatekey');public=keys.get('publickey') or keys.get('password') or keys.get('password(publickey)');assert private and public
  uid=str(uuid.uuid4());short=secrets.token_hex(8)
  private_ranges=['0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8','169.254.0.0/16','172.16.0.0/12','192.168.0.0/16','224.0.0.0/4','240.0.0.0/4','::/128','::1/128','fc00::/7','fe80::/10','ff00::/8']
  cfg={'log':{'loglevel':'warning'},'inbounds':[{'tag':'ai-vless','listen':'0.0.0.0','port':443,'protocol':'vless','settings':{'clients':[{'id':uid,'flow':'xtls-rprx-vision'}],'decryption':'none'},'streamSettings':{'network':'raw','security':'reality','realitySettings':{'show':False,'target':name+':443','xver':0,'serverNames':[name],'privateKey':private,'shortIds':[short],'maxTimeDiff':60000}}}], 'outbounds':[{'tag':'internet','protocol':'freedom','settings':{'domainStrategy':'UseIPv4'}},{'tag':'blocked','protocol':'blackhole'}], 'routing':{'domainStrategy':'IPIfNonMatch','rules':[{'type':'field','ip':private_ranges,'outboundTag':'blocked'}]}, 'policy':{'levels':{'0':{'handshake':5,'connIdle':300,'uplinkOnly':3,'downlinkOnly':5}}}}
