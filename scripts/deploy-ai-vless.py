@@ -118,7 +118,7 @@ if fresh:
  try:s.bind(('0.0.0.0',443))
  finally:s.close()
  candidates=[]
- for name in ['www.microsoft.com','www.apple.com','www.cloudflare.com']:
+ for name in ['www.microsoft.com','www.cloudflare.com']:
   try:
    ctx=ssl.create_default_context();ctx.minimum_version=ssl.TLSVersion.TLSv1_3;ctx.set_alpn_protocols(['h2']);start=time.monotonic()
    with socket.create_connection((name,443),timeout=5) as raw:
@@ -133,8 +133,16 @@ if fresh:
  private_ranges=['0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8','169.254.0.0/16','172.16.0.0/12','192.168.0.0/16','224.0.0.0/4','240.0.0.0/4','::/128','::1/128','fc00::/7','fe80::/10','ff00::/8']
  cfg={'log':{'loglevel':'warning'},'inbounds':[{'tag':'ai-vless','listen':'0.0.0.0','port':443,'protocol':'vless','settings':{'clients':[{'id':uid,'flow':'xtls-rprx-vision'}],'decryption':'none'},'streamSettings':{'network':'raw','security':'reality','realitySettings':{'show':False,'target':name+':443','xver':0,'serverNames':[name],'privateKey':private,'shortIds':[short],'maxTimeDiff':60000}}}], 'outbounds':[{'tag':'internet','protocol':'freedom','settings':{'domainStrategy':'UseIPv4'}},{'tag':'blocked','protocol':'blackhole'}], 'routing':{'domainStrategy':'IPIfNonMatch','rules':[{'type':'field','ip':private_ranges,'outboundTag':'blocked'}]}, 'policy':{'levels':{'0':{'handshake':5,'connIdle':300,'uplinkOnly':3,'downlinkOnly':5}}}}
  config.write_text(json.dumps(cfg,indent=2));config.chmod(0o640)
- client.write_text(json.dumps({'server':'38.180.37.198','port':443,'uuid':uid,'servername':name,'public-key':public,'short-id':short,'client-fingerprint':'firefox'},indent=2));client.chmod(0o600)
+ client.write_text(json.dumps({'server':'38.180.37.198','port':443,'uuid':uid,'servername':name,'public-key':public,'short-id':short,'client-fingerprint':'chrome'},indent=2));client.chmod(0o600)
 assert config.exists() and client.exists()
+cfg=json.loads(config.read_text());cli=json.loads(client.read_text())
+if cli['servername']=='www.apple.com':
+ ctx=ssl.create_default_context();ctx.minimum_version=ssl.TLSVersion.TLSv1_3;ctx.set_alpn_protocols(['h2'])
+ with socket.create_connection(('www.microsoft.com',443),timeout=6) as raw:
+  with ctx.wrap_socket(raw,server_hostname='www.microsoft.com') as tls:assert tls.selected_alpn_protocol()=='h2'
+ cli['servername']='www.microsoft.com';cli['client-fingerprint']='chrome'
+ reality=cfg['inbounds'][0]['streamSettings']['realitySettings'];reality['target']='www.microsoft.com:443';reality['serverNames']=['www.microsoft.com']
+ config.write_text(json.dumps(cfg,indent=2));config.chmod(0o640);client.write_text(json.dumps(cli,indent=2));client.chmod(0o600)
 run([str(release/'xray'),'run','-test','-config',str(config)])
 if subprocess.run(['id','homenet-xray'],capture_output=True).returncode:run(['useradd','--system','--no-create-home','--shell','/usr/sbin/nologin','homenet-xray'])
 run(['chown','root:homenet-xray',str(state),str(config)]);state.chmod(0o750)
