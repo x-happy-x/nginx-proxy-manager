@@ -77,7 +77,9 @@ def apply(activate):
     os.umask(0o077)
     BASE.mkdir(mode=0o700, exist_ok=True)
     cfg = config()
-    (BASE / ('before-activate.yaml' if activate else 'before-prepare.yaml')).write_bytes(CONFIG.read_bytes())
+    backup = BASE / ('before-activate.yaml' if activate else 'before-prepare.yaml')
+    if not backup.exists():
+        backup.write_bytes(CONFIG.read_bytes())
     client = json.loads(CLIENT.read_text())
     candidate = transform(cfg, client, activate)
     assert transform(candidate, client, activate) == candidate
