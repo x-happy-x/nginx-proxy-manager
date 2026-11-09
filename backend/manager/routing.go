@@ -28,16 +28,18 @@ import (
  */
 
 type routingSettings struct {
-	Base        string   `json:"base"`
-	Bypass      []string `json:"bypass"`
-	Junk        []string `json:"junk"`
-	FastMS      int      `json:"fast_ms"`
-	EU          []string `json:"eu"`
-	AI          []string `json:"ai"`
-	Never       []string `json:"never"`
-	RUCheck     string   `json:"ru_check"`
-	Cascade     bool     `json:"cascade"`
-	AIServiceOK bool     `json:"ai_service_check"`
+	// Keep the configured manual AI selector without generating two extra AI groups.
+	SingleAIGroup bool     `json:"single_ai_group,omitempty"`
+	Base          string   `json:"base"`
+	Bypass        []string `json:"bypass"`
+	Junk          []string `json:"junk"`
+	FastMS        int      `json:"fast_ms"`
+	EU            []string `json:"eu"`
+	AI            []string `json:"ai"`
+	Never         []string `json:"never"`
+	RUCheck       string   `json:"ru_check"`
+	Cascade       bool     `json:"cascade"`
+	AIServiceOK   bool     `json:"ai_service_check"`
 	// Addresses that must always open (a tailnet's control server, its
 	// sign-in): each gets its own group DIRECT → RU → AUTO with a check of
 	// its own and a rule for its domain (NPM-41). Kept in routing.json on the
@@ -798,6 +800,20 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 
 	// groups: keep the ones HomeNet does not generate
 	oldGroups := yamlGet(root, "proxy-groups")
+	var manualAI *yaml.Node
+	if s.SingleAIGroup {
+		if oldGroups != nil {
+			for _, g := range oldGroups.Content {
+				if scalar(mapGet(g, "name")) == "ИИ" && scalar(mapGet(g, "type")) == "select" {
+					manualAI = g
+					break
+				}
+			}
+		}
+		if manualAI == nil {
+			return nil, errors.New("Для одной группы ИИ сначала настройте ручную группу «ИИ»")
+		}
+	}
 	kept := []*yaml.Node{}
 	keptNames := map[string]bool{}
 	usedProviders := map[string]bool{}
@@ -843,10 +859,17 @@ func buildRouting(original []byte, s routingSettings) ([]byte, error) {
 	head, tail := routingGroups(s, reserve, ruURL, nil, keptNames["OLCRTC"], keptNames["Tailscale"])
 	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 	for _, g := range head {
+		if manualAI != nil && (g["name"] == "ИИ прямые" || g["name"] == "ИИ обходы") {
+			continue
+		}
 		seq.Content = append(seq.Content, orderedNode(g))
 	}
 	seq.Content = append(seq.Content, kept...)
 	for _, g := range tail {
+		if manualAI != nil && g["name"] == "ИИ" {
+			seq.Content = append(seq.Content, manualAI)
+			continue
+		}
 		seq.Content = append(seq.Content, orderedNode(g))
 	}
 	seq.Content[0].HeadComment = routingMarker
