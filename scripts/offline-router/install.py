@@ -173,7 +173,9 @@ def configure(target, source, lan, port):
     offline=at('/opt/etc/homenet/offline');offline.mkdir(parents=True,exist_ok=True)
     write_json(offline/'gateway.json',{'secret':secrets.token_hex(32),
         'account_api':'http://127.0.0.1:63417','account_url':'https://'+host,
-        'emergency_url':'https://'+host+'/_gate/emergency','router_url':'http://127.0.0.1:80',
+        # Native Netcraze HTTP rejects the loopback Host with 403; its LAN
+        # origin presents the /auth challenge even for requests from the router.
+        'emergency_url':'https://'+host+'/_gate/emergency','router_url':'http://'+lan+':80',
         'hosts':{host:{'app':'homenet','min_role':'admin'}}})
     write_json(offline/'no-extra-hosts.json',{'hosts':{}})
     write_json(offline/'front.json',{'listen':host,'host':host,'core':'http://127.0.0.1:18490',

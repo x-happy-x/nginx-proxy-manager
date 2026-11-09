@@ -108,6 +108,8 @@ class TransferTest(unittest.TestCase):
             put(bundle,'payload/opt/share/homenet/core/releases/test/core','binary')
             put(bundle,'meta/registry.json','{"schema":1,"items":[]}');manifest(bundle)
             backup=installer.install(bundle,target,'192.0.2.1',63412,sandbox=True)
+            gateway=json.loads((target/'opt/etc/homenet/offline/gateway.json').read_text())
+            self.assertEqual(gateway['router_url'],'http://192.0.2.1:80')
             self.assertFalse((target/'opt/share/zashboard').exists())
             self.assertFalse((target/'opt/etc/init.d/S99nginx-manager-lite').exists())
             self.assertEqual((target/'opt/root/.ssh/authorized_keys').read_text(),'target-key\nsource-key\n')
