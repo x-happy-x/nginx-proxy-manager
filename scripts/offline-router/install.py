@@ -24,9 +24,9 @@ ROOTS = ['opt/etc/mihomo', 'opt/etc/xkeen', 'opt/sbin/mihomo', 'opt/sbin/yq', 'o
          'opt/etc/init.d/S04homenet-clock', 'opt/etc/init.d/S05xkeen', 'opt/etc/init.d/S99homenet-offline',
          'opt/etc/ndm/netfilter.d/proxy.sh', 'opt/etc/ndm/netfilter.d/01-mihomo-dns1053.sh',
          'opt/etc/ndm/schedule.d/00-xkeen-hotspot-sync.sh',
-         'opt/share/homenet/core', 'opt/share/homenet/integrations/vpn',
+         'opt/share/homenet/core', 'opt/share/homenet/integrations/vpn', 'opt/share/homenet/integrations/network',
          'opt/share/homenet/offline-runtime', 'opt/share/homenet/offline',
-         'opt/etc/homenet/core', 'opt/etc/homenet/mihomo', 'opt/etc/homenet/offline',
+         'opt/etc/homenet/core', 'opt/etc/homenet/mihomo', 'opt/etc/homenet/network', 'opt/etc/homenet/offline',
          'opt/etc/homenet/nginx/config/runtime.env', 'opt/etc/homenet/nginx/routes.yml',
          'opt/etc/homenet/access.json', 'opt/root/.ssh',
          'opt/etc/nginx/sites-enabled/zashboard.local.conf']
