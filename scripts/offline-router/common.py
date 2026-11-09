@@ -5,6 +5,22 @@ import posixpath
 import re
 
 
+def runtime_binary_name(name, actual):
+    # iproute2 treats an executable called ip-FOO as the command `ip FOO`.
+    # Entware's ip-full therefore needs the basename `ip` under our loader.
+    return 'ip' if name == 'ip' else posixpath.basename(actual)
+
+
+def transfer_integrations(registry):
+    selected = []
+    for name in ('vpn', 'network'):
+        item = next((i for i in registry['items'] if i['manifest']['id'] == name and i.get('enabled')), None)
+        if item is None:
+            raise RuntimeError('Required source integration is not enabled: ' + name)
+        selected.append(copy.deepcopy(item))
+    return {'schema': 1, 'items': selected}
+
+
 def without_tail_state(value, names):
     """Drop access/routing entries naming a removed node, retaining OLCRTC data."""
     if isinstance(value, str):

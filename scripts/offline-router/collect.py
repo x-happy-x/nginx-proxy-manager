@@ -42,14 +42,17 @@ def yq(path):
     return json.loads(subprocess.check_output(['/opt/sbin/yq', '-o=json', '.', path], stderr=subprocess.PIPE))
 
 
-registry = json.load(open('/opt/etc/homenet/core/registry.json'))
+registry = transfer_integrations(json.load(open('/opt/etc/homenet/core/registry.json')))
 vpn = next(i for i in registry['items'] if i['manifest']['id'] == 'vpn')
+network = next(i for i in registry['items'] if i['manifest']['id'] == 'network' and i.get('enabled'))
 core_root = os.path.realpath('/opt/share/homenet/core/current')
 core_version = os.path.basename(core_root)
 vpn_root = '/opt/share/homenet/integrations/vpn/' + vpn['manifest']['version']
 tree(core_root, 'payload/opt/share/homenet/core/releases/'+core_version)
 tree(vpn_root, 'payload'+vpn_root)
-emit('meta/registry.json', json.dumps({'schema':1,'items':[vpn]}).encode())
+network_root = '/opt/share/homenet/integrations/network/' + network['manifest']['version']
+tree(network_root, 'payload'+network_root)
+emit('meta/registry.json', json.dumps(registry).encode())
 cfg, removed = without_tail(yq('/opt/etc/mihomo/config.yaml'))
 for p in cfg.get('proxy-providers', {}).values():
     if p.get('path'):
@@ -111,11 +114,11 @@ if os.path.isdir('/opt/lib/iptables'):tree('/opt/lib/iptables','payload'+runtime
 tree('/opt/lib/python3.13','payload'+runtime+'/python/lib/python3.13',
      lambda n:n in ('site-packages','test','tests','ensurepip','idlelib','tkinter'))
 tools={}
-for name in ('python3','curl','jq','grep','ipset','ip','yq','tar','nohup','iptables','ip6tables','iptables-save','iptables-restore'):
+for name in ('python3','curl','jq','grep','ipset','ip','yq','tar','nohup','iptables','ip6tables','iptables-save','iptables-restore','ip6tables-save','ip6tables-restore'):
     src=shutil.which(name,path='/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin')
     if not src or not os.path.realpath(src).startswith('/opt/'):
         continue
-    actual=os.path.realpath(src);target=os.path.basename(actual)
+    actual=os.path.realpath(src);target=runtime_binary_name(name,actual)
     file(actual,'payload'+runtime+'/libexec/'+target)
     tools[name]={'binary':target,'applet':name if target in ('busybox','poorbox','xtables-multi','xtables-nft-multi','xtables-legacy-multi') else ''}
 busy='/opt/bin/busybox'
@@ -138,6 +141,7 @@ source_mac=open('/sys/class/net/br0/address').read().strip()
 version=subprocess.check_output(['/opt/sbin/mihomo','-v']).decode().splitlines()[0]
 metadata={'schema':1,'created':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'arch':'arm64','kernel':platform.release(),
           'source_mac':source_mac,'core_version':core_version,'vpn_version':vpn['manifest']['version'],
+          'network_version':network['manifest']['version'],
           'mihomo_version':version,'removed_tail_names':removed,'proxy_providers':len(cfg.get('proxy-providers',{})),
           'xkeen_sha256':hashlib.sha256(open('/opt/sbin/xkeen','rb').read()).hexdigest(),
           'xkeen_version':subprocess.check_output(['/opt/bin/opkg','status','xkeen']).decode().split('Version: ',1)[1].splitlines()[0],

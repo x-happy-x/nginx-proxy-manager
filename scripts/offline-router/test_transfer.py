@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from common import without_tail, without_tail_state, provider_path, runtime_script
+from common import without_tail, without_tail_state, provider_path, runtime_script, runtime_binary_name, transfer_integrations
 
 spec=importlib.util.spec_from_file_location('installer',Path(__file__).with_name('install.py'))
 installer=importlib.util.module_from_spec(spec);spec.loader.exec_module(installer)
@@ -20,6 +20,18 @@ def manifest(bundle):
 
 
 class TransferTest(unittest.TestCase):
+    def test_vpn_transfer_includes_required_analyzer_integration(self):
+        source={'items':[{'manifest':{'id':id},'enabled':True} for id in ('vpn','proxy','network')]}
+        exported=transfer_integrations(source)
+        self.assertEqual([i['manifest']['id'] for i in exported['items']],['vpn','network'])
+        source['items'][2]['enabled']=False
+        self.assertTrue(exported['items'][1]['enabled'])
+        with self.assertRaisesRegex(RuntimeError,'network'):transfer_integrations(source)
+
+    def test_iproute_binary_keeps_plain_ip_basename(self):
+        self.assertEqual(runtime_binary_name('ip','/opt/sbin/ip-full'),'ip')
+        self.assertEqual(runtime_binary_name('iptables','/opt/sbin/xtables-multi'),'xtables-multi')
+
     def test_controller_check_waits_for_xkeen_background_start(self):
         response=mock.MagicMock();response.__enter__.return_value.status=200
         with mock.patch.object(installer.urllib.request,'urlopen',side_effect=[OSError('not listening yet'),response]) as opened, \
