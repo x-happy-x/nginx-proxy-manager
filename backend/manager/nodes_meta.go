@@ -18,6 +18,7 @@ import (
 
 type nodeMeta struct {
 	Provider string `json:"provider"`
+	Source   string `json:"source,omitempty"`
 	Type     string `json:"type"`
 	Server   string `json:"server"`
 	Port     int    `json:"port,omitempty"`
@@ -36,7 +37,7 @@ func nodeEntry(n *yaml.Node, provider, prefix string) (string, nodeMeta, bool) {
 	if name == "" || server == "" {
 		return "", nodeMeta{}, false
 	}
-	m := nodeMeta{Provider: provider, Type: scalar(mapGet(n, "type")), Server: server, Network: scalar(mapGet(n, "network"))}
+	m := nodeMeta{Provider: provider, Source: strings.TrimRight(strings.TrimSpace(prefix), " ·|"), Type: scalar(mapGet(n, "type")), Server: server, Network: scalar(mapGet(n, "network"))}
 	m.Port, _ = strconv.Atoi(scalar(mapGet(n, "port")))
 	for _, key := range []string{"servername", "sni"} {
 		if v := scalar(mapGet(n, key)); v != "" {

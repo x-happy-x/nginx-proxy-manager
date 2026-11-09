@@ -7,10 +7,11 @@ import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeM
 import { useMihomo } from "./context";
 import { lastDelay } from "./shared";
 import { isBool, useStored } from "./NodeTiles";
+import { CategorySelect, NodeCategories, useNodeCategory, type NodeCategory } from "./NodeCategories";
 
 /*
- * VPN → «Узлы» (NPM-56): one page, four ways to look at the same nodes —
- * group cards with a dot per node, tiles, a dense list and nodes by server —
+ * VPN → «Узлы» (NPM-56): route cards and source/country categories, with cards or a dense list
+ * for nodes and a separate diagnostic view by server address —
  * with filters by group, «hide silent», sort and search, and a side panel
  * for the chosen group (pin a node) or node (history, server, SNI, country).
  * Design: https://claude.ai/artifact/8w7GwGhKrK96ePPxL166SG
@@ -41,10 +42,9 @@ const ICON: Record<View, string> = {
   servers: "M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01",
 };
 const VIEWS: Array<[View, string]> = [
-  ["groups", "Группы"],
-  ["tiles", "Плитки"],
-  ["list", "Список"],
-  ["servers", "По серверам"],
+  ["groups", "Маршруты"],
+  ["tiles", "Узлы"],
+  ["servers", "По адресам"],
 ];
 
 export type NodeRow = {
@@ -164,7 +164,8 @@ export function Nodes({
 }) {
   const { act } = useMihomo();
   const [flagMode] = useFlagMode();
-  const [view, setView] = useStored<View>("homenet.nodes.view", "groups", (v): v is View => VIEWS.some(([k]) => k === v));
+  const [view, setView] = useStored<View>("homenet.nodes.view", "groups", (v): v is View => v === "list" || VIEWS.some(([k]) => k === v));
+  const [category, setCategory] = useNodeCategory();
   const [sort, setSort] = useStored<Sort>("homenet.nodes.sort", "delay", (v): v is Sort => v === "delay" || v === "name");
   const [hideSilent, setHideSilent] = useStored<boolean>("homenet.mihomo.hideDead", false, isBool);
   const [grp, setGrp] = useState("");
@@ -199,7 +200,6 @@ export function Nodes({
   };
   // groups of nodes first: they are what the chips filter by
   const nodeGroups = groups.filter((g) => (g.all || []).filter((n) => rows.has(n)).length >= Math.max(2, (g.all || []).length / 2));
-  const chips = nodeGroups.slice(0, 10);
   const member = useMemo(() => {
     const m = new Map<string, string[]>();
     groups.forEach((g) => (g.all || []).forEach((n) => m.set(n, [...(m.get(n) || []), g.name])));
@@ -211,7 +211,7 @@ export function Nodes({
   const list = [...rows.values()]
     .filter((r) => !grp || (proxies[grp]?.all || []).includes(r.name))
     .filter((r) => !hideSilent || (r.state !== "silent" && r.state !== "reset"))
-    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""}`.toLowerCase().includes(query))
+    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.country ? countryName(r.country) : ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""} ${r.meta?.source || ""}`.toLowerCase().includes(query))
     .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name, "ru") : order[a.state] - order[b.state] || (a.delay || 9e9) - (b.delay || 9e9)));
   const alive = [...rows.values()].filter((r) => r.state === "ok" || r.state === "slow").length;
 
@@ -261,8 +261,11 @@ export function Nodes({
     setBusy("");
   };
 
-  const shownGroups = grp ? groups.filter((g) => g.name === grp) : groups;
-  const selGroup = sel?.kind === "group" ? proxies[sel.name] : sel ? undefined : grp ? proxies[grp] : shownGroups[0];
+  const technical = new Set(["AUTO", "ALL", "GLOBAL", "Прямые EU", "Прямые мир", "Обходы", "Каскад", "Резерв", "QUIC"]);
+  const shownGroups = (grp ? groups.filter((g) => g.name === grp) : groups).filter(g => !query || `${g.name} ${(g.all || []).join(" ")}`.toLowerCase().includes(query));
+  const primaryGroups = shownGroups.filter(g => !technical.has(g.name));
+  const extraGroups = shownGroups.filter(g => technical.has(g.name));
+  const selGroup = sel?.kind === "group" ? proxies[sel.name] : sel ? undefined : grp ? proxies[grp] : primaryGroups[0] || shownGroups[0];
   const selNode = sel?.kind === "node" ? rows.get(sel.name) : undefined;
 
   // nodes by server: the subnet decides, nodes of one server share their fate
@@ -278,12 +281,45 @@ export function Nodes({
   const openNode = (name: string) => setSel({ kind: "node", name });
   const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
 
+  const groupCard = (g: MProxy) => {
+    const members = (g.all || []).filter((n) => !hideSilent || !["silent", "reset"].includes(stateOf(n)));
+    const ok = (g.all || []).filter((n) => ["ok", "slow"].includes(stateOf(n))).length;
+    const l = leaf(g.name);
+    const on = selGroup?.name === g.name && !selNode;
+    return (
+      <button key={g.name} type="button" className={`nx-gcard${on ? " is-sel" : ""}`} aria-pressed={on} onClick={() => setSel({ kind: "group", name: g.name })}>
+        <span className="nx-gcard-top">
+          <b className="truncate">{g.name}</b>
+          <span className="nx-count">
+            <span className="nx-ok">{ok}</span> / {(g.all || []).length}
+          </span>
+        </span>
+        <span className="nx-gcard-type">
+          {TYPE_LABEL[g.type] || g.type}
+          {g.fixed ? " · закреплён" : ""}
+        </span>
+        <span className="nx-dots" aria-hidden="true">
+          {members.slice(0, 120).map((n) => (
+            <i key={n} className={`nx-dot nx-${stateOf(n)}`} title={`${n}: ${ST_TEXT[stateOf(n)]}`} />
+          ))}
+          {members.length > 120 ? <small>+{members.length - 120}</small> : null}
+        </span>
+        <span className="nx-gcard-now">
+          <span className="truncate">
+            <PathChain path={pathOf(g.name, proxies).slice(1)} proxies={proxies} />
+          </span>
+          <span className="mono">{ms(rows.get(l)?.delay ?? lastDelay(proxies[l], g.testUrl))}</span>
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="nx">
       <div className="nx-toolbar">
         <div className="nx-views" role="group" aria-label="Вид">
           {VIEWS.map(([k, label]) => (
-            <button key={k} type="button" className={view === k ? "is-on" : ""} aria-pressed={view === k} onClick={() => setView(k)}>
+            <button key={k} type="button" className={view === k || k === "tiles" && view === "list" ? "is-on" : ""} aria-pressed={view === k || k === "tiles" && view === "list"} onClick={() => setView(k)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d={ICON[k]} />
               </svg>
@@ -294,30 +330,32 @@ export function Nodes({
         <label className="sr-only" htmlFor="nx-q">
           Найти узел
         </label>
-        <input id="nx-q" className="input nx-search" placeholder="Узел, страна, сервер, SNI" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input id="nx-q" className="input nx-search" placeholder="Узел, подписка, страна, сервер" value={q} onChange={(e) => setQ(e.target.value)} />
         <button type="button" className="btn btn-primary" disabled={busy === "all"} onClick={() => void checkAll()}>
           <Icon name="bolt" size={14} /> {busy === "all" ? "Проверяю…" : "Проверить все"}
         </button>
       </div>
       <div className="nx-filters">
-        <div className="vn-chips nx-chiprow" role="group" aria-label="Группа">
-          <button type="button" className={`vn-chip${!grp ? " is-on" : ""}`} aria-pressed={!grp} onClick={() => setGrp("")}>
-            Все <span className="vs-count">{number(rows.size)}</span>
-          </button>
-          {chips.map((g) => (
-            <button key={g.name} type="button" className={`vn-chip${grp === g.name ? " is-on" : ""}`} aria-pressed={grp === g.name} onClick={() => (setGrp(grp === g.name ? "" : g.name), setSel(null))}>
-              {g.name} <span className="vs-count">{(g.all || []).length}</span>
-            </button>
-          ))}
-        </div>
+        <label className="nx-filter-select">Маршрут
+          <select className="input input-sm" value={grp} onChange={e => { setGrp(e.target.value); setSel(null); }}>
+            <option value="">Все узлы · {rows.size}</option>
+            {groups.map(g => <option key={g.name} value={g.name}>{g.name} · {(g.all || []).length}</option>)}
+          </select>
+        </label>
+        {view === "tiles" || view === "list" ? <>
+          <CategorySelect value={category} onChange={setCategory} id="nx-category" />
+          <label className="nx-filter-select">Вид узлов
+            <select className="input input-sm" value={view} onChange={e => setView(e.target.value as View)}><option value="tiles">Карточки</option><option value="list">Таблица</option></select>
+          </label>
+        </> : null}
         <div className="vn-chips">
           <button type="button" className={`vn-chip${hideSilent ? " is-on" : ""}`} aria-pressed={hideSilent} onClick={() => setHideSilent(!hideSilent)}>
             Скрыть молчащие
           </button>
-          <button type="button" className="vn-chip" onClick={() => setSort(sort === "delay" ? "name" : "delay")}>
+          {view !== "groups" ? <button type="button" className="vn-chip" onClick={() => setSort(sort === "delay" ? "name" : "delay")}>
             {sort === "delay" ? "Сначала быстрые" : "По имени"}
-          </button>
-          {orderButton}
+          </button> : null}
+          {view === "groups" ? orderButton : null}
         </div>
       </div>
       <p className="nx-summary">
@@ -330,44 +368,17 @@ export function Nodes({
         <div className="nx-main">
           {view === "groups" ? (
             <div className="nx-groups">
-              {shownGroups.map((g) => {
-                const members = (g.all || []).filter((n) => !hideSilent || !["silent", "reset"].includes(stateOf(n)));
-                const ok = (g.all || []).filter((n) => ["ok", "slow"].includes(stateOf(n))).length;
-                const l = leaf(g.name);
-                const on = selGroup?.name === g.name && !selNode;
-                return (
-                  <button key={g.name} type="button" className={`nx-gcard${on ? " is-sel" : ""}`} aria-pressed={on} onClick={() => setSel({ kind: "group", name: g.name })}>
-                    <span className="nx-gcard-top">
-                      <b className="truncate">{g.name}</b>
-                      <span className="nx-count">
-                        <span className="nx-ok">{ok}</span> / {(g.all || []).length}
-                      </span>
-                    </span>
-                    <span className="nx-gcard-type">
-                      {TYPE_LABEL[g.type] || g.type}
-                      {g.fixed ? " · закреплён" : ""}
-                    </span>
-                    <span className="nx-dots" aria-hidden="true">
-                      {members.slice(0, 120).map((n) => (
-                        <i key={n} className={`nx-dot nx-${stateOf(n)}`} title={`${n}: ${ST_TEXT[stateOf(n)]}`} />
-                      ))}
-                      {members.length > 120 ? <small>+{members.length - 120}</small> : null}
-                    </span>
-                    <span className="nx-gcard-now">
-                      <span className="truncate">
-                        <PathChain path={pathOf(g.name, proxies).slice(1)} proxies={proxies} />
-                      </span>
-                      <span className="mono">{ms(rows.get(l)?.delay ?? lastDelay(proxies[l], g.testUrl))}</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {primaryGroups.map(groupCard)}
+              {extraGroups.length ? <details className="nx-technical" open={query || grp || sel?.kind === "group" && technical.has(sel.name) ? true : undefined}>
+                <summary>Подключение и диагностика <span className="mh-muted">{extraGroups.length}</span></summary>
+                <div className="nx-groups">{extraGroups.map(groupCard)}</div>
+              </details> : null}
             </div>
           ) : null}
 
-          {view === "tiles" ? (
+          {view === "tiles" || view === "list" ? <NodeCategories names={list.map(r => r.name)} rows={rows} by={category} scope="nodes" search={query} active={selNode?.name} stateOf={stateOf} limit={60} render={names => view === "tiles" ? (
             <div className="nx-tiles">
-              {list.slice(0, 400).map((r) => (
+              {names.map(name => rows.get(name)!).map((r) => (
                 <button key={r.name} type="button" className={`nx-tile nx-t-${r.state}${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)} title={r.note}>
                   <span className="nx-tile-top">
                     <b className="nx-tile-name">
@@ -380,11 +391,8 @@ export function Nodes({
                   </span>
                 </button>
               ))}
-              {list.length > 400 ? <p className="mh-muted">Показаны первые 400 — уточните поиск или выберите группу.</p> : null}
             </div>
-          ) : null}
-
-          {view === "list" ? (
+          ) : (
             <div className="nx-table" role="table" aria-label="Узлы">
               <div className="nx-row nx-head" role="row">
                 <span role="columnheader">Узел</span>
@@ -400,14 +408,14 @@ export function Nodes({
                   Состояние
                 </span>
               </div>
-              {list.slice(0, 500).map((r) => (
+              {names.map(name => rows.get(name)!).map((r) => (
                 <button key={r.name} type="button" role="row" className={`nx-row${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)}>
                   <span className="nx-name" role="cell">
                     <i className={`nx-dot nx-${r.state}`} />
                     <NodeName name={r.name} cc={nodeCC(r.name, r.country, flagMode)} />
                   </span>
                   <span role="cell" className="nx-hm truncate">
-                    {r.provider || "свой узел"}
+                    {r.meta?.source || r.provider || "свой узел"}
                   </span>
                   <span role="cell" className="nx-exit">
                     {r.country ? <Flag cc={r.country} /> : null} {r.country ? countryName(r.country) : "—"}
@@ -424,7 +432,7 @@ export function Nodes({
                 </button>
               ))}
             </div>
-          ) : null}
+          )} /> : null}
 
           {view === "servers" ? (
             <div className="nx-servers">
@@ -489,6 +497,8 @@ export function Nodes({
               proxies={proxies}
               onGroup={(n) => setSel({ kind: "group", name: n })}
               rows={rows}
+              category={category}
+              onCategory={setCategory}
               stateOf={stateOf}
               leaf={leaf(selGroup.name)}
               delayOf={(n) => rows.get(n)?.delay ?? rows.get(leaf(n))?.delay ?? lastDelay(proxies[leaf(n)])}
@@ -514,6 +524,8 @@ function GroupPanel({
   proxies,
   onGroup,
   rows,
+  category,
+  onCategory,
   stateOf,
   leaf,
   delayOf,
@@ -529,6 +541,8 @@ function GroupPanel({
   proxies: Record<string, MProxy>;
   onGroup: (n: string) => void;
   rows: Map<string, NodeRow>;
+  category: NodeCategory;
+  onCategory: (category: NodeCategory) => void;
   stateOf: (n: string) => NodeState;
   leaf: string;
   delayOf: (n: string) => number | null;
@@ -550,7 +564,6 @@ function GroupPanel({
   // the point, so it is shown as it is, numbered; url-test by speed
   const ordered = g.type === "Fallback";
   const [mq, setMq] = useState("");
-  const [more, setMore] = useState(false);
   const isGroup = (n: string) => !!proxies[n] && GROUP_TYPES.has(proxies[n].type);
   type MemberSort = "order" | "delay" | "name";
   const [memberSort, setMemberSort] = useStored<MemberSort>("homenet.nodes.members.sort", "order", (v): v is MemberSort => v === "order" || v === "delay" || v === "name");
@@ -564,18 +577,15 @@ function GroupPanel({
   if (memberSort === "delay") sorted.sort((a, b) => delayRank(a) - delayRank(b) || priority.get(a)! - priority.get(b)!);
   if (memberSort === "name") sorted.sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
   const mquery = mq.trim().toLowerCase();
-  const members = sorted.filter((n) => (!mquery || n.toLowerCase().includes(mquery)) && (!aliveOnly || ["ok", "slow"].includes(stateOf(n))));
-  const shown = more || mquery ? members : members.slice(0, 15);
+  const members = sorted.filter((n) => (!mquery || `${n} ${rows.get(n)?.meta?.source || ""} ${rows.get(n)?.country || ""} ${rows.get(n)?.country ? countryName(rows.get(n)!.country!) : ""}`.toLowerCase().includes(mquery)) && (!aliveOnly || ["ok", "slow"].includes(stateOf(n))));
   const chosen = manual ? g.now : g.fixed;
   useEffect(() => {
     setMq("");
-    setMore(false);
   }, [g.name]);
-  useEffect(() => setMore(false), [memberSort, aliveOnly, mq]);
   return (
     <div className="nx-pan">
       <div className="nx-pan-head">
-        <span className="vn-eyebrow">Группа · {TYPE_LABEL[g.type] || g.type}</span>
+        <span className="vn-eyebrow">Маршрут · {TYPE_LABEL[g.type] || g.type}</span>
         <b>{g.name}</b>
         <PathChain path={pathOf(g.name, proxies)} proxies={proxies} onGroup={onGroup} onNode={onOpen} label="Путь группы сейчас" />
       </div>
@@ -614,6 +624,7 @@ function GroupPanel({
         </>
       ) : null}
       <div className="nx-member-tools">
+        <CategorySelect value={category} onChange={onCategory} id="nx-member-category" />
         <label className="sr-only" htmlFor="nx-member-sort">Сортировка участников</label>
         <select id="nx-member-sort" className="input input-sm" value={memberSort} onChange={e => setMemberSort(e.target.value as MemberSort)}>
           <option value="order">Порядок группы</option><option value="delay">По пингу: быстрые первыми</option><option value="name">По имени</option>
@@ -621,9 +632,9 @@ function GroupPanel({
         <label className="nx-member-alive"><input type="checkbox" checked={aliveOnly} onChange={e => setAliveOnly(e.target.checked)} />Только отвечающие</label>
         <small className="mh-muted" aria-live="polite">Найдено {members.length} из {all.length}</small>
       </div>
-      {ordered && memberSort !== "order" ? <small className="mh-muted">Номера — приоритет группы. Сортировка меняет только список.</small> : null}
-      <div className="nx-top">
-        {shown.map((n) => {
+      {ordered && (memberSort !== "order" || category !== "none") ? <small className="mh-muted">Номера — приоритет группы. Сортировка меняет только список.</small> : null}
+      <NodeCategories names={members} rows={rows} by={category} scope={`group:${g.name}`} search={mquery} active={g.now} stateOf={stateOf} limit={15} render={names => <div className="nx-top">
+        {names.map((n) => {
           const on = chosen === n;
           const grp = isGroup(n);
           const sub = leafOf(n);
@@ -648,13 +659,8 @@ function GroupPanel({
             </div>
           );
         })}
-        {!members.length ? <p className="mh-muted">{all.length ? "Нет подходящих участников. Измените поиск или фильтр." : "В группе нет участников."}</p> : null}
-      </div>
-      {members.length > shown.length ? (
-        <button type="button" className="btn btn-sm" onClick={() => setMore(true)}>
-          Показать все {members.length}
-        </button>
-      ) : null}
+      </div>} />
+      {!members.length ? <p className="mh-muted">{all.length ? "Нет подходящих участников. Измените поиск или фильтр." : "В группе нет участников."}</p> : null}
       <small className="mh-muted">{manual ? "Ручная группа: трафик идёт через выбранного участника, пока не выберете другого." : g.fixed ? "Закрепление снимется само, если узел перестанет отвечать." : "Без закрепления группа сама берёт подходящий узел."}</small>
       <div className="nx-actions">
         <button type="button" className="btn btn-sm" disabled={busy === `g:${g.name}`} onClick={onTest}>
@@ -697,7 +703,7 @@ function NodePanel({
     <div className="nx-pan">
       <div className="nx-pan-head nx-pan-head-row">
         <span>
-          <span className="vn-eyebrow">Узел{r.provider ? ` · ${r.provider}` : ""}</span>
+          <span className="vn-eyebrow">Узел{r.provider ? ` · ${r.meta?.source || r.provider}` : ""}</span>
           <b>
             <NodeName name={r.name} />
           </b>

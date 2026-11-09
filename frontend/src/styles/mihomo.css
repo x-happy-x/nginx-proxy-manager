@@ -3457,3 +3457,31 @@ button.vr-gchip { cursor: pointer; }
 .nx-member-tools select { width: 100%; min-width: 0; }
 .nx-member-alive { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
 .nx-member-alive input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+
+/* Node categories are presentation only; route order stays in Mihomo. */
+.nx-filters { justify-content: flex-start; }
+.nx-filter-select { white-space: nowrap; display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; min-width: 0; }
+.nx-filter-select select { min-width: 0; max-width: 260px; }
+.nx-member-tools .nx-filter-select { display: grid; gap: 5px; }
+.nx-member-tools .nx-filter-select select { max-width: none; }
+.nx-categories { display: grid; gap: 10px; min-width: 0; }
+.nx-category { min-width: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.nx-category-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px; border: 0; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.nx-category-head:hover { background: var(--surface-hover, var(--surface)); }
+.nx-category-head b { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.nx-category-head small { color: var(--text-2); white-space: nowrap; font-size: 12px; }
+.nx-category-current { color: var(--success); font-size: 11px; }
+.nx-category-body { padding: 10px; display: grid; gap: 8px; min-width: 0; }
+.nx-category-more { justify-self: start; }
+.nx-panel .nx-category-body { padding: 4px; }
+.nx-panel .nx-top-row { flex-wrap: wrap; }
+.nx-panel .nx-top-name { flex-basis: 100%; padding: 6px 4px; }
+.nx-panel .nx-top-row > .btn, .nx-panel .nx-top-row > .vn-pill { margin: 0 4px 4px auto; }
+.nx-technical { grid-column: 1 / -1; min-width: 0; }
+.nx-technical > summary { cursor: pointer; padding: 12px 0; color: var(--text-2); font-size: 13px; }
+.nx-technical > summary span { margin-left: 6px; }
+@media (max-width: 760px) {
+  .nx-filters .nx-filter-select { display: grid; grid-template-columns: 100px minmax(0, 1fr); }
+  .nx-filter-select select { width: 100%; max-width: none; }
+  .nx-member-tools .nx-filter-select { grid-template-columns: minmax(0, 1fr); }
+}

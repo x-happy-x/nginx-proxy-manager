@@ -269,7 +269,7 @@ export type ServiceState = {
 };
 
 /** Where a node connects, from the subscription files (NPM-48). */
-export type NodeMeta = { provider: string; type: string; server: string; port?: number; sni?: string; network?: string };
+export type NodeMeta = { provider: string; source?: string; type: string; server: string; port?: number; sni?: string; network?: string };
 
 export type ServiceDef = { id: string; name: string; what: string; url?: string; group: string; kind?: string };
 /** The list people edit (NPM-49): own services, hidden built-ins, the order. */
