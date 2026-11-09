@@ -28,6 +28,17 @@ def router(command, data=None):
     return p.stdout
 
 
+def vps_detail():
+    code = r"""
+import json,subprocess,sys
+k=next(a['token'] for a in json.load(open('/opt/etc/homenet/hostings/accounts.json')) if a['provider']=='ishosting')
+config='url = "https://api.ishosting.com/vps/482492"\nheader = '+json.dumps('X-Api-Token: '+k)+'\nheader = "User-Agent: HomeNet-hostings/1.0"\nheader = "Accept: application/json"\n'
+p=subprocess.run(['/opt/bin/curl','--disable','--silent','--show-error','--proto','=https','--noproxy','*','--max-time','25','--config','-'],input=config.encode(),capture_output=True,check=True)
+sys.stdout.buffer.write(p.stdout)
+"""
+    return json.loads(router('/opt/bin/python3 -', code.encode()))
+
+
 class Pinned(paramiko.MissingHostKeyPolicy):
     def missing_host_key(self, client, hostname, key):
         if base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=') != PIN:
@@ -43,11 +54,7 @@ def main():
         return
     branch = subprocess.check_output(['git', '-C', str(ROOT), '-c', 'safe.directory=' + ROOT.as_posix(), 'branch', '--show-current'], text=True).strip()
     assert branch == 'master', 'Deploy only from merged master'
-    accounts = json.loads(router('cat /opt/etc/homenet/hostings/accounts.json'))
-    token = next(x['token'] for x in accounts if x['provider'] == 'ishosting')
-    req = urllib.request.Request('https://api.ishosting.com/vps/482492', headers={'X-Api-Token': token, 'Accept': 'application/json', 'User-Agent': 'HomeNet-hostings/1.0'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        detail = json.load(r)
+    detail = vps_detail()
     assert detail['network']['public_ip'] == HOST
     access = detail['access']['ssh']
     c = paramiko.SSHClient()
@@ -70,17 +77,21 @@ def main():
         folder = '/opt/homenet-xray/releases/' + VERSION
         exists = run('test -x ' + folder + '/xray && echo yes || true').strip() == b'yes'
         if not exists:
+            print('Downloading verified official Xray release', flush=True)
             req = urllib.request.Request('https://github.com/XTLS/Xray-core/releases/download/v' + VERSION + '/Xray-linux-64.zip', headers={'User-Agent': 'HomeNet-deployment/1.0'})
             with urllib.request.urlopen(req, timeout=90) as r:
                 archive = r.read(40 << 20)
             assert hashlib.sha256(archive).hexdigest() == DIGEST, 'Official asset digest mismatch'
             with zipfile.ZipFile(io.BytesIO(archive)) as z:
                 binary = z.read('xray')
+            print('Uploading Xray binary', flush=True)
             run('mkdir -p ' + folder)
             with c.open_sftp() as s:
                 with s.file(folder + '/xray', 'wb') as f:
+                    f.set_pipelined(True)
                     f.write(binary)
                 s.chmod(folder + '/xray', 0o755)
+        print('Validating configuration and starting isolated service', flush=True)
         result = json.loads(run('python3 -', REMOTE.replace('__VERSION__', VERSION), timeout=100))
         with c.open_sftp() as s:
             with s.file('/etc/homenet-xray/client.json', 'r') as f:
