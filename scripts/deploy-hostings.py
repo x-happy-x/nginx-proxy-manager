@@ -39,7 +39,7 @@ def main():
             if path.is_file():
                 files[target + '/' + path.relative_to(folder).as_posix()] = path
     assert all((source / 'core' / name).is_file() for name in ['core', 'platformctl']), 'Missing Core candidate; check build output layout'
-    assert (source / 'core/ui/index.html').is_file(), 'Missing Core UI'
+    assert (source / 'core/ui/core.html').is_file(), 'Missing Core UI'
     assert all((source / name / VERSION / 'manifest.json').is_file() for name in ['hostings'])
     # Resume an identical staged release after a readiness failure, without
     # overwriting any existing version. All hashes are checked below.
