@@ -131,7 +131,7 @@ if fresh:
  private=keys.get('privatekey');public=keys.get('publickey') or keys.get('password') or keys.get('password(publickey)');assert private and public
  uid=str(uuid.uuid4());short=secrets.token_hex(8)
  private_ranges=['0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8','169.254.0.0/16','172.16.0.0/12','192.168.0.0/16','224.0.0.0/4','240.0.0.0/4','::/128','::1/128','fc00::/7','fe80::/10','ff00::/8']
- cfg={'log':{'loglevel':'warning'},'inbounds':[{'tag':'ai-vless','listen':'0.0.0.0','port':443,'protocol':'vless','settings':{'clients':[{'id':uid,'flow':'xtls-rprx-vision'}],'decryption':'none'},'streamSettings':{'network':'raw','security':'reality','realitySettings':{'show':False,'target':name+':443','xver':0,'serverNames':[name],'privateKey':private,'shortIds':[short],'maxTimeDiff':60000}}}], 'outbounds':[{'tag':'internet','protocol':'freedom','settings':{'domainStrategy':'UseIPv4'}},{'tag':'blocked','protocol':'blackhole'}], 'routing':{'domainStrategy':'IPIfNonMatch','rules':[{'type':'field','ip':private_ranges,'outboundTag':'blocked'}]}, 'policy':{'levels':{'0':{'handshake':5,'connIdle':300,'uplinkOnly':3,'downlinkOnly':5}}}}
+ cfg={'log':{'loglevel':'warning'},'inbounds':[{'tag':'ai-vless','listen':'0.0.0.0','port':443,'protocol':'vless','settings':{'clients':[{'id':uid,'flow':'xtls-rprx-vision'}],'decryption':'none'},'streamSettings':{'network':'raw','security':'reality','realitySettings':{'show':False,'target':name+':443','xver':0,'serverNames':[name],'privateKey':private,'shortIds':[short],'maxTimeDiff':60000,'minClientVer':'1.8.2'}}}], 'outbounds':[{'tag':'internet','protocol':'freedom','settings':{'domainStrategy':'UseIPv4'}},{'tag':'blocked','protocol':'blackhole'}], 'routing':{'domainStrategy':'IPIfNonMatch','rules':[{'type':'field','ip':private_ranges,'outboundTag':'blocked'}]}, 'policy':{'levels':{'0':{'handshake':5,'connIdle':300,'uplinkOnly':3,'downlinkOnly':5}}}}
  config.write_text(json.dumps(cfg,indent=2));config.chmod(0o640)
  client.write_text(json.dumps({'server':'38.180.37.198','port':443,'uuid':uid,'servername':name,'public-key':public,'short-id':short,'client-fingerprint':'chrome'},indent=2));client.chmod(0o600)
 assert config.exists() and client.exists()
@@ -143,6 +143,8 @@ if cli['servername']=='www.apple.com':
  cli['servername']='www.microsoft.com';cli['client-fingerprint']='chrome'
  reality=cfg['inbounds'][0]['streamSettings']['realitySettings'];reality['target']='www.microsoft.com:443';reality['serverNames']=['www.microsoft.com']
  config.write_text(json.dumps(cfg,indent=2));config.chmod(0o640);client.write_text(json.dumps(cli,indent=2));client.chmod(0o600)
+cfg['inbounds'][0]['streamSettings']['realitySettings']['minClientVer']='1.8.2'
+config.write_text(json.dumps(cfg,indent=2));config.chmod(0o640)
 run([str(release/'xray'),'run','-test','-config',str(config)])
 if subprocess.run(['id','homenet-xray'],capture_output=True).returncode:run(['useradd','--system','--no-create-home','--shell','/usr/sbin/nologin','homenet-xray'])
 run(['chown','root:homenet-xray',str(state),str(config)]);state.chmod(0o750)

@@ -28,7 +28,7 @@ def transform(original, client, activate=False):
     assert client['server'] == '38.180.37.198' and client['port'] == 443
     node = {k: client[k] for k in ('server', 'port', 'uuid', 'servername', 'client-fingerprint')}
     node.update({'type': 'vless', 'tls': True, 'network': 'tcp', 'flow': 'xtls-rprx-vision', 'udp': True, 'packet-encoding': 'xudp',
-                 'reality-opts': {k: client[k] for k in ('public-key', 'short-id')}})
+                 'reality-opts': {**{k: client[k] for k in ('public-key', 'short-id')}, 'support-x25519mlkem768': True}})
     proxies = [p for p in cfg.get('proxies', []) if p['name'] not in (DIRECT, CHAIN)]
     proxies.extend([{**node, 'name': DIRECT, 'dialer-proxy': 'DIRECT'}, {**node, 'name': CHAIN, 'dialer-proxy': ENTRANCE}])
     cfg['proxies'] = proxies
