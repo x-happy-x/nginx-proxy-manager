@@ -670,3 +670,35 @@ func TestRoutingALLHasOLCRTC(t *testing.T) {
 		t.Fatalf("ALL = %s", got)
 	}
 }
+
+func TestSingleAIGroupSurvivesRegeneration(t *testing.T) {
+	s := defaultRouting()
+	s.SingleAIGroup = true
+	if err := s.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	input := strings.Replace(routingFixture, "['EU', DIRECT]", "['TS-HOME', REJECT]", 1)
+	out, err := buildRouting([]byte(input), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := routingDoc(t, out)
+	if groupByName(v, "ИИ прямые") != nil || groupByName(v, "ИИ обходы") != nil {
+		t.Fatal("Generated redundant AI groups")
+	}
+	ai := groupByName(v, "ИИ")
+	if ai["type"] != "select" || !equalAny(ai["proxies"], "TS-HOME", "REJECT") {
+		t.Fatalf("Lost manual AI choice: %v", ai)
+	}
+	again, err := buildRouting(out, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if groupByName(routingDoc(t, again), "ИИ")["type"] != "select" {
+		t.Fatal("Manual AI selector replaced on second generation")
+	}
+	invalid := strings.Replace(input, "  - name: 'ИИ'\n    type: select", "  - name: 'ИИ'\n    type: fallback", 1)
+	if _, err := buildRouting([]byte(invalid), s); err == nil {
+		t.Fatal("Single AI mode accepted without manual selector")
+	}
+}

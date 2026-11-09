@@ -153,7 +153,7 @@ function Flow({ c, s }: { c: Ctx; s: RoutingSettings }) {
             </span>
           ))}
       </Row>
-      <Row icon="bolt" title="ИИ" sub={`category-ai · ${s.ai.length} стран${s.ai_service_check ? " · проверка страны и OpenAI API" : ""}`} now={nowText(c, "ИИ")}>
+      <Row icon="bolt" title="ИИ" sub={s.single_ai_group ? "Ручной выбор сервера в одной группе" : `category-ai · ${s.ai.length} стран${s.ai_service_check ? " · проверка страны и OpenAI API" : ""}`} now={nowText(c, "ИИ")}>
         <Steps c={c} group="ИИ" sub={(n) => (n === "Каскад" ? "⛓ через обход" : stat(c, n))} />
       </Row>
       <Row icon="home" title="РФ" sub=".ru, .рф, GeoIP RU · кроме белых списков" now={nowText(c, "РФ")}>

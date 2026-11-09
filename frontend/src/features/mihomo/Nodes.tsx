@@ -552,20 +552,26 @@ function GroupPanel({
   const [mq, setMq] = useState("");
   const [more, setMore] = useState(false);
   const isGroup = (n: string) => !!proxies[n] && GROUP_TYPES.has(proxies[n].type);
-  const order: Record<NodeState, number> = { ok: 0, slow: 1, none: 2, out: 3, reset: 4, silent: 5 };
-  const sorted = manual
-    ? [...all].sort((a, b) => Number(isGroup(b) || b === "DIRECT") - Number(isGroup(a) || a === "DIRECT"))
-    : ordered
-    ? all
-    : [...all].sort((a, b) => order[stateOf(a)] - order[stateOf(b)] || (delayOf(a) || 9e9) - (delayOf(b) || 9e9));
+  type MemberSort = "order" | "delay" | "name";
+  const [memberSort, setMemberSort] = useStored<MemberSort>("homenet.nodes.members.sort", "order", (v): v is MemberSort => v === "order" || v === "delay" || v === "name");
+  const [aliveOnly, setAliveOnly] = useStored<boolean>("homenet.nodes.members.aliveOnly", false, isBool);
+  const priority = new Map(all.map((name, index) => [name, index]));
+  const delayRank = (name: string) => {
+    const delay = delayOf(name);
+    return delay != null && delay > 0 && ["ok", "slow"].includes(stateOf(name)) ? delay : Infinity;
+  };
+  const sorted = [...all];
+  if (memberSort === "delay") sorted.sort((a, b) => delayRank(a) - delayRank(b) || priority.get(a)! - priority.get(b)!);
+  if (memberSort === "name") sorted.sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
   const mquery = mq.trim().toLowerCase();
-  const members = sorted.filter((n) => !mquery || n.toLowerCase().includes(mquery));
+  const members = sorted.filter((n) => (!mquery || n.toLowerCase().includes(mquery)) && (!aliveOnly || ["ok", "slow"].includes(stateOf(n))));
   const shown = more || mquery ? members : members.slice(0, 15);
   const chosen = manual ? g.now : g.fixed;
   useEffect(() => {
     setMq("");
     setMore(false);
   }, [g.name]);
+  useEffect(() => setMore(false), [memberSort, aliveOnly, mq]);
   return (
     <div className="nx-pan">
       <div className="nx-pan-head">
@@ -598,7 +604,7 @@ function GroupPanel({
           </button>
         </div>
       ) : null}
-      <span className="vn-eyebrow">{manual ? "Участники — выберите, куда пойдёт трафик" : ordered ? "Участники по порядку: первый живой несёт трафик" : pinnable ? "Участники — закрепите, чтобы группа не переключалась сама" : "Участники"}</span>
+      <span className="vn-eyebrow">{manual ? "Участники — выберите, куда пойдёт трафик" : ordered ? "Участники · первый живой несёт трафик" : pinnable ? "Участники — закрепите, чтобы группа не переключалась сама" : "Участники"}</span>
       {all.length > 15 ? (
         <>
           <label className="sr-only" htmlFor="nx-mq">
@@ -607,6 +613,15 @@ function GroupPanel({
           <input id="nx-mq" className="input input-sm" placeholder={`Найти среди ${all.length}`} value={mq} onChange={(e) => setMq(e.target.value)} />
         </>
       ) : null}
+      <div className="nx-member-tools">
+        <label className="sr-only" htmlFor="nx-member-sort">Сортировка участников</label>
+        <select id="nx-member-sort" className="input input-sm" value={memberSort} onChange={e => setMemberSort(e.target.value as MemberSort)}>
+          <option value="order">Порядок группы</option><option value="delay">По пингу: быстрые первыми</option><option value="name">По имени</option>
+        </select>
+        <label className="nx-member-alive"><input type="checkbox" checked={aliveOnly} onChange={e => setAliveOnly(e.target.checked)} />Только отвечающие</label>
+        <small className="mh-muted" aria-live="polite">Найдено {members.length} из {all.length}</small>
+      </div>
+      {ordered && memberSort !== "order" ? <small className="mh-muted">Номера — приоритет группы. Сортировка меняет только список.</small> : null}
       <div className="nx-top">
         {shown.map((n) => {
           const on = chosen === n;
@@ -616,7 +631,7 @@ function GroupPanel({
             <div key={n} className={`nx-top-row${on ? " is-fixed" : ""}${g.now === n ? " is-now" : ""}`}>
               <button type="button" className="nx-top-name" onClick={() => (grp ? onGroup(n) : onOpen(n))} title={grp ? "Открыть группу" : "Подробнее об узле"}>
                 <i className={`nx-dot nx-${stateOf(n)}`} />
-                {ordered ? <span className="mono mh-muted">{all.indexOf(n) + 1}.</span> : null}
+                {ordered ? <span className="mono mh-muted">{priority.get(n)! + 1}.</span> : null}
                 <span className="truncate">
                   {n === "DIRECT" ? "напрямую" : <FlagText text={n} />}
                   {grp ? <small className="nx-sub"> · группа{sub ? <> · сейчас {sub === "DIRECT" ? "напрямую" : <FlagText text={sub} />}</> : null}</small> : null}
@@ -633,7 +648,7 @@ function GroupPanel({
             </div>
           );
         })}
-        {!members.length ? <p className="mh-muted">{mquery ? "Не нашлось." : "В группе нет участников."}</p> : null}
+        {!members.length ? <p className="mh-muted">{all.length ? "Нет подходящих участников. Измените поиск или фильтр." : "В группе нет участников."}</p> : null}
       </div>
       {members.length > shown.length ? (
         <button type="button" className="btn btn-sm" onClick={() => setMore(true)}>

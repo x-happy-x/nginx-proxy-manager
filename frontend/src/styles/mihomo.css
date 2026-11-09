@@ -3451,3 +3451,9 @@ button.vr-gchip { cursor: pointer; }
 .ol-route > span { display: grid; gap: 2px; flex: 1 1 320px; min-width: 0; }
 .ol-route small { color: var(--text-2); font-size: 12.5px; }
 .ol-route.is-on { background: var(--warning-soft); border-color: var(--warning-border); }
+
+/* NPM-121: member list preferences do not change routing priority. */
+.nx-member-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.nx-member-tools select { width: 100%; min-width: 0; }
+.nx-member-alive { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.nx-member-alive input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }

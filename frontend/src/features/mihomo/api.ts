@@ -173,6 +173,7 @@ function normalizeProviders(list: Record<string, MProvider> | null | undefined):
 }
 
 export type RoutingSettings = {
+  single_ai_group?: boolean;
   base: string;
   bypass: string[];
   junk: string[];

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakePc } from './fixtures/pc.mjs';
 import { fakeHostings } from './fixtures/hostings.mjs';
+import { fakeVpnNodes } from './fixtures/vpn-nodes.mjs';
 import { fakePublicProxy } from './fixtures/public-proxy.mjs';
 import { fakePve, pvePortalFixture } from './fixtures/pve.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -118,6 +119,7 @@ for (const item of catalog.filter(i => requested.has(i.id))) {
         }body=JSON.stringify(data);}catch{}return end(body);
       };
     }
+    if (item.id === 'vpn' && process.env.PREVIEW_VPN_NODES === 'fake' && fakeVpnNodes(req,res)) return;
     if (req.url === '/health') { res.end(JSON.stringify({status:'ok'})); return; }
     if (item.id === 'proxy' && process.env.PREVIEW_PUBLIC_PROXY === 'fake' && fakePublicProxy(req, res)) return;
     if (item.id === 'hostings' && fakeHostings(req, res)) return;
