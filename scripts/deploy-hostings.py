@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '1.6.120'
+VERSION = '1.6.121'
 
 
 def ssh(code, data=None, timeout=180):
@@ -67,8 +67,9 @@ current=root/'core/current';old=current.resolve();new=root/'core/releases/VERSIO
 registry=json.loads((state/'registry.json').read_text())
 listen=json.loads((state/'config.json').read_text())['listen']
 ready_url='http://'+listen.replace('0.0.0.0:','127.0.0.1:')+'/health/ready'
-assert not any(i['manifest']['id']=='hostings' for i in registry['items']), 'Hostings already installed; use lifecycle update'
-previous=[{'id':'hostings','action':'remove'}]
+installed=next((i for i in registry['items'] if i['manifest']['id']=='hostings'),None)
+action='update' if installed else 'install'
+previous=[{'id':'hostings','action':'rollback','version':installed['manifest']['version']}] if installed else [{'id':'hostings','action':'remove'}]
 for p in (state/'operations').glob('*.json'):
  op=json.loads(p.read_text());assert op.get('status') not in ['running','recovering','recovery_required'],'Unfinished Core operation'
 backup=state/('backup/NPM-120-'+str(time.time_ns()));backup.mkdir(parents=True,mode=0o700)
@@ -84,7 +85,7 @@ service='/opt/etc/init.d/S99homenet-core'
 run(['sh',service,'stop'])
 changed=False
 try:
- changes=[{'id':'hostings','action':'install','version':'VERSION'}]
+ changes=[{'id':'hostings','action':action,'version':'VERSION'}]
  dry=run([str(new/'platformctl'),'apply','--config',str(state/'config.json'),'--changes',json.dumps(changes),'--dry-run=true'])
  assert json.loads(dry)['status']=='planned',dry
  output=run([str(new/'platformctl'),'apply','--config',str(state/'config.json'),'--changes',json.dumps(changes),'--dry-run=false'])

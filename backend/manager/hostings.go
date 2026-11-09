@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +58,9 @@ type hostingMonitor struct {
 var hostings *hostingMonitor
 
 func newHostingMonitor(dir string, transport http.RoundTripper) *hostingMonitor {
+	if transport == nil {
+		transport = hostingCurlTransport{}
+	}
 	m := &hostingMonitor{dir: dir, views: map[string]hostingSnapshot{}, client: &http.Client{Transport: transport, Timeout: 20 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	if b, err := os.ReadFile(filepath.Join(dir, "accounts.json")); err == nil {
@@ -110,6 +116,54 @@ func (m *hostingMonitor) save(name string, value any) error {
 		return fmt.Errorf("Не удалось сохранить подключения")
 	}
 	return os.Rename(tmp, filepath.Join(m.dir, name))
+}
+
+// The provider's Cloudflare API front rejects Go's TLS client with an HTML
+// challenge. Use the installed curl TLS stack, keeping the token off argv and
+// disabling config files, proxies and redirects. Only this provider is allowed.
+type hostingCurlTransport struct{}
+type hostingBuffer struct{ buffer bytes.Buffer }
+
+func (b *hostingBuffer) Write(p []byte) (int, error) {
+	if b.buffer.Len()+len(p) > 4<<20 {
+		return 0, fmt.Errorf("provider response exceeds limit")
+	}
+	return b.buffer.Write(p)
+}
+func (hostingCurlTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method != "GET" || r.URL.Scheme != "https" || r.URL.Host != "api.ishosting.com" || r.URL.User != nil {
+		return nil, fmt.Errorf("unsupported provider request")
+	}
+	quote := func(s string) string { return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"` }
+	config := "url = " + quote(r.URL.String()) + "\n"
+	for _, key := range []string{"X-Api-Token", "Accept", "Accept-Language", "User-Agent"} {
+		value := r.Header.Get(key)
+		if strings.ContainsAny(value, "\r\n") {
+			return nil, fmt.Errorf("invalid provider header")
+		}
+		config += "header = " + quote(key+": "+value) + "\n"
+	}
+	binary := "/opt/bin/curl"
+	if _, err := os.Stat(binary); err != nil {
+		binary = "curl"
+	}
+	cmd := exec.CommandContext(r.Context(), binary, "--disable", "--silent", "--show-error", "--proto", "=https", "--noproxy", "*", "--connect-timeout", "10", "--max-time", "20", "--max-filesize", "4194304", "--write-out", "\n%{http_code}", "--config", "-")
+	cmd.Stdin = strings.NewReader(config)
+	var output hostingBuffer
+	cmd.Stdout = &output
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("provider request failed")
+	}
+	data := output.buffer.Bytes()
+	i := bytes.LastIndexByte(data, '\n')
+	if i < 0 {
+		return nil, fmt.Errorf("invalid provider status")
+	}
+	code, err := strconv.Atoi(string(data[i+1:]))
+	if err != nil || code < 100 || code > 599 {
+		return nil, fmt.Errorf("invalid provider status")
+	}
+	return &http.Response{StatusCode: code, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(data[:i])), Request: r}, nil
 }
 
 type hostingField struct {
