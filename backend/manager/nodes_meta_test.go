@@ -60,7 +60,7 @@ proxy-providers:
 	if n := nodes["ОБХОД №1-2"]; n.SNI != "yandex.ru" {
 		t.Errorf("1-2 = %+v", n)
 	}
-	if n := nodes["ИИ | ОБХОД №1-1"]; n.Provider != "AI" {
+	if n := nodes["ИИ | ОБХОД №1-1"]; n.Provider != "AI" || n.Source != "ИИ" {
 		t.Errorf("prefixed = %+v", n)
 	}
 	if n := nodes["own"]; n.Server != "own.example.org" || n.Provider != "" {
