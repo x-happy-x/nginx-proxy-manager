@@ -7,8 +7,8 @@ import re
 import sys
 
 SELECTOR = 'ИИ · сервер'
-SERVER_GROUP = 'ИИ · OLC 88.214.53.84'
-SERVER_NAME = 'AI-88.214.53.84'
+SERVER_GROUP = 'ИИ · OLC 38.180.37.198'
+SERVER_NAME = 'AI-38.180.37.198'
 
 
 def transform(original):
