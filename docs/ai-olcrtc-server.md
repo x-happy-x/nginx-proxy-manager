@@ -62,3 +62,11 @@ OpenAI, Anthropic и Gemini, которые требуют авторизаци�
 `/opt/etc/mihomo/recovery-NPM-119-20261109`. HomeNet при применении создаёт
 дополнительную `.homenet-backup-*.yaml`; откат конфигурации также проводить
 через HomeNet, сохраняя текущий secret контроллера.
+
+## is*hosting: итог проверки 9 ноября
+
+На VPS 38.180.37.198 установлен OLCRTC 92b2332-jitsi-config-v1 через мастер HomeNet (server ID 4ca023e1f4f7), ключ SSH HomeNet, systemd и UDP-реле 127.0.0.1:18443. Временный swap для сборки удалён мастером. Ubuntu22.04.5, 1vCPU, 957МиБ памяти.
+
+Телемост доступен по TCP/TLS, ICE соединяется, но vp8channel и videochannel не прошли проверки. На vp8 фиксируются decrypt failed и read welcome timeout. Jitsi meet.egovm.ru на обоих транспортах не достигается с VPS (config.js/XMPP timeout); meet.riddlerx.org не запустил вариант. Рабочих вариантов нет. Установка серверной части завершена, сквозной туннель — нет; правила ИИ не применялись, watchdog не запускался.
+
+Исходный SHA256 config.yaml остался 277887637a29243a488b6f73675a0483815773575a810006bf7ba3f757fe2402. Account200, Keycloak302 после установки интеграции хостинга. Исследование площадок: [ограничения OLCRTC](olcrtc-platform-risks.md). По следующему вопросу пользователя подготовлено [сравнение современных методов и каскада](proxy-methods-2026-11.md); VLESS/Mieru/AnyTLS на VPS ещё не разворачивались.
