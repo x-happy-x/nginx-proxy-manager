@@ -61,6 +61,35 @@ func readNodesMeta(configPath string, body []byte) (map[string]nodeMeta, error) 
 			}
 		}
 	}
+	if files := yamlGet(root, "proxy-files"); files != nil && files.Kind == yaml.SequenceNode {
+		dir := filepath.Dir(configPath)
+		for _, f := range files.Content {
+			path := f.Value
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(dir, path)
+			}
+			rel, err := filepath.Rel(dir, path)
+			if err != nil || !filepath.IsLocal(rel) {
+				continue
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil || len(raw) > 4<<20 {
+				continue
+			}
+			_, source, err := yamlRoot(raw)
+			if err != nil {
+				continue
+			}
+			if list := mapGet(source, "proxies"); list != nil && list.Kind == yaml.SequenceNode {
+				for _, p := range list.Content {
+					if name, m, ok := nodeEntry(p, "", ""); ok {
+						out[name] = m
+					}
+				}
+			}
+		}
+	}
+
 	providers := yamlGet(root, "proxy-providers")
 	if providers == nil || providers.Kind != yaml.MappingNode {
 		return out, nil

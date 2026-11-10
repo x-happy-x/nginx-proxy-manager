@@ -3,11 +3,12 @@ import { Icon } from "../../components/ui/Icon";
 import { Flag, FlagText, NodeName, useFlagMode } from "../../components/ui/Flag";
 import { countryName, nodeCC } from "../../lib/flags";
 import { errText, number } from "../../lib/format";
-import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeMeta, type NodeFolder, type NodeFolders } from "./api";
+import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeMeta, type GroupFolder, type GroupFolders as GroupFolderData } from "./api";
 import { useMihomo } from "./context";
 import { lastDelay } from "./shared";
 import { isBool, useStored } from "./NodeTiles";
-import { NodeFolderEditor } from "./NodeFolderEditor";
+import { GroupFolderEditor } from "./GroupFolderEditor";
+import { GroupFolders } from "./GroupFolders";
 import { CategorySelect, NodeCategories, useNodeCategory, type NodeCategory } from "./NodeCategories";
 
 /*
@@ -44,7 +45,7 @@ const ICON: Record<View, string> = {
   servers: "M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01",
 };
 const VIEWS: Array<[View, string]> = [
-  ["groups", "Маршруты"],
+  ["groups", "Группы"],
   ["tiles", "Узлы"],
   ["servers", "По адресам"],
 ];
@@ -165,19 +166,14 @@ export function Nodes({
   const [meta, setMeta] = useState<Record<string, NodeMeta>>({});
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
-  const [folderData,setFolderData]=useState<NodeFolders|null>(null);
-  const [folderEditor,setFolderEditor]=useState<NodeFolder|"new"|null>(null);
-  const loadFolders=()=>core.nodeFolders().then(setFolderData);
+  const [folderData,setFolderData]=useState<GroupFolderData|null>(null);
+  const [folderEditor,setFolderEditor]=useState<GroupFolder|"new"|null>(null);
+  const loadFolders=()=>core.groupFolders().then(setFolderData);
   useEffect(()=>{void loadFolders().catch(e=>setErr(errText(e)))},[]);
   const folders=folderData?.folders||[];
-  const folderNames=useMemo(()=>{
-    const map=new Map<string,string>();
-    folders.forEach(f=>f.nodes.forEach(n=>map.set(n,`${map.get(n)||""} ${f.name}`)));
-    return map;
-  },[folderData]);
-  const commitFolders=async (next:NodeFolder[])=>{
+  const commitFolders=async (next:GroupFolder[])=>{
     if(!folderData)throw new Error("Дождитесь загрузки папок.");
-    try {setFolderData(await core.saveNodeFolders({revision:folderData.revision,folders:next}));setFolderEditor(null);setCategory("folder")}
+    try {setFolderData(await core.saveGroupFolders({revision:folderData.revision,folders:next}));setFolderEditor(null)}
     catch(e){await loadFolders().catch(()=>undefined);throw e}
   };
   useEffect(() => {
@@ -217,7 +213,7 @@ export function Nodes({
   const list = [...rows.values()]
     .filter((r) => !grp || (proxies[grp]?.all || []).includes(r.name))
     .filter((r) => !hideSilent || (r.state !== "silent" && r.state !== "reset"))
-    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.country ? countryName(r.country) : ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""} ${r.meta?.source || ""} ${category === "folder" ? folderNames.get(r.name)||"" : ""}`.toLowerCase().includes(query))
+    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.country ? countryName(r.country) : ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""} ${r.meta?.source || ""}`.toLowerCase().includes(query))
     .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name, "ru") : order[a.state] - order[b.state] || (a.delay || 9e9) - (b.delay || 9e9)));
   const alive = [...rows.values()].filter((r) => r.state === "ok" || r.state === "slow").length;
 
@@ -267,11 +263,8 @@ export function Nodes({
     setBusy("");
   };
 
-  const technical = new Set(["AUTO", "ALL", "GLOBAL", "Прямые EU", "Прямые мир", "Обходы", "Каскад", "Резерв", "QUIC", "Каскад Казахстана"]);
-  const shownGroups = (grp ? groups.filter((g) => g.name === grp) : groups).filter(g => !query || `${g.name} ${(g.all || []).join(" ")}`.toLowerCase().includes(query));
-  const primaryGroups = shownGroups.filter(g => !technical.has(g.name));
-  const extraGroups = shownGroups.filter(g => technical.has(g.name));
-  const selGroup = sel?.kind === "group" ? proxies[sel.name] : sel ? undefined : grp ? proxies[grp] : primaryGroups[0] || shownGroups[0];
+  const shownGroups = grp ? groups.filter(g=>g.name===grp) : groups;
+  const selGroup = sel?.kind === "group" ? proxies[sel.name] : sel ? undefined : grp ? proxies[grp] : groups.find(g=>g.name==="ИИ") || shownGroups[0];
   const selNode = sel?.kind === "node" ? rows.get(sel.name) : undefined;
 
   // nodes by server: the subnet decides, nodes of one server share their fate
@@ -288,8 +281,9 @@ export function Nodes({
   const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
 
   const groupCard = (g: MProxy) => {
-    const members = (g.all || []).filter((n) => !hideSilent || !["silent", "reset"].includes(stateOf(n)));
-    const ok = (g.all || []).filter((n) => ["ok", "slow"].includes(stateOf(n))).length;
+    const cardState=(n:string):NodeState=>g.cascadeHealth ? g.cascadeHealth[n] ? g.cascadeHealth[n].alive ? "ok" : "silent" : "none" : stateOf(n);
+    const members = (g.all || []).filter((n) => !hideSilent || !["silent", "reset"].includes(cardState(n)));
+    const ok = (g.all || []).filter((n) => ["ok", "slow"].includes(cardState(n))).length;
     const l = leaf(g.name);
     const on = selGroup?.name === g.name && !selNode;
     return (
@@ -306,7 +300,7 @@ export function Nodes({
         </span>
         <span className="nx-dots" aria-hidden="true">
           {members.slice(0, 120).map((n) => (
-            <i key={n} className={`nx-dot nx-${stateOf(n)}`} title={`${n}: ${ST_TEXT[stateOf(n)]}`} />
+            <i key={n} className={`nx-dot nx-${cardState(n)}`} title={`${n}: ${ST_TEXT[cardState(n)]}`} />
           ))}
           {members.length > 120 ? <small>+{members.length - 120}</small> : null}
         </span>
@@ -334,9 +328,9 @@ export function Nodes({
           ))}
         </div>
         <label className="sr-only" htmlFor="nx-q">
-          Найти узел
+          Найти группу или узел
         </label>
-        <input id="nx-q" className="input nx-search" placeholder="Узел, подписка, страна, сервер" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input id="nx-q" className="input nx-search" placeholder={view==="groups"?"Папка или группа":"Узел, подписка, страна, сервер"} value={q} onChange={(e) => setQ(e.target.value)} />
         <button type="button" className="btn btn-primary" disabled={busy === "all"} onClick={() => void checkAll()}>
           <Icon name="bolt" size={14} /> {busy === "all" ? "Проверяю…" : "Проверить все"}
         </button>
@@ -364,11 +358,11 @@ export function Nodes({
           {view === "groups" ? orderButton : null}
         </div>
       </div>
-      <div className="nf-toolbar">
-        <button type="button" className="btn btn-sm" disabled={!folderData} onClick={()=>setFolderEditor("new")}><Icon name="plus" size={14}/>Новая папка</button>
-        <small className="mh-muted">Мои папки: {folders.length}</small>
+      {view==="groups"?<div className="nf-toolbar">
+        <button type="button" className="btn btn-sm" disabled={!folderData} onClick={()=>setFolderEditor("new")}><Icon name="plus" size={14}/>Новая папка групп</button>
+        <small className="mh-muted">Папки групп: {folders.length}</small>
         <button type="button" className="btn btn-sm" onClick={()=>void loadFolders().catch(e=>setErr(errText(e)))}>Обновить папки</button>
-      </div>
+      </div>:null}
       <p className="nx-summary">
         {number(alive)} из {number(rows.size)} узлов отвечают{grp ? ` · в «${grp}» ${(proxies[grp]?.all || []).length}` : ""}
         {list.length !== rows.size ? ` · показано ${number(list.length)}` : ""}
@@ -378,16 +372,11 @@ export function Nodes({
       <div className="nx-layout">
         <div className="nx-main">
           {view === "groups" ? (
-            <div className="nx-groups">
-              {primaryGroups.map(groupCard)}
-              {extraGroups.length ? <details className="nx-technical" open={query || grp || sel?.kind === "group" && technical.has(sel.name) ? true : undefined}>
-                <summary>Подключение и диагностика <span className="mh-muted">{extraGroups.length}</span></summary>
-                <div className="nx-groups">{extraGroups.map(groupCard)}</div>
-              </details> : null}
-            </div>
+            <GroupFolders folders={folders} groups={shownGroups} active={selGroup?.name} query={query} filtered={!!grp} onEdit={setFolderEditor} render={groupCard}/>
+
           ) : null}
 
-          {view === "tiles" || view === "list" ? <NodeCategories names={list.map(r => r.name)} rows={rows} by={category} scope="nodes" folders={folders} onEditFolder={setFolderEditor} search={query} active={selNode?.name} stateOf={stateOf} limit={60} render={names => view === "tiles" ? (
+          {view === "tiles" || view === "list" ? <NodeCategories names={list.map(r => r.name)} rows={rows} by={category} scope="nodes" search={query} active={selNode?.name} stateOf={stateOf} limit={60} render={names => view === "tiles" ? (
             <div className="nx-tiles">
               {names.map(name => rows.get(name)!).map((r) => (
                 <button key={r.name} type="button" className={`nx-tile nx-t-${r.state}${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)} title={r.note}>
@@ -508,8 +497,6 @@ export function Nodes({
               proxies={proxies}
               onGroup={(n) => setSel({ kind: "group", name: n })}
               rows={rows}
-              folders={folders}
-              onEditFolder={setFolderEditor}
               category={category}
               onCategory={setCategory}
               stateOf={stateOf}
@@ -528,9 +515,10 @@ export function Nodes({
           )}
         </aside>
       </div>
-      {folderEditor!==null?<NodeFolderEditor key={folderEditor==="new"?"new":folderEditor.id} folder={folderEditor==="new"?null:folderEditor} folders={folders} rows={rows}
+      {folderEditor!==null?<GroupFolderEditor key={folderEditor==="new"?"new":folderEditor.id} folder={folderEditor==="new"?null:folderEditor} folders={folders}
+        rows={new Map(groups.map(g=>[g.name,{name:g.name,type:g.type,delay:rows.get(leaf(g.name))?.delay??null,state:stateOf(g.name),note:TYPE_LABEL[g.type]||g.type,history:[],meta:{provider:"",type:g.type,server:"",source:TYPE_LABEL[g.type]||g.type}}]))}
         onClose={()=>setFolderEditor(null)}
-        onSave={folder=>commitFolders([...folders.filter(f=>f.id!==folder.id),folder])}
+        onSave={folder=>{const moved=new Set(folder.groups);return commitFolders([...folders.filter(f=>f.id!==folder.id).map(f=>({...f,groups:f.groups.filter(n=>!moved.has(n))})),folder])}}
         onDelete={id=>commitFolders(folders.filter(f=>f.id!==id))}/>:null}
 
     </div>
@@ -544,8 +532,6 @@ function GroupPanel({
   rows,
   category,
   onCategory,
-  folders,
-  onEditFolder,
   stateOf,
   leaf,
   delayOf,
@@ -561,8 +547,6 @@ function GroupPanel({
   proxies: Record<string, MProxy>;
   onGroup: (n: string) => void;
   rows: Map<string, NodeRow>;
-  folders: NodeFolder[];
-  onEditFolder: (folder: NodeFolder)=>void;
   category: NodeCategory;
   onCategory: (category: NodeCategory) => void;
   stateOf: (n: string) => NodeState;
@@ -661,7 +645,7 @@ function GroupPanel({
         <small className="mh-muted" aria-live="polite">Найдено {members.length} из {all.length}</small>
       </div>
       {ordered && (memberSort !== "order" || category !== "none") ? <small className="mh-muted">Номера — приоритет группы. Сортировка меняет только список.</small> : null}
-      <NodeCategories names={members} rows={rows} by={category} scope={`group:${g.name}`} folders={folders} onEditFolder={onEditFolder} search={mquery} active={g.now} stateOf={stateOf} limit={15} render={names => <div className="nx-top">
+      <NodeCategories names={members} rows={rows} by={category} scope={`group:${g.name}`} search={mquery} active={g.now} stateOf={stateOf} limit={15} render={names => <div className="nx-top">
         {names.map((n) => {
           const on = chosen === n;
           const grp = isGroup(n);
