@@ -648,6 +648,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleRoutingGet(w)
 	case "/api/core/services":
 		a.handleServices(w, r)
+	case "/api/core/node-folders":
+		a.handleNodeFolders(w, r)
 	case "/api/core/nodes":
 		a.handleNodesMeta(w)
 	case "/api/core/vpn/board":
@@ -678,6 +680,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case "/api/core/node-folders":
+		a.handleNodeFolders(w, r)
 	case "/api/core/sublab/connect", "/api/core/sublab/refresh", "/api/core/sublab/sync", "/api/core/sublab/sync-now", "/api/core/sublab/create", "/api/core/sublab/import", "/api/core/sublab/pause":
 		a.handleSubLab(w, r)
 	case "/api/core/devices":

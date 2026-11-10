@@ -3,10 +3,11 @@ import { Icon } from "../../components/ui/Icon";
 import { Flag, FlagText, NodeName, useFlagMode } from "../../components/ui/Flag";
 import { countryName, nodeCC } from "../../lib/flags";
 import { errText, number } from "../../lib/format";
-import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeMeta } from "./api";
+import { DEFAULT_TEST_URL, core, mihomo, type MProvider, type MProxy, type NodeMeta, type NodeFolder, type NodeFolders } from "./api";
 import { useMihomo } from "./context";
 import { lastDelay } from "./shared";
 import { isBool, useStored } from "./NodeTiles";
+import { NodeFolderEditor } from "./NodeFolderEditor";
 import { CategorySelect, NodeCategories, useNodeCategory, type NodeCategory } from "./NodeCategories";
 
 /*
@@ -17,7 +18,8 @@ import { CategorySelect, NodeCategories, useNodeCategory, type NodeCategory } fr
  * Design: https://claude.ai/artifact/8w7GwGhKrK96ePPxL166SG
  */
 
-export const GROUP_TYPES = new Set(["Selector", "URLTest", "Fallback", "LoadBalance", "Smart", "Relay"]);
+import { GROUP_TYPES, pathOf } from "./node-path";
+export { GROUP_TYPES, pathOf } from "./node-path";
 const TYPE_LABEL: Record<string, string> = { Selector: "выбор", URLTest: "по задержке", Fallback: "первый живой", LoadBalance: "балансировка", Smart: "smart", Relay: "цепочка" };
 const SLOW_MS = 1000;
 
@@ -108,17 +110,6 @@ export function useNodeRows(proxies: Record<string, MProxy>, providers: Record<s
   }, [proxies, providers, groups, meta]);
 }
 
-/** The chain a group goes through now: RU → ALL → Обходы → the node (NPM-60). */
-export function pathOf(name: string, proxies: Record<string, MProxy>): string[] {
-  const out = [name];
-  let cur = proxies[name];
-  for (let i = 0; cur?.now && i < 10 && !out.includes(cur.now); i++) {
-    out.push(cur.now);
-    cur = proxies[cur.now];
-  }
-  return out;
-}
-
 export function PathChain({ path, proxies, onGroup, onNode, label }: { path: string[]; proxies: Record<string, MProxy>; onGroup?: (n: string) => void; onNode?: (n: string) => void; label?: string }) {
   return (
     <span className="nx-path" aria-label={label || "Путь"}>
@@ -174,6 +165,21 @@ export function Nodes({
   const [meta, setMeta] = useState<Record<string, NodeMeta>>({});
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [folderData,setFolderData]=useState<NodeFolders|null>(null);
+  const [folderEditor,setFolderEditor]=useState<NodeFolder|"new"|null>(null);
+  const loadFolders=()=>core.nodeFolders().then(setFolderData);
+  useEffect(()=>{void loadFolders().catch(e=>setErr(errText(e)))},[]);
+  const folders=folderData?.folders||[];
+  const folderNames=useMemo(()=>{
+    const map=new Map<string,string>();
+    folders.forEach(f=>f.nodes.forEach(n=>map.set(n,`${map.get(n)||""} ${f.name}`)));
+    return map;
+  },[folderData]);
+  const commitFolders=async (next:NodeFolder[])=>{
+    if(!folderData)throw new Error("Дождитесь загрузки папок.");
+    try {setFolderData(await core.saveNodeFolders({revision:folderData.revision,folders:next}));setFolderEditor(null);setCategory("folder")}
+    catch(e){await loadFolders().catch(()=>undefined);throw e}
+  };
   useEffect(() => {
     void core
       .nodes()
@@ -211,7 +217,7 @@ export function Nodes({
   const list = [...rows.values()]
     .filter((r) => !grp || (proxies[grp]?.all || []).includes(r.name))
     .filter((r) => !hideSilent || (r.state !== "silent" && r.state !== "reset"))
-    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.country ? countryName(r.country) : ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""} ${r.meta?.source || ""}`.toLowerCase().includes(query))
+    .filter((r) => !query || `${r.name} ${r.country || ""} ${r.country ? countryName(r.country) : ""} ${r.meta?.server || ""} ${r.meta?.sni || ""} ${r.provider || ""} ${r.meta?.source || ""} ${category === "folder" ? folderNames.get(r.name)||"" : ""}`.toLowerCase().includes(query))
     .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name, "ru") : order[a.state] - order[b.state] || (a.delay || 9e9) - (b.delay || 9e9)));
   const alive = [...rows.values()].filter((r) => r.state === "ok" || r.state === "slow").length;
 
@@ -261,7 +267,7 @@ export function Nodes({
     setBusy("");
   };
 
-  const technical = new Set(["AUTO", "ALL", "GLOBAL", "Прямые EU", "Прямые мир", "Обходы", "Каскад", "Резерв", "QUIC"]);
+  const technical = new Set(["AUTO", "ALL", "GLOBAL", "Прямые EU", "Прямые мир", "Обходы", "Каскад", "Резерв", "QUIC", "Каскад Казахстана"]);
   const shownGroups = (grp ? groups.filter((g) => g.name === grp) : groups).filter(g => !query || `${g.name} ${(g.all || []).join(" ")}`.toLowerCase().includes(query));
   const primaryGroups = shownGroups.filter(g => !technical.has(g.name));
   const extraGroups = shownGroups.filter(g => technical.has(g.name));
@@ -358,6 +364,11 @@ export function Nodes({
           {view === "groups" ? orderButton : null}
         </div>
       </div>
+      <div className="nf-toolbar">
+        <button type="button" className="btn btn-sm" disabled={!folderData} onClick={()=>setFolderEditor("new")}><Icon name="plus" size={14}/>Новая папка</button>
+        <small className="mh-muted">Мои папки: {folders.length}</small>
+        <button type="button" className="btn btn-sm" onClick={()=>void loadFolders().catch(e=>setErr(errText(e)))}>Обновить папки</button>
+      </div>
       <p className="nx-summary">
         {number(alive)} из {number(rows.size)} узлов отвечают{grp ? ` · в «${grp}» ${(proxies[grp]?.all || []).length}` : ""}
         {list.length !== rows.size ? ` · показано ${number(list.length)}` : ""}
@@ -376,7 +387,7 @@ export function Nodes({
             </div>
           ) : null}
 
-          {view === "tiles" || view === "list" ? <NodeCategories names={list.map(r => r.name)} rows={rows} by={category} scope="nodes" search={query} active={selNode?.name} stateOf={stateOf} limit={60} render={names => view === "tiles" ? (
+          {view === "tiles" || view === "list" ? <NodeCategories names={list.map(r => r.name)} rows={rows} by={category} scope="nodes" folders={folders} onEditFolder={setFolderEditor} search={query} active={selNode?.name} stateOf={stateOf} limit={60} render={names => view === "tiles" ? (
             <div className="nx-tiles">
               {names.map(name => rows.get(name)!).map((r) => (
                 <button key={r.name} type="button" className={`nx-tile nx-t-${r.state}${selNode?.name === r.name ? " is-sel" : ""}`} onClick={() => openNode(r.name)} title={r.note}>
@@ -497,6 +508,8 @@ export function Nodes({
               proxies={proxies}
               onGroup={(n) => setSel({ kind: "group", name: n })}
               rows={rows}
+              folders={folders}
+              onEditFolder={setFolderEditor}
               category={category}
               onCategory={setCategory}
               stateOf={stateOf}
@@ -515,6 +528,11 @@ export function Nodes({
           )}
         </aside>
       </div>
+      {folderEditor!==null?<NodeFolderEditor key={folderEditor==="new"?"new":folderEditor.id} folder={folderEditor==="new"?null:folderEditor} folders={folders} rows={rows}
+        onClose={()=>setFolderEditor(null)}
+        onSave={folder=>commitFolders([...folders.filter(f=>f.id!==folder.id),folder])}
+        onDelete={id=>commitFolders(folders.filter(f=>f.id!==id))}/>:null}
+
     </div>
   );
 }
@@ -526,6 +544,8 @@ function GroupPanel({
   rows,
   category,
   onCategory,
+  folders,
+  onEditFolder,
   stateOf,
   leaf,
   delayOf,
@@ -541,6 +561,8 @@ function GroupPanel({
   proxies: Record<string, MProxy>;
   onGroup: (n: string) => void;
   rows: Map<string, NodeRow>;
+  folders: NodeFolder[];
+  onEditFolder: (folder: NodeFolder)=>void;
   category: NodeCategory;
   onCategory: (category: NodeCategory) => void;
   stateOf: (n: string) => NodeState;
@@ -554,6 +576,11 @@ function GroupPanel({
   onOpen: (n: string) => void;
   onAll: () => void;
 }) {
+  const cascade = g.cascadeHealth;
+  const baseStateOf=stateOf;
+  const baseDelayOf=delayOf;
+  stateOf=n=>cascade ? cascade[n] ? cascade[n].alive ? "ok" : "silent" : "none" : baseStateOf(n);
+  delayOf=n=>cascade ? cascade[n]?.alive ? cascade[n].delay : null : baseDelayOf(n);
   const all = g.all || [];
   const count = (s: NodeState[]) => all.filter((n) => s.includes(stateOf(n))).length;
   const pinnable = g.type === "Selector" || g.type === "Fallback" || g.type === "URLTest";
@@ -587,8 +614,9 @@ function GroupPanel({
       <div className="nx-pan-head">
         <span className="vn-eyebrow">Маршрут · {TYPE_LABEL[g.type] || g.type}</span>
         <b>{g.name}</b>
-        <PathChain path={pathOf(g.name, proxies)} proxies={proxies} onGroup={onGroup} onNode={onOpen} label="Путь группы сейчас" />
+        <PathChain path={pathOf(g.name, proxies)} proxies={proxies} onGroup={onGroup} onNode={onOpen} label="Путь маршрута с каскадом" />
       </div>
+      {g.cascadeTarget?<p className="mh-muted">Автовыбор входа: проверяется полный путь через «{g.cascadeTarget}». При отказе группа выбирает другой проверенный сервер.</p>:null}
       <div className="nx-stats">
         <div>
           <small>Живы</small>
@@ -633,7 +661,7 @@ function GroupPanel({
         <small className="mh-muted" aria-live="polite">Найдено {members.length} из {all.length}</small>
       </div>
       {ordered && (memberSort !== "order" || category !== "none") ? <small className="mh-muted">Номера — приоритет группы. Сортировка меняет только список.</small> : null}
-      <NodeCategories names={members} rows={rows} by={category} scope={`group:${g.name}`} search={mquery} active={g.now} stateOf={stateOf} limit={15} render={names => <div className="nx-top">
+      <NodeCategories names={members} rows={rows} by={category} scope={`group:${g.name}`} folders={folders} onEditFolder={onEditFolder} search={mquery} active={g.now} stateOf={stateOf} limit={15} render={names => <div className="nx-top">
         {names.map((n) => {
           const on = chosen === n;
           const grp = isGroup(n);
@@ -738,6 +766,8 @@ function NodePanel({
         <dd className="mono truncate">{r.meta?.server ? `${r.meta.server}${r.meta.port ? `:${r.meta.port}` : ""}` : "—"}</dd>
         <dt>SNI</dt>
         <dd className="mono truncate">{r.meta?.sni || "—"}</dd>
+        <dt>Подключение</dt>
+        <dd>{proxies[r.name]?.["dialer-proxy"] ? <PathChain path={pathOf(r.name,proxies)} proxies={proxies} onGroup={onGroup} label="Каскад подключения к серверу" /> : "Прямое подключение к серверу"}</dd>
         <dt>Протокол</dt>
         <dd>{[r.meta?.type || r.type.toLowerCase(), r.meta?.network].filter(Boolean).join(" · ")}</dd>
       </dl>
