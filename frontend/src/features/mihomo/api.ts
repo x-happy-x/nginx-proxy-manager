@@ -3,6 +3,9 @@
 
 export type DelayPoint = { time: string; delay: number };
 
+export type GroupFolder = { id:string; name:string; groups:string[] };
+export type GroupFolders = { revision:string; folders:GroupFolder[] };
+
 export type NodeFolder = { id: string; name: string; nodes: string[] };
 export type NodeFolders = { revision: string; folders: NodeFolder[] };
 
@@ -432,6 +435,8 @@ export type TorrentRecord = { provider?: string; udp: boolean; http: TorrentStep
 export type TorrentsReport = { running?: boolean; done?: number; total?: number; nodes: Record<string, TorrentRecord> };
 
 export const core = {
+  groupFolders:()=>call<GroupFolders>("/api/core/group-folders"),
+  saveGroupFolders:(snapshot:GroupFolders)=>call<GroupFolders>("/api/core/group-folders",json("POST",snapshot)),
   nodeFolders: () => call<NodeFolders>("/api/core/node-folders"),
   saveNodeFolders: (snapshot: NodeFolders) => call<NodeFolders>("/api/core/node-folders", json("POST", snapshot)),
   status: () => call<{ status: CoreStatus }>("/api/core/status").then((r) => r.status),

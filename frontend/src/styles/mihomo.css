@@ -3506,3 +3506,8 @@ button.vr-gchip { cursor: pointer; }
 .nf-spacer { flex:1; }
 .nf-delete { padding:10px;border:1px solid var(--border);border-radius:10px; }
 @media (max-width:760px) { .nf-toolbar > button:last-child { margin-left:0; } .nf-list { max-height:280px; } }
+
+.gf-sections { display:grid;gap:12px;min-width:0; }
+.gf-section .nx-category-body { padding:12px; }
+
+.nx-gcard-now > .mono { flex:none;white-space:nowrap; }

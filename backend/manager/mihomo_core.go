@@ -222,7 +222,7 @@ func keeneticDevices() ([]coreDevice, error) {
 // Sections the console edits as structured data. Everything else in
 // config.yaml (comments included) is left as it was.
 var coreEditableSections = map[string]bool{
-	"proxies": true, "proxy-providers": true, "proxy-groups": true, "rules": true, "rule-providers": true,
+	"proxies": true, "proxy-files": true, "proxy-providers": true, "proxy-groups": true, "rules": true, "rule-providers": true,
 	"dns": true, "tun": true, "sniffer": true, "hosts": true, "mode": true, "log-level": true,
 	"allow-lan": true, "ipv6": true, "mixed-port": true, "port": true, "socks-port": true,
 	"redir-port": true, "tproxy-port": true, "unified-delay": true, "tcp-concurrent": true,
@@ -648,6 +648,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 		a.handleRoutingGet(w)
 	case "/api/core/services":
 		a.handleServices(w, r)
+	case "/api/core/group-folders":
+		a.handleGroupFolders(w, r)
 	case "/api/core/node-folders":
 		a.handleNodeFolders(w, r)
 	case "/api/core/nodes":
@@ -680,6 +682,8 @@ func (a *app) handleCoreGet(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleCorePost(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case "/api/core/group-folders":
+		a.handleGroupFolders(w, r)
 	case "/api/core/node-folders":
 		a.handleNodeFolders(w, r)
 	case "/api/core/sublab/connect", "/api/core/sublab/refresh", "/api/core/sublab/sync", "/api/core/sublab/sync-now", "/api/core/sublab/create", "/api/core/sublab/import", "/api/core/sublab/pause":

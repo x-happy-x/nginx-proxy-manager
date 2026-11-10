@@ -14,6 +14,7 @@ proxies[nodes[0].name]['dialer-proxy']='Каскад Казахстана';
 proxies['ИИ'].now=nodes[0].name;
 
 let folderState={revision:'fixture-0',folders:[{id:'favorites',name:'Избранное',nodes:[nodes[0].name,nodes[1].name,nodes[2].name]},{id:'archive',name:'Архив',nodes:['Снятый сервер из подписки']}]};let folderRevision=0;
+let groupFolderState={revision:'group-fixture-0',folders:[{id:'ai',name:'ИИ',groups:['ИИ','Каскад Казахстана']},{id:'other',name:'Остальные',groups:['Игры','AUTO']}]};let groupFolderRevision=0;
 export function fakeVpnNodes(req,res){
  const path=req.url.split('?')[0];let value;
  if(path==='/api/core/node-folders'){
@@ -25,6 +26,16 @@ export function fakeVpnNodes(req,res){
    });return true;
   }
   res.end(JSON.stringify(folderState));return true;
+ }
+ if(path==='/api/core/group-folders'){
+  if(req.method==='POST'){
+   let body='';req.on('data',c=>body+=c);req.on('end',()=>{
+    const snapshot=JSON.parse(body);
+    if(snapshot.revision!==groupFolderState.revision){res.statusCode=409;res.end(JSON.stringify({error:'Папки изменились, обновите список.'}));return;}
+    groupFolderState={revision:'group-fixture-'+(++groupFolderRevision),folders:snapshot.folders};res.end(JSON.stringify(groupFolderState));
+   });return true;
+  }
+  res.end(JSON.stringify(groupFolderState));return true;
  }
  const selected=path.match(/^\/api\/mihomo\/proxies\/([^/]+)$/);
  if(req.method==='PUT'&&selected){

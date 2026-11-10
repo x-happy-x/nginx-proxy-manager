@@ -126,6 +126,7 @@ type olcCheck struct {
 }
 
 type olcStore struct {
+	OwnServersFallback bool `json:"own_servers_fallback,omitempty"`
 	// Route: «весь трафик через OLCRTC» is on — what each manual group had
 	// chosen before, to put back (NPM-61).
 	Route   map[string]string   `json:"route,omitempty"`
@@ -193,6 +194,16 @@ func (a *app) startOlcrtc() {
 			olc.st.Checks = map[string]olcCheck{}
 		}
 	}
+	if !olc.st.OwnServersFallback {
+		if servers, enabled, err := readOwnOLCServers(); enabled {
+			if err == nil {
+				olc.st.Servers = servers
+			} else {
+				olc.st.Auto = false
+				olc.st.Events = append([]olcEvent{{T: time.Now().Unix(), Kind: "fail", Text: err.Error()}}, olc.st.Events...)
+			}
+		}
+	}
 	if os.Getenv("MAINTENANCE_DISABLED") == "1" || os.Getenv("MIHOMO_TRAFFIC_DISABLED") == "1" {
 		return
 	}
@@ -200,7 +211,14 @@ func (a *app) startOlcrtc() {
 }
 
 func (o *olcState) saveLocked() {
-	body, err := json.MarshalIndent(o.st, "", "  ")
+	stored := o.st
+	if enabled, err := writeOwnOLCServers(o.st.Servers); enabled {
+		stored.OwnServersFallback = err != nil
+		if err == nil {
+			stored.Servers = nil
+		}
+	}
+	body, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return
 	}
