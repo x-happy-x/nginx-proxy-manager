@@ -3,6 +3,9 @@
 
 export type DelayPoint = { time: string; delay: number };
 
+export type NodeFolder = { id: string; name: string; nodes: string[] };
+export type NodeFolders = { revision: string; folders: NodeFolder[] };
+
 export type MProxy = {
   name: string;
   type: string;
@@ -16,6 +19,8 @@ export type MProxy = {
   hidden?: boolean;
   icon?: string;
   testUrl?: string;
+  cascadeTarget?: string;
+  cascadeHealth?: Record<string,{alive:boolean;delay:number;checked:string}>;
   "dialer-proxy"?: string;
   "provider-name"?: string;
 };
@@ -427,6 +432,8 @@ export type TorrentRecord = { provider?: string; udp: boolean; http: TorrentStep
 export type TorrentsReport = { running?: boolean; done?: number; total?: number; nodes: Record<string, TorrentRecord> };
 
 export const core = {
+  nodeFolders: () => call<NodeFolders>("/api/core/node-folders"),
+  saveNodeFolders: (snapshot: NodeFolders) => call<NodeFolders>("/api/core/node-folders", json("POST", snapshot)),
   status: () => call<{ status: CoreStatus }>("/api/core/status").then((r) => r.status),
   devices: () => call<{ devices: CoreDevice[]; warning?: string }>("/api/core/devices"),
   saveLabels: (labels: Record<string, string>) => call<unknown>("/api/core/devices", json("POST", { labels })),

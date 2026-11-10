@@ -3485,3 +3485,24 @@ button.vr-gchip { cursor: pointer; }
   .nx-filter-select select { width: 100%; max-width: none; }
   .nx-member-tools .nx-filter-select { grid-template-columns: minmax(0, 1fr); }
 }
+
+.nx-category-title { display:flex;align-items:center;min-width:0;background:var(--surface); }
+.nx-category-title .nx-category-head { flex:1;min-width:0; }
+.nx-category-edit { flex:none;margin-right:8px; }
+.nf-toolbar,.nf-selection { display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px; }
+.nf-toolbar { margin-top:10px; }
+.nf-toolbar > button:last-child { margin-left:auto; }
+.nf-editor { display:grid;gap:14px;min-width:0; }
+.nf-field { display:grid;gap:6px;font-size:13px;color:var(--text-2); }
+.nf-field .input { width:100%;min-width:0; }
+.nf-list { max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px; }
+.nf-node { display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);min-width:0; }
+.nf-node:last-child { border-bottom:0; }
+.nf-node.is-selected { background:var(--accent-soft); }
+.nf-node > input { width:16px;height:16px;flex:none;accent-color:var(--accent); }
+.nf-node > span { flex:1;min-width:0;display:grid;gap:4px;font-size:13px;overflow-wrap:anywhere; }
+.nf-node small { color:var(--text-2);font-size:12px; }
+.nf-node .node-name { min-width:0; }
+.nf-spacer { flex:1; }
+.nf-delete { padding:10px;border:1px solid var(--border);border-radius:10px; }
+@media (max-width:760px) { .nf-toolbar > button:last-child { margin-left:0; } .nf-list { max-height:280px; } }
