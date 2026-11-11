@@ -139,6 +139,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.pcPower(w, r)
 		return
 	}
+	if r.URL.Path == "/api/lms/egress" {
+		s.lmsEgress(w, r)
+		return
+	}
 	if r.URL.Path == "/health/ready" && r.Method == "GET" {
 		if s.Lifecycle.Ready() != nil {
 			jsonReply(w, 503, map[string]string{"status": "not_ready"})
