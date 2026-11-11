@@ -139,6 +139,14 @@ func main() {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		if workerID == "vpn" && r.URL.Path == "/api/core/lms-egress" {
+			a.provisionLMSEgress(w, r)
+			return
+		}
+		if workerID == "vpn" && r.URL.Path == "/api/mihomo/lms-egress" {
+			a.handleLMSEgress(w, r)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, mihomoAPIPrefix+"/") {
 			a.handleMihomoAPI(w, r)
 			return
